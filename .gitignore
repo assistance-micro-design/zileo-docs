@@ -1,6 +1,7 @@
 # Local dotfiles (config, env, tools)
 .*
 !.env.example
+CLAUDE.md
 
 # Python
 __pycache__/
