@@ -1,5 +1,5 @@
-# Claude Code configuration (local only)
-.claude/
+# Local dotfiles (config, env, tools)
+.*
 
 # Python
 __pycache__/

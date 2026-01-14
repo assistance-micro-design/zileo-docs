@@ -1,0 +1,522 @@
+"""Tests E2E pour le pipeline complet et l'API.
+
+Ces tests verifient le fonctionnement de bout en bout:
+- Endpoints API REST
+- Serveur MCP JSON-RPC
+- Pipeline complet d'extraction et indexation
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+from src.api.dependencies import get_embedder, get_vector_store
+from src.core.exceptions import DocumentNotFoundError, EmptyQueryError, PDFNotFoundError
+from src.main import app
+from src.mcp.server import MCPServer
+from src.mcp.tools.get_document import GetDocumentTool
+from src.mcp.tools.index_document import IndexDocumentTool
+from src.mcp.tools.search import SearchDocumentsTool
+from src.services.pipeline.orchestrator import PDFPipelineOrchestrator
+
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+
+# =============================================================================
+# Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def client() -> Generator[TestClient, None, None]:
+    """Client de test FastAPI."""
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture
+def mcp_server_instance() -> MCPServer:
+    """Instance du serveur MCP pour les tests."""
+    return MCPServer()
+
+
+# =============================================================================
+# Tests: API Health
+# =============================================================================
+
+
+class TestHealthAPI:
+    """Tests pour les endpoints de health check."""
+
+    def test_root_returns_info(self, client: TestClient) -> None:
+        """Test que la route racine retourne les infos du service."""
+        response = client.get("/")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "name" in data
+        assert "version" in data
+        assert "health" in data
+
+    def test_health_endpoint_returns_status(self, client: TestClient) -> None:
+        """Test que /health retourne un statut."""
+        with patch(
+            "src.api.routes.health._check_qdrant",
+            new_callable=AsyncMock,
+            return_value="healthy",
+        ):
+            response = client.get("/health")
+            assert response.status_code == 200
+
+            data = response.json()
+            assert "status" in data
+            assert "version" in data
+            assert "qdrant_status" in data
+            assert "mistral_status" in data
+
+    def test_liveness_returns_alive(self, client: TestClient) -> None:
+        """Test que /health/live retourne alive."""
+        response = client.get("/health/live")
+        assert response.status_code == 200
+        assert response.json()["status"] == "alive"
+
+    def test_readiness_check(self, client: TestClient) -> None:
+        """Test que /health/ready verifie les dependances."""
+        with patch(
+            "src.api.routes.health._check_qdrant",
+            new_callable=AsyncMock,
+            return_value="healthy",
+        ):
+            response = client.get("/health/ready")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] in ["ready", "not_ready"]
+
+
+# =============================================================================
+# Tests: API Documents
+# =============================================================================
+
+
+class TestDocumentsAPI:
+    """Tests pour les endpoints de documents."""
+
+    def test_index_requires_pdf_file(self, client: TestClient) -> None:
+        """Test que l'indexation rejette les fichiers non-PDF."""
+        response = client.post(
+            "/api/v1/documents/index",
+            files={"file": ("test.txt", b"not a pdf", "text/plain")},
+        )
+        assert response.status_code == 400
+        assert "PDF" in response.json()["detail"]
+
+    def test_index_rejects_empty_file(self, client: TestClient) -> None:
+        """Test que l'indexation rejette les fichiers vides."""
+        response = client.post(
+            "/api/v1/documents/index",
+            files={"file": ("test.pdf", b"", "application/pdf")},
+        )
+        # Un PDF vide n'est pas valide
+        assert response.status_code in [400, 500]
+
+    @patch("src.api.dependencies.get_orchestrator")
+    def test_index_pdf_success(
+        self,
+        mock_get_orchestrator: MagicMock,
+        client: TestClient,
+        sample_text_pdf: Path,
+    ) -> None:
+        """Test l'indexation reussie d'un PDF."""
+        # Mock de l'orchestrateur
+        mock_orchestrator = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.analysis.metadata.document_id = "test-doc-id"
+        mock_result.analysis.metadata.total_pages = 2
+        mock_result.pages_processed_native = 2
+        mock_result.pages_processed_ocr = 0
+        mock_result.chunks_generated = 5
+        mock_result.chunks_embedded = 5
+        mock_result.chunks_stored = 5
+        mock_result.processing_time_seconds = 1.5
+        mock_result.errors = []
+
+        mock_orchestrator.initialize = AsyncMock()
+        mock_orchestrator.process_and_index = AsyncMock(return_value=mock_result)
+        mock_get_orchestrator.return_value = mock_orchestrator
+
+        with Path(sample_text_pdf).open("rb") as f:
+            response = client.post(
+                "/api/v1/documents/index",
+                files={"file": ("test.pdf", f, "application/pdf")},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "completed"
+        assert "document_id" in data
+        assert "chunks_stored" in data
+
+    def test_get_document_stats(self, client: TestClient) -> None:
+        """Test la recuperation des statistiques."""
+        with patch("src.api.dependencies.get_vector_store") as mock_get_store:
+            mock_store = AsyncMock()
+            mock_store.COLLECTION_NAME = "pdf_documents"
+            mock_store.get_stats = AsyncMock(
+                return_value={
+                    "points_count": 100,
+                    "indexed_vectors_count": 100,
+                    "status": "green",
+                }
+            )
+            mock_get_store.return_value = mock_store
+
+            response = client.get("/api/v1/documents")
+            assert response.status_code == 200
+            data = response.json()
+            assert "collection" in data
+
+
+# =============================================================================
+# Tests: API Search
+# =============================================================================
+
+
+class TestSearchAPI:
+    """Tests pour les endpoints de recherche."""
+
+    def test_search_requires_query(self, client: TestClient) -> None:
+        """Test que la recherche exige une requete."""
+        response = client.get("/api/v1/search")
+        # Query parameter 'q' is required
+        assert response.status_code == 422
+
+    def test_search_get_with_query(self, client: TestClient) -> None:
+        """Test la recherche GET avec une requete."""
+        # Mock embedder
+        mock_embedder = MagicMock()
+        mock_embedder.embed_query = AsyncMock(return_value=[0.1] * 1024)
+
+        # Mock vector store
+        mock_store = MagicMock()
+        mock_store.search = AsyncMock(
+            return_value=[
+                {
+                    "chunk_id": "chunk-1",
+                    "document_id": "doc-1",
+                    "content": "Test content",
+                    "content_preview": "Test...",
+                    "score": 0.95,
+                    "page_numbers": [1],
+                    "section_title": "Test Section",
+                    "content_type": "text",
+                    "doc_filename": "test.pdf",
+                }
+            ]
+        )
+
+        # Override dependencies
+        app.dependency_overrides[get_embedder] = lambda: mock_embedder
+        app.dependency_overrides[get_vector_store] = lambda: mock_store
+
+        try:
+            response = client.get("/api/v1/search?q=test%20query")
+            assert response.status_code == 200
+            data = response.json()
+            assert "results" in data
+            assert data["query"] == "test query"
+        finally:
+            # Clean up overrides
+            app.dependency_overrides.clear()
+
+    def test_search_post_with_body(self, client: TestClient) -> None:
+        """Test la recherche POST avec un corps JSON."""
+        # Mock embedder
+        mock_embedder = MagicMock()
+        mock_embedder.embed_query = AsyncMock(return_value=[0.1] * 1024)
+
+        # Mock vector store
+        mock_store = MagicMock()
+        mock_store.search = AsyncMock(return_value=[])
+
+        # Override dependencies
+        app.dependency_overrides[get_embedder] = lambda: mock_embedder
+        app.dependency_overrides[get_vector_store] = lambda: mock_store
+
+        try:
+            response = client.post(
+                "/api/v1/search",
+                json={
+                    "query": "test query",
+                    "top_k": 10,
+                    "score_threshold": 0.5,
+                },
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total_results"] == 0
+        finally:
+            # Clean up overrides
+            app.dependency_overrides.clear()
+
+
+# =============================================================================
+# Tests: MCP Server
+# =============================================================================
+
+
+class TestMCPServer:
+    """Tests pour le serveur MCP."""
+
+    def test_mcp_server_initialization(self, mcp_server_instance: MCPServer) -> None:
+        """Test l'initialisation du serveur MCP."""
+        assert mcp_server_instance.name is not None
+        assert mcp_server_instance.version is not None
+        assert len(mcp_server_instance.tools) == 3
+
+    def test_mcp_tools_registered(self, mcp_server_instance: MCPServer) -> None:
+        """Test que tous les tools sont enregistres."""
+        expected_tools = [
+            "index_document",
+            "search_documents",
+            "get_document",
+        ]
+        for tool_name in expected_tools:
+            assert tool_name in mcp_server_instance.tools
+
+    @pytest.mark.asyncio
+    async def test_mcp_invalid_jsonrpc_version(self, mcp_server_instance: MCPServer) -> None:
+        """Test le rejet de version JSON-RPC invalide."""
+        response = await mcp_server_instance.handle_request(
+            {
+                "jsonrpc": "1.0",
+                "method": "tools/list",
+                "id": 1,
+            }
+        )
+        assert "error" in response
+        assert response["error"]["code"] == -32600
+
+    @pytest.mark.asyncio
+    async def test_mcp_missing_method(self, mcp_server_instance: MCPServer) -> None:
+        """Test le rejet de requete sans methode."""
+        response = await mcp_server_instance.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+            }
+        )
+        assert "error" in response
+        assert response["error"]["code"] == -32600
+
+    @pytest.mark.asyncio
+    async def test_mcp_unknown_method(self, mcp_server_instance: MCPServer) -> None:
+        """Test le rejet de methode inconnue."""
+        response = await mcp_server_instance.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "method": "unknown/method",
+                "id": 1,
+            }
+        )
+        assert "error" in response
+        assert response["error"]["code"] == -32601
+
+    @pytest.mark.asyncio
+    async def test_mcp_tools_list(self, mcp_server_instance: MCPServer) -> None:
+        """Test la liste des tools."""
+        response = await mcp_server_instance.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "method": "tools/list",
+                "id": 1,
+            }
+        )
+        assert "result" in response
+        assert "tools" in response["result"]
+        assert len(response["result"]["tools"]) == 4
+
+    @pytest.mark.asyncio
+    async def test_mcp_initialize(self, mcp_server_instance: MCPServer) -> None:
+        """Test l'initialisation MCP."""
+        with patch.object(mcp_server_instance, "initialize", new_callable=AsyncMock):
+            response = await mcp_server_instance.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "initialize",
+                    "params": {},
+                    "id": 1,
+                }
+            )
+            assert "result" in response
+            assert "protocolVersion" in response["result"]
+            assert "serverInfo" in response["result"]
+
+    @pytest.mark.asyncio
+    async def test_mcp_tools_call_unknown_tool(self, mcp_server_instance: MCPServer) -> None:
+        """Test l'appel d'un tool inconnu."""
+        response = await mcp_server_instance.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "method": "tools/call",
+                "params": {
+                    "name": "unknown_tool",
+                    "arguments": {},
+                },
+                "id": 1,
+            }
+        )
+        assert "error" in response
+        assert response["error"]["code"] == -32602
+
+    @pytest.mark.asyncio
+    async def test_mcp_tools_call_missing_name(self, mcp_server_instance: MCPServer) -> None:
+        """Test l'appel sans nom de tool."""
+        response = await mcp_server_instance.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "method": "tools/call",
+                "params": {
+                    "arguments": {},
+                },
+                "id": 1,
+            }
+        )
+        assert "error" in response
+        assert response["error"]["code"] == -32602
+
+
+# =============================================================================
+# Tests: MCP Endpoint Integration
+# =============================================================================
+
+
+class TestMCPEndpoint:
+    """Tests pour l'endpoint MCP via HTTP."""
+
+    def test_mcp_endpoint_tools_list(self, client: TestClient) -> None:
+        """Test l'endpoint /mcp pour lister les tools."""
+        response = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "method": "tools/list",
+                "id": 1,
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "result" in data or "error" in data
+
+    def test_mcp_endpoint_invalid_json(self, client: TestClient) -> None:
+        """Test l'endpoint /mcp avec JSON invalide."""
+        response = client.post(
+            "/mcp",
+            content="not json",
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "error" in data
+        assert data["error"]["code"] == -32700
+
+
+# =============================================================================
+# Tests: MCP Tools
+# =============================================================================
+
+
+class TestMCPTools:
+    """Tests pour les tools MCP individuels."""
+
+    @pytest.mark.asyncio
+    async def test_index_document_tool_file_not_found(self) -> None:
+        """Test que index_document leve une erreur si fichier introuvable."""
+        tool = IndexDocumentTool()
+        with pytest.raises(PDFNotFoundError):
+            await tool.execute({"file_path": "/nonexistent/file.pdf"})
+
+    @pytest.mark.asyncio
+    async def test_search_tool_empty_query(self) -> None:
+        """Test que search rejette une requete vide."""
+        tool = SearchDocumentsTool()
+        with patch.object(tool, "_vector_store"):
+            tool._initialized = True
+            with pytest.raises(EmptyQueryError):
+                await tool.execute({"query": "  "})
+
+    @pytest.mark.asyncio
+    async def test_get_document_tool_not_found(self) -> None:
+        """Test que get_document leve une erreur si document introuvable."""
+        tool = GetDocumentTool()
+
+        # Mock le vector store
+        mock_store = AsyncMock()
+        mock_store.get_document_chunks = AsyncMock(return_value=[])
+        mock_store.initialize = AsyncMock()
+        tool._vector_store = mock_store
+        tool._initialized = True
+
+        with pytest.raises(DocumentNotFoundError):
+            await tool.execute({"document_id": "nonexistent-doc"})
+
+
+# =============================================================================
+# Tests: Integration Pipeline
+# =============================================================================
+
+
+class TestPipelineIntegration:
+    """Tests d'integration du pipeline complet."""
+
+    @pytest.mark.asyncio
+    async def test_full_pipeline_mock(self, sample_text_pdf: Path) -> None:
+        """Test du pipeline complet avec mocks."""
+        orchestrator = PDFPipelineOrchestrator()
+
+        # Patcher les services externes
+        with (
+            patch.object(orchestrator, "_ocr_processor", create=True) as mock_ocr,
+            patch.object(orchestrator, "_embedder", create=True) as mock_embedder,
+            patch.object(orchestrator, "_vector_store", create=True) as mock_store,
+        ):
+            # Configurer les mocks
+            mock_ocr.process_pages = AsyncMock(return_value={})
+            mock_embedder.embed_chunks = AsyncMock(side_effect=lambda x, **_kwargs: x)
+            mock_store.initialize = AsyncMock()
+            mock_store.store_chunks = AsyncMock(
+                return_value={"stored_chunks": 5, "skipped_chunks": 0}
+            )
+
+            # Executer le pipeline (juste extraction sans OCR/embedding)
+            result = await orchestrator.process_document(
+                sample_text_pdf,
+                options={"skip_ocr": True},
+            )
+
+            assert result.analysis is not None
+            assert result.analysis.metadata.total_pages == 2
+            assert result.processing_time_seconds > 0
+
+    def test_api_to_mcp_integration(self, client: TestClient) -> None:
+        """Test que l'API et le MCP fonctionnent ensemble."""
+        # Test health
+        health_response = client.get("/health/live")
+        assert health_response.status_code == 200
+
+        # Test MCP tools/list
+        mcp_response = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "method": "tools/list",
+                "id": 1,
+            },
+        )
+        assert mcp_response.status_code == 200

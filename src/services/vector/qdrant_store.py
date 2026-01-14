@@ -1,0 +1,637 @@
+"""Stockage vectoriel avec Qdrant pour les chunks de documents PDF.
+
+Ce module gere le stockage, la recherche et la gestion des chunks
+de documents dans une base de donnees vectorielle Qdrant.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import logging
+import re
+from typing import Any
+
+from qdrant_client import QdrantClient, models
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchText,
+    MatchValue,
+    PayloadSchemaType,
+    PointStruct,
+    Range,
+    TextIndexParams,
+    TokenizerType,
+    VectorParams,
+)
+
+from src.core.config import settings
+from src.models.chunk import DocumentChunk
+from src.models.document import DocumentMetadata
+
+
+logger = logging.getLogger(__name__)
+
+
+def _sanitize_text(text: str | None) -> str:
+    """Nettoie le texte des caracteres Unicode problematiques.
+
+    Remplace les caracteres de remplacement et normalise les espaces.
+
+    Args:
+        text: Texte a nettoyer.
+
+    Returns:
+        Texte nettoye.
+    """
+    if not text:
+        return ""
+
+    # Remplacer le caractere de remplacement Unicode
+    text = text.replace("\ufffd", "")
+
+    # Normaliser les espaces multiples
+    text = re.sub(r"\s+", " ", text)
+
+    # Supprimer les caracteres de controle (sauf newlines et tabs)
+    text = "".join(
+        char
+        for char in text
+        if char in ("\n", "\t", "\r") or (ord(char) >= 32 and ord(char) != 127)
+    )
+
+    return text.strip()
+
+
+COLLECTION_NAME = "pdf_documents"
+VECTOR_SIZE = 1024  # Mistral embed dimension
+
+
+class QdrantVectorStore:
+    """Stockage vectoriel avec Qdrant.
+
+    Cette classe gere toutes les operations de stockage vectoriel:
+    - Creation et configuration de la collection
+    - Stockage des chunks avec embeddings et metadata
+    - Recherche semantique avec filtrage avance
+    - Gestion du cycle de vie des documents
+
+    Attributes:
+        client: Client Qdrant pour les operations sur la base.
+        collection_name: Nom de la collection utilisee.
+
+    Example:
+        >>> store = QdrantVectorStore()
+        >>> await store.initialize()
+        >>> result = await store.store_chunks(chunks, doc_metadata)
+        >>> results = await store.search(query_embedding, top_k=5)
+    """
+
+    COLLECTION_NAME = COLLECTION_NAME
+    VECTOR_SIZE = VECTOR_SIZE
+
+    def __init__(
+        self,
+        host: str | None = None,
+        port: int | None = None,
+        api_key: str | None = None,
+    ) -> None:
+        """Initialise le client Qdrant.
+
+        Args:
+            host: Hostname du serveur Qdrant. Defaut depuis settings.
+            port: Port du serveur Qdrant. Defaut depuis settings.
+            api_key: Cle API pour authentification. Defaut depuis settings.
+        """
+        self.client = QdrantClient(
+            host=host or settings.QDRANT_HOST,
+            port=port or settings.QDRANT_PORT,
+            api_key=api_key or settings.QDRANT_API_KEY,
+        )
+        self._initialized = False
+
+    async def initialize(self) -> None:
+        """Initialise la collection si elle n'existe pas.
+
+        Cree la collection avec la configuration optimisee pour
+        les embeddings Mistral et configure tous les index necessaires.
+
+        Raises:
+            Exception: Si la creation de la collection echoue.
+        """
+        collections = await asyncio.to_thread(self.client.get_collections)
+        exists = any(c.name == self.COLLECTION_NAME for c in collections.collections)
+
+        if not exists:
+            logger.info("Creating Qdrant collection: %s", self.COLLECTION_NAME)
+            await self._create_collection()
+            await self._create_indexes()
+            logger.info("Collection %s created successfully", self.COLLECTION_NAME)
+        else:
+            logger.debug("Collection %s already exists", self.COLLECTION_NAME)
+
+        self._initialized = True
+
+    async def _create_collection(self) -> None:
+        """Cree la collection avec configuration optimisee.
+
+        Configure les vecteurs, la quantization scalaire pour
+        reduire la memoire, et les optimiseurs pour l'indexation.
+        """
+        await asyncio.to_thread(
+            self.client.create_collection,
+            collection_name=self.COLLECTION_NAME,
+            vectors_config=VectorParams(
+                size=self.VECTOR_SIZE,
+                distance=Distance.COSINE,
+                on_disk=False,
+            ),
+            optimizers_config=models.OptimizersConfigDiff(
+                indexing_threshold=20000,
+            ),
+            quantization_config=models.ScalarQuantization(
+                scalar=models.ScalarQuantizationConfig(
+                    type=models.ScalarType.INT8,
+                    quantile=0.99,
+                    always_ram=True,
+                ),
+            ),
+        )
+
+    async def _create_indexes(self) -> None:
+        """Cree les index pour filtrage performant.
+
+        Configure les index par cardinalite:
+        - Haute cardinalite: document_id, chunk_id
+        - Medium cardinalite: content_type, section_title, doc_filename
+        - Index numeriques: pages, token_count
+        - Index booleens: has_table, has_image, has_equation
+        - Index datetime: ingested_at
+        - Index full-text: content
+        """
+        # Index haute cardinalite (tres efficaces)
+        high_cardinality: list[tuple[str, PayloadSchemaType]] = [
+            ("document_id", PayloadSchemaType.KEYWORD),
+            ("chunk_id", PayloadSchemaType.KEYWORD),
+        ]
+
+        # Index medium cardinalite
+        medium_cardinality: list[tuple[str, PayloadSchemaType]] = [
+            ("content_type", PayloadSchemaType.KEYWORD),
+            ("section_title", PayloadSchemaType.KEYWORD),
+            ("doc_filename", PayloadSchemaType.KEYWORD),
+        ]
+
+        # Index numeriques
+        numeric_indexes: list[tuple[str, PayloadSchemaType]] = [
+            ("start_page", PayloadSchemaType.INTEGER),
+            ("end_page", PayloadSchemaType.INTEGER),
+            ("token_count", PayloadSchemaType.INTEGER),
+        ]
+
+        # Index booleens
+        bool_indexes: list[tuple[str, PayloadSchemaType]] = [
+            ("has_table", PayloadSchemaType.BOOL),
+            ("has_image", PayloadSchemaType.BOOL),
+            ("has_equation", PayloadSchemaType.BOOL),
+        ]
+
+        # Index datetime
+        datetime_indexes: list[tuple[str, PayloadSchemaType]] = [
+            ("ingested_at", PayloadSchemaType.DATETIME),
+        ]
+
+        # Creer tous les index
+        all_indexes = (
+            high_cardinality
+            + medium_cardinality
+            + numeric_indexes
+            + bool_indexes
+            + datetime_indexes
+        )
+
+        for field_name, field_type in all_indexes:
+            await asyncio.to_thread(
+                self.client.create_payload_index,
+                collection_name=self.COLLECTION_NAME,
+                field_name=field_name,
+                field_schema=field_type,
+            )
+
+        # Index full-text pour recherche hybride
+        await asyncio.to_thread(
+            self.client.create_payload_index,
+            collection_name=self.COLLECTION_NAME,
+            field_name="content",
+            field_schema=TextIndexParams(
+                type="text",
+                tokenizer=TokenizerType.WORD,
+                min_token_len=2,
+                max_token_len=20,
+                lowercase=True,
+            ),
+        )
+
+    async def store_chunks(
+        self,
+        chunks: list[DocumentChunk],
+        document_metadata: DocumentMetadata,
+    ) -> dict[str, Any]:
+        """Stocke les chunks avec embeddings et metadata.
+
+        Args:
+            chunks: Liste des chunks a stocker (avec embeddings).
+            document_metadata: Metadata du document parent.
+
+        Returns:
+            Dictionnaire avec statistiques de stockage:
+            - stored_chunks: Nombre de chunks stockes
+            - skipped_chunks: Nombre de chunks sans embedding
+            - document_id: ID du document
+            - collection: Nom de la collection
+
+        Example:
+            >>> result = await store.store_chunks(chunks, doc_meta)
+            >>> print(f"Stored {result['stored_chunks']} chunks")
+        """
+        points: list[PointStruct] = []
+        skipped = 0
+
+        for chunk in chunks:
+            if chunk.embedding is None:
+                skipped += 1
+                continue
+
+            payload = self._build_payload(chunk, document_metadata)
+            point_id = self._generate_point_id(chunk.metadata.chunk_id)
+
+            points.append(
+                PointStruct(
+                    id=point_id,
+                    vector=chunk.embedding,
+                    payload=payload,
+                )
+            )
+
+        # Upsert par batch pour performance
+        batch_size = 100
+        for i in range(0, len(points), batch_size):
+            batch = points[i : i + batch_size]
+            await asyncio.to_thread(
+                self.client.upsert,
+                collection_name=self.COLLECTION_NAME,
+                points=batch,
+            )
+
+        logger.info(
+            "Stored %d chunks for document %s (skipped %d without embeddings)",
+            len(points),
+            document_metadata.document_id,
+            skipped,
+        )
+
+        return {
+            "stored_chunks": len(points),
+            "skipped_chunks": skipped,
+            "document_id": document_metadata.document_id,
+            "collection": self.COLLECTION_NAME,
+        }
+
+    def _build_payload(
+        self,
+        chunk: DocumentChunk,
+        doc_meta: DocumentMetadata,
+    ) -> dict[str, Any]:
+        """Construit le payload optimise pour Qdrant.
+
+        Args:
+            chunk: Chunk a stocker.
+            doc_meta: Metadata du document parent.
+
+        Returns:
+            Dictionnaire du payload avec toutes les metadonnees.
+        """
+        meta = chunk.metadata
+
+        # Sanitize content to remove problematic Unicode characters
+        content = _sanitize_text(chunk.content)
+        content_preview = content[:500] if content else ""
+
+        return {
+            # --- Identifiants du chunk ---
+            "chunk_id": meta.chunk_id,
+            "document_id": meta.document_id,
+            "parent_chunk_id": meta.parent_chunk_id or "",
+            # --- Contenu textuel ---
+            "content": content,
+            "content_preview": content_preview,
+            # --- Localisation dans le document ---
+            "page_numbers": meta.page_numbers,
+            "start_page": meta.start_page,
+            "end_page": meta.end_page,
+            "chunk_index": meta.chunk_index,
+            "total_chunks": meta.total_chunks,
+            # --- Structure hierarchique ---
+            "section_title": meta.section_title or "",
+            "section_hierarchy": meta.section_hierarchy,
+            # --- Type de contenu detecte ---
+            "content_type": meta.content_type,
+            "has_table": meta.has_table,
+            "has_image": meta.has_image,
+            "has_equation": meta.has_equation,
+            # --- Statistiques du chunk ---
+            "token_count": meta.token_count,
+            "char_count": meta.char_count,
+            "word_count": meta.word_count,
+            # --- Contexte environnant ---
+            "preceding_context": meta.preceding_context,
+            "following_context": meta.following_context,
+            # --- Metadonnees document denormalisees ---
+            "doc_filename": doc_meta.filename,
+            "doc_title": doc_meta.title or "",
+            "doc_author": doc_meta.author or "",
+            "doc_total_pages": doc_meta.total_pages,
+            "doc_file_hash": doc_meta.file_hash,
+            # --- Horodatages ---
+            "ingested_at": doc_meta.ingested_at.isoformat(),
+            "doc_creation_date": (
+                doc_meta.creation_date.isoformat() if doc_meta.creation_date else None
+            ),
+        }
+
+    def _generate_point_id(self, chunk_id: str) -> int:
+        """Genere un ID numerique unique a partir du chunk_id.
+
+        Utilise MD5 pour generer un hash reproductible qui permet
+        l'upsert (mise a jour si existant).
+
+        Args:
+            chunk_id: Identifiant unique du chunk.
+
+        Returns:
+            Identifiant numerique positif pour Qdrant.
+        """
+        hash_bytes = hashlib.md5(chunk_id.encode()).hexdigest()[:16]
+        return int(hash_bytes, 16)
+
+    async def search(
+        self,
+        query_embedding: list[float],
+        top_k: int = 5,
+        filters: dict[str, Any] | None = None,
+        score_threshold: float = 0.7,
+    ) -> list[dict[str, Any]]:
+        """Recherche semantique avec filtrage.
+
+        Args:
+            query_embedding: Vecteur de requete (1024 dimensions).
+            top_k: Nombre maximum de resultats. Defaut 5.
+            filters: Filtres optionnels (voir _build_filter).
+            score_threshold: Score minimum de similarite. Defaut 0.7.
+
+        Returns:
+            Liste de dictionnaires avec les resultats:
+            - chunk_id: ID du chunk
+            - content: Contenu complet
+            - content_preview: Apercu du contenu
+            - score: Score de similarite
+            - document_id: ID du document
+            - page_numbers: Pages du chunk
+            - section_title: Titre de section
+            - content_type: Type de contenu
+            - doc_filename: Nom du fichier
+
+        Example:
+            >>> results = await store.search(
+            ...     query_embedding=embedding,
+            ...     top_k=10,
+            ...     filters={"document_id": "doc-123", "has_table": True},
+            ... )
+        """
+        qdrant_filter = self._build_filter(filters) if filters else None
+
+        response = await asyncio.to_thread(
+            self.client.query_points,
+            collection_name=self.COLLECTION_NAME,
+            query=query_embedding,
+            limit=top_k,
+            query_filter=qdrant_filter,
+            score_threshold=score_threshold,
+            with_payload=True,
+        )
+
+        return [
+            {
+                "chunk_id": hit.payload["chunk_id"] if hit.payload else None,
+                "content": hit.payload["content"] if hit.payload else None,
+                "content_preview": hit.payload.get("content_preview") if hit.payload else None,
+                "score": hit.score,
+                "document_id": hit.payload["document_id"] if hit.payload else None,
+                "page_numbers": hit.payload.get("page_numbers", []) if hit.payload else [],
+                "section_title": hit.payload.get("section_title") if hit.payload else None,
+                "content_type": hit.payload.get("content_type") if hit.payload else None,
+                "doc_filename": hit.payload.get("doc_filename") if hit.payload else None,
+            }
+            for hit in response.points
+        ]
+
+    def _build_filter(self, filters: dict[str, Any]) -> Filter | None:
+        """Construit un filtre Qdrant a partir d'un dictionnaire.
+
+        Args:
+            filters: Dictionnaire des filtres supportes:
+                - document_id: Filtre par ID document exact
+                - content_type: Filtre par type de contenu
+                - page_range: Tuple (start, end) pour pages
+                - has_table: Boolean pour presence de tableaux
+                - has_image: Boolean pour presence d'images
+                - has_equation: Boolean pour presence d'equations
+                - section_title: Filtre par titre de section
+                - text_search: Recherche full-text dans content
+                - doc_filename: Filtre par nom de fichier
+
+        Returns:
+            Filtre Qdrant ou None si aucune condition.
+        """
+        conditions: list[FieldCondition] = []
+
+        # Filtrage par document
+        if "document_id" in filters:
+            conditions.append(
+                FieldCondition(
+                    key="document_id",
+                    match=MatchValue(value=filters["document_id"]),
+                )
+            )
+
+        # Filtrage par type
+        if "content_type" in filters:
+            conditions.append(
+                FieldCondition(
+                    key="content_type",
+                    match=MatchValue(value=filters["content_type"]),
+                )
+            )
+
+        # Filtrage par page
+        if "page_range" in filters:
+            start, end = filters["page_range"]
+            conditions.append(
+                FieldCondition(
+                    key="start_page",
+                    range=Range(gte=start, lte=end),
+                )
+            )
+
+        # Filtrage tableaux
+        if filters.get("has_table"):
+            conditions.append(
+                FieldCondition(
+                    key="has_table",
+                    match=MatchValue(value=True),
+                )
+            )
+
+        # Filtrage images
+        if filters.get("has_image"):
+            conditions.append(
+                FieldCondition(
+                    key="has_image",
+                    match=MatchValue(value=True),
+                )
+            )
+
+        # Filtrage equations
+        if filters.get("has_equation"):
+            conditions.append(
+                FieldCondition(
+                    key="has_equation",
+                    match=MatchValue(value=True),
+                )
+            )
+
+        # Filtrage section
+        if "section_title" in filters:
+            conditions.append(
+                FieldCondition(
+                    key="section_title",
+                    match=MatchValue(value=filters["section_title"]),
+                )
+            )
+
+        # Recherche full-text
+        if "text_search" in filters:
+            conditions.append(
+                FieldCondition(
+                    key="content",
+                    match=MatchText(text=filters["text_search"]),
+                )
+            )
+
+        # Filtrage par filename
+        if "doc_filename" in filters:
+            conditions.append(
+                FieldCondition(
+                    key="doc_filename",
+                    match=MatchValue(value=filters["doc_filename"]),
+                )
+            )
+
+        return Filter(must=conditions) if conditions else None
+
+    async def delete_document(self, document_id: str) -> int:
+        """Supprime tous les chunks d'un document.
+
+        Args:
+            document_id: Identifiant du document a supprimer.
+
+        Returns:
+            Nombre de points supprimes (approximatif via status).
+
+        Example:
+            >>> count = await store.delete_document("doc-123")
+            >>> print(f"Deleted chunks for document")
+        """
+        result = await asyncio.to_thread(
+            self.client.delete,
+            collection_name=self.COLLECTION_NAME,
+            points_selector=models.FilterSelector(
+                filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="document_id",
+                            match=MatchValue(value=document_id),
+                        )
+                    ]
+                )
+            ),
+        )
+
+        logger.info("Deleted chunks for document %s", document_id)
+
+        # Retourne le status de l'operation
+        # Note: Qdrant ne retourne pas le nombre exact de points supprimes
+        return 1 if result.status else 0
+
+    async def get_document_chunks(
+        self,
+        document_id: str,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """Recupere tous les chunks d'un document.
+
+        Args:
+            document_id: Identifiant du document.
+            limit: Nombre maximum de chunks a recuperer. Defaut 1000.
+
+        Returns:
+            Liste des payloads de tous les chunks du document.
+
+        Example:
+            >>> chunks = await store.get_document_chunks("doc-123")
+            >>> for chunk in chunks:
+            ...     print(chunk["content_preview"])
+        """
+        results, _ = await asyncio.to_thread(
+            self.client.scroll,
+            collection_name=self.COLLECTION_NAME,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(
+                        key="document_id",
+                        match=MatchValue(value=document_id),
+                    )
+                ]
+            ),
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
+        )
+
+        return [point.payload for point in results if point.payload]
+
+    async def get_stats(self) -> dict[str, Any]:
+        """Retourne les statistiques de la collection.
+
+        Returns:
+            Dictionnaire avec les statistiques:
+            - points_count: Nombre total de points
+            - indexed_vectors_count: Vecteurs indexes
+            - status: Statut de la collection
+
+        Example:
+            >>> stats = await store.get_stats()
+            >>> print(f"Total points: {stats['points_count']}")
+        """
+        info = await asyncio.to_thread(
+            self.client.get_collection,
+            self.COLLECTION_NAME,
+        )
+
+        return {
+            "points_count": info.points_count,
+            "indexed_vectors_count": info.indexed_vectors_count,
+            "status": str(info.status),
+        }
