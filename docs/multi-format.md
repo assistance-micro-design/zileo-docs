@@ -1,6 +1,6 @@
 # Traitement Multi-Format : Excel et Word
 
-Ce document decrit l'extension du serveur MCP Zileo PDF pour traiter les documents Excel (.xlsx, .xls) et Word (.docx), en plus des PDF.
+Ce document decrit l'extension du serveur MCP Zileo RAG pour traiter les documents Excel (.xlsx, .xls) et Word (.docx), en plus des PDF.
 
 ## Vue d'Ensemble
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Assistance Micro Design
 """MCP Tools pour le traitement PDF.
 
 Ce module expose les tools MCP disponibles pour le serveur.

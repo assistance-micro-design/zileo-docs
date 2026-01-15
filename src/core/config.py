@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Assistance Micro Design
 """Configuration de l'application via pydantic-settings."""
 
 from __future__ import annotations
@@ -7,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Configuration de l'application MCP Zileo PDF.
+    """Configuration de l'application MCP Zileo RAG.
 
     Toutes les valeurs peuvent etre surchargees via variables d'environnement.
     """
@@ -19,7 +21,7 @@ class Settings(BaseSettings):
     )
 
     # === Application ===
-    APP_NAME: str = "MCP Zileo PDF"
+    APP_NAME: str = "MCP Zileo RAG"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False
 

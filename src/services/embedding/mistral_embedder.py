@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Assistance Micro Design
 """Service d'embedding avec Mistral Embed API.
 
 Ce module fournit un service pour generer des embeddings vectoriels

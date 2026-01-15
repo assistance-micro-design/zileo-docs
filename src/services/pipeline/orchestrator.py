@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Assistance Micro Design
 """Orchestrateur du pipeline de traitement PDF.
 
 Coordonne les 5 phases du pipeline:

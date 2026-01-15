@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Assistance Micro Design
 """Chunking semantique intelligent pour documents PDF.
 
 Ce module fournit un chunker intelligent qui:

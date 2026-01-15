@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Assistance Micro Design
 """Types MCP pour le serveur JSON-RPC 2.0.
 
 Ce module définit les types personnalisés utilisés par le serveur MCP,

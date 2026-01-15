@@ -1,18 +1,18 @@
 [project]
-name = "mcp-zileo-pdf"
+name = "mcp-zileo-rag"
 version = "0.1.0"
 description = "MCP Server for PDF processing with OCR and vector search"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = {text = "AGPL-3.0-or-later"}
 authors = [
-    {name = "Zileo Team"}
+    {name = "Assistance Micro Design"}
 ]
 keywords = ["mcp", "pdf", "ocr", "vector-search", "rag"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -65,9 +65,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/zileo/mcp-zileo-pdf"
-Documentation = "https://github.com/zileo/mcp-zileo-pdf#readme"
-Repository = "https://github.com/zileo/mcp-zileo-pdf.git"
+Homepage = "https://github.com/zileo/mcp-zileo-rag"
+Documentation = "https://github.com/zileo/mcp-zileo-rag#readme"
+Repository = "https://github.com/zileo/mcp-zileo-rag.git"
 
 [build-system]
 requires = ["hatchling"]

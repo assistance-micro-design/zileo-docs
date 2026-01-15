@@ -1,6 +1,8 @@
-# MCP Zileo PDF
+# MCP Zileo RAG
 
 Serveur MCP pour le traitement de documents PDF, Excel et Word avec OCR et recherche vectorielle.
+
+> **Usage personnel uniquement** - Ce projet est concu pour une utilisation locale sur votre ordinateur personnel via Docker Desktop. Aucune garantie n'est fournie pour un deploiement public ou en production. L'auteur decline toute responsabilite en cas d'utilisation sur un reseau public ou expose a Internet.
 
 ## Formats Supportes
 
@@ -46,6 +48,57 @@ docker-compose up -d
 
 ```bash
 uvicorn src.main:app --reload
+```
+
+## Configuration MCP pour Claude Desktop
+
+Pour utiliser ce serveur avec Claude Desktop, ajoutez la configuration suivante dans votre fichier de configuration Claude :
+
+**Emplacement du fichier de configuration :**
+- macOS : `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows : `%APPDATA%\Claude\claude_desktop_config.json`
+- Linux : `~/.config/Claude/claude_desktop_config.json`
+
+**Configuration a ajouter :**
+
+```json
+{
+  "mcpServers": {
+    "zileo-rag": {
+      "url": "http://localhost:8000/mcp",
+      "transport": "http"
+    }
+  }
+}
+```
+
+**Etapes d'installation :**
+
+1. **Demarrer le serveur** avec Docker Compose :
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **Verifier que le serveur fonctionne** :
+   ```bash
+   curl http://localhost:8000/health
+   ```
+
+3. **Configurer Claude Desktop** en editant le fichier de configuration ci-dessus
+
+4. **Redemarrer Claude Desktop** pour charger la nouvelle configuration
+
+5. **Tester** en demandant a Claude de lister les documents disponibles :
+   > "Liste les documents disponibles dans mon dossier"
+
+**Variables importantes dans `.env` :**
+
+```bash
+# Chemin vers vos documents (monte en lecture seule)
+DOCUMENTS_PATH=/chemin/vers/vos/documents
+
+# Votre cle API Mistral (requise pour OCR et embeddings)
+MISTRAL_API_KEY=votre_cle_api
 ```
 
 ## Outils MCP Disponibles

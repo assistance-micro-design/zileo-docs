@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # =============================================================================
-# MCP Zileo PDF - Dockerfile
+# MCP Zileo RAG - Dockerfile
 # Multi-stage build pour une image optimisee
 # =============================================================================
 
@@ -31,7 +31,7 @@ FROM python:3.11-slim AS runtime
 WORKDIR /app
 
 # Labels
-LABEL org.opencontainers.image.title="MCP Zileo PDF"
+LABEL org.opencontainers.image.title="MCP Zileo RAG"
 LABEL org.opencontainers.image.description="MCP Server for PDF processing with OCR and vector search"
 LABEL org.opencontainers.image.version="0.1.0"
 
@@ -42,7 +42,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Variables d'environnement par defaut
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    APP_NAME="MCP Zileo PDF" \
+    APP_NAME="MCP Zileo RAG" \
     APP_VERSION="0.1.0" \
     LOG_LEVEL="INFO" \
     LOG_FORMAT="json"

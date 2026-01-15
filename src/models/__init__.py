@@ -1,4 +1,6 @@
-"""Models Pydantic et dataclasses pour le projet MCP Zileo PDF."""
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Assistance Micro Design
+"""Models Pydantic et dataclasses pour le projet MCP Zileo RAG."""
 
 from __future__ import annotations
 

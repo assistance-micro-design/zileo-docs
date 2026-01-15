@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Assistance Micro Design
 """Serveur MCP (Model Context Protocol) pour le traitement PDF.
 
 Ce module implemente un serveur MCP compatible JSON-RPC 2.0 qui expose

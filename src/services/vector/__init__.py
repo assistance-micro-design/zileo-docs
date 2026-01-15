@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Assistance Micro Design
 """Services de stockage vectoriel.
 
 Ce module expose les services de stockage vectoriel pour les embeddings

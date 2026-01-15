@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Assistance Micro Design
 """Modèles unifiés pour traitement multi-format (PDF, Excel, Word)."""
 
 from __future__ import annotations

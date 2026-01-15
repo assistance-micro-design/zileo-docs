@@ -1,6 +1,6 @@
 # Type Safety
 
-Guide pour le typage statique du projet MCP Zileo PDF.
+Guide pour le typage statique du projet MCP Zileo RAG.
 
 ## Vue d'Ensemble
 

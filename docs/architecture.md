@@ -1,8 +1,8 @@
-# Architecture MCP Zileo PDF
+# Architecture MCP Zileo RAG
 
 ## Vue d'Ensemble
 
-MCP Zileo PDF est un serveur pour l'extraction et la vectorisation de documents. Il supporte les formats **PDF**, **Excel** (.xlsx, .xls) et **Word** (.docx). Il expose ses fonctionnalites via une API REST FastAPI et un serveur MCP (Model Context Protocol) en JSON-RPC 2.0.
+MCP Zileo RAG est un serveur pour l'extraction et la vectorisation de documents. Il supporte les formats **PDF**, **Excel** (.xlsx, .xls) et **Word** (.docx). Il expose ses fonctionnalites via une API REST FastAPI et un serveur MCP (Model Context Protocol) en JSON-RPC 2.0.
 
 Pour les details specifiques au traitement Excel et Word, voir [Multi-Format](multi-format.md).
 

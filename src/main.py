@@ -1,4 +1,6 @@
-"""Point d'entree principal de l'application MCP Zileo PDF.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Assistance Micro Design
+"""Point d'entree principal de l'application MCP Zileo RAG.
 
 Ce module configure et lance le serveur FastAPI avec:
 - API REST pour les documents et la recherche

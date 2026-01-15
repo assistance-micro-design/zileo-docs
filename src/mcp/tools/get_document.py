@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Assistance Micro Design
 """Tool MCP pour obtenir les informations d'un document."""
 
 from __future__ import annotations

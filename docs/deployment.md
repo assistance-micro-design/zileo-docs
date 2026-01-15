@@ -37,7 +37,7 @@ curl http://localhost:8000/health/ready
 
 ## Services Docker
 
-### Application (mcp-zileo-pdf)
+### Application (mcp-zileo-rag)
 
 - **Port** : 8000
 - **Image** : Build local via Dockerfile
