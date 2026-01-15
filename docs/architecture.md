@@ -2,7 +2,9 @@
 
 ## Vue d'Ensemble
 
-MCP Zileo PDF est un serveur pour l'extraction et la vectorisation de documents PDF. Il expose ses fonctionnalites via une API REST FastAPI et un serveur MCP (Model Context Protocol) en JSON-RPC 2.0.
+MCP Zileo PDF est un serveur pour l'extraction et la vectorisation de documents. Il supporte les formats **PDF**, **Excel** (.xlsx, .xls) et **Word** (.docx). Il expose ses fonctionnalites via une API REST FastAPI et un serveur MCP (Model Context Protocol) en JSON-RPC 2.0.
+
+Pour les details specifiques au traitement Excel et Word, voir [Multi-Format](multi-format.md).
 
 ## Composants Principaux
 
@@ -14,7 +16,36 @@ MCP Zileo PDF est un serveur pour l'extraction et la vectorisation de documents 
 
 ### Couche Services
 
-Le traitement des PDF suit un pipeline en 5 phases :
+Le traitement des documents suit un pipeline unifie :
+
+```
++----------+   +----------+   +----------+
+|   PDF    |   |  Excel   |   |   Word   |
+|  .pdf    |   |.xlsx/.xls|   |  .docx   |
++----+-----+   +----+-----+   +----+-----+
+     |              |              |
+     v              v              v
++--------------------------------------------+
+|        DocumentRouter (detection type)     |
++--------------------------------------------+
+     |              |              |
+     v              v              v
++----------+   +----------+   +----------+
+|PDF Extrac|   |ExcelExtr.|   |WordExtr. |
++----------+   +----------+   +----------+
+     |              |              |
+     v              v              v
++--------------------------------------------+
+|        UnifiedDocument (format commun)     |
++--------------------------------------------+
+               |
+               v
++----------+   +----------+   +----------+
+| Chunker  |-->| Embedder |-->|  Qdrant  |
++----------+   +----------+   +----------+
+```
+
+#### Pipeline PDF (5 phases)
 
 | Phase | Composant | Description |
 |-------|-----------|-------------|
@@ -23,6 +54,24 @@ Le traitement des PDF suit un pipeline en 5 phases :
 | 3 | OCR Processor | OCR Mistral pour pages complexes |
 | 4 | Chunker + Embedder | Decoupage semantique et generation d'embeddings |
 | 5 | Vector Store | Stockage dans Qdrant avec metadata riche |
+
+#### Pipeline Excel
+
+| Phase | Composant | Description |
+|-------|-----------|-------------|
+| 1 | ExcelExtractor | Extraction donnees, formules, tableaux (openpyxl/xlrd) |
+| 2 | UnifiedDocument | Conversion vers format commun |
+| 3 | Chunker + Embedder | Decoupage et embeddings |
+| 4 | Vector Store | Stockage avec metadonnees formules |
+
+#### Pipeline Word
+
+| Phase | Composant | Description |
+|-------|-----------|-------------|
+| 1 | WordExtractor | Extraction texte, tableaux, images (docx2python) |
+| 2 | UnifiedDocument | Conversion vers format commun |
+| 3 | Chunker + Embedder | Decoupage et embeddings |
+| 4 | Vector Store | Stockage avec metadonnees structure |
 
 ### Orchestrateur
 
@@ -38,9 +87,12 @@ Le `PDFPipelineOrchestrator` coordonne l'execution du pipeline :
 
 | Service | Utilisation |
 |---------|-------------|
-| **Mistral OCR** | Extraction de contenu des pages complexes |
+| **Mistral OCR** | Extraction de contenu des pages PDF complexes |
 | **Mistral Embed** | Generation d'embeddings (1024 dimensions) |
 | **Qdrant** | Base de donnees vectorielle |
+| **openpyxl** | Extraction Excel .xlsx |
+| **xlrd** | Extraction Excel .xls legacy |
+| **docx2python** | Extraction Word .docx |
 
 ## Classification des Pages
 
@@ -80,26 +132,35 @@ Chaque chunk stocke des metadonnees riches pour le filtrage :
 
 ```
 src/
-├── api/           # Endpoints REST
-├── mcp/           # Serveur MCP et tools
-│   ├── server.py          # MCPServer principal
-│   └── tools/             # Tools MCP
-│       ├── base.py        # BaseMCPTool (classe abstraite)
-│       ├── index_document.py
-│       ├── search.py
-│       ├── get_document.py
-│       ├── delete_document.py
-│       ├── list_indexed_documents.py
-│       ├── list_available_pdfs.py
-│       └── read_document_content.py
-├── services/      # Logique metier (pipeline)
-├── models/        # Schemas Pydantic
-└── core/          # Configuration et exceptions
++-- api/           # Endpoints REST
++-- mcp/           # Serveur MCP et tools
+|   +-- server.py          # MCPServer principal
+|   +-- tools/             # Tools MCP
+|       +-- base.py        # BaseMCPTool (classe abstraite)
+|       +-- index_document.py
+|       +-- search.py
+|       +-- get_document.py
+|       +-- delete_document.py
+|       +-- list_indexed_documents.py
+|       +-- list_available_documents.py  # Multi-format
+|       +-- get_excel_formulas.py        # Excel specifique
+|       +-- read_document_content.py
++-- services/      # Logique metier (pipeline)
+|   +-- document/  # Router multi-format
+|   +-- excel/     # Extraction Excel
+|   +-- word/      # Extraction Word
+|   +-- pdf/       # Extraction PDF
++-- models/        # Schemas Pydantic
+|   +-- types.py   # TypeAlias partages
+|   +-- unified.py # Format unifie
+|   +-- excel.py   # Modeles Excel
+|   +-- word.py    # Modeles Word
++-- core/          # Configuration et exceptions
 
 tests/
-├── unit/          # Tests unitaires
-├── integration/   # Tests avec services externes
-└── e2e/           # Tests bout-en-bout
++-- unit/          # Tests unitaires
++-- integration/   # Tests avec services externes
++-- e2e/           # Tests bout-en-bout
 ```
 
 ## Architecture des Tools MCP
@@ -166,12 +227,13 @@ async def initialize(self) -> None:
 
 | Tool | Fichier | Dependances |
 |------|---------|-------------|
-| `index_document` | `index_document.py` | Orchestrator, VectorStore |
+| `index_document` | `index_document.py` | DocumentRouter, VectorStore |
 | `search_documents` | `search.py` | VectorStore, Embedder |
 | `get_document` | `get_document.py` | VectorStore |
 | `delete_document` | `delete_document.py` | VectorStore |
 | `list_indexed_documents` | `list_indexed_documents.py` | VectorStore |
-| `list_available_pdfs` | `list_available_pdfs.py` | FileSystem |
+| `list_available_documents` | `list_available_documents.py` | FileSystem |
+| `get_excel_formulas` | `get_excel_formulas.py` | VectorStore |
 | `read_document_content` | `read_document_content.py` | VectorStore |
 
 ## Type Safety

@@ -36,9 +36,10 @@ class SearchDocumentsTool(BaseMCPTool):
 
     name: ClassVar[str] = "search_documents"
     description: ClassVar[str] = (
-        "Recherche dans les PDFs indexes par similarite semantique. "
+        "Recherche dans les documents indexes (PDF/Excel/Word) par similarite semantique. "
         "Requiert: documents indexes via index_document. "
-        "Retourne: passages pertinents avec score et numero de page."
+        "Retourne: passages pertinents avec score, page et type de document. "
+        "Supporte filtres: document_type, has_formula, sheet_name."
     )
 
     input_schema: ClassVar[dict[str, Any]] = {
@@ -55,6 +56,13 @@ class SearchDocumentsTool(BaseMCPTool):
                 "minimum": 1,
                 "maximum": 100,
             },
+            "score_threshold": {
+                "type": "number",
+                "description": "Score minimum de similarite (0.0-1.0, defaut: 0.7). Baisser pour plus de resultats.",
+                "default": 0.7,
+                "minimum": 0.0,
+                "maximum": 1.0,
+            },
             "filters": {
                 "type": "object",
                 "description": "Filtres optionnels pour affiner la recherche",
@@ -67,6 +75,11 @@ class SearchDocumentsTool(BaseMCPTool):
                         "type": "string",
                         "description": "Limiter par nom de fichier. Ex: 'rapport.pdf'",
                     },
+                    "document_type": {
+                        "type": "string",
+                        "enum": ["pdf", "excel", "word"],
+                        "description": "Filtrer par type de document (pdf/excel/word)",
+                    },
                     "has_table": {
                         "type": "boolean",
                         "description": "True pour ne chercher que dans les passages avec tableaux",
@@ -74,6 +87,18 @@ class SearchDocumentsTool(BaseMCPTool):
                     "has_image": {
                         "type": "boolean",
                         "description": "True pour ne chercher que dans les passages avec images",
+                    },
+                    "has_formula": {
+                        "type": "boolean",
+                        "description": "Excel uniquement: True pour chunks avec formules",
+                    },
+                    "text_search": {
+                        "type": "string",
+                        "description": "Recherche full-text exacte dans le contenu (pour noms, mots-cles)",
+                    },
+                    "sheet_name": {
+                        "type": "string",
+                        "description": "Excel uniquement: filtrer par nom de feuille",
                     },
                 },
             },
@@ -133,9 +158,10 @@ class SearchDocumentsTool(BaseMCPTool):
             raise EmptyQueryError()
 
         logger.info(
-            "Recherche: '%s' (top_k=%d, filters=%s)",
+            "Recherche: '%s' (top_k=%d, threshold=%.2f, filters=%s)",
             params.query[:50],
             params.top_k,
+            params.score_threshold,
             params.filters,
         )
 
@@ -147,7 +173,7 @@ class SearchDocumentsTool(BaseMCPTool):
             query_embedding=query_embedding,
             top_k=params.top_k,
             filters=params.filters,
-            score_threshold=0.7,
+            score_threshold=params.score_threshold,
         )
 
         logger.info("Recherche terminee: %d resultats", len(results))
@@ -167,6 +193,10 @@ class SearchDocumentsTool(BaseMCPTool):
                     "section_title": r.get("section_title"),
                     "content_type": r.get("content_type"),
                     "doc_filename": r.get("doc_filename"),
+                    # Nouveaux champs multi-format
+                    "document_type": r.get("document_type", "pdf"),
+                    "has_formula": r.get("has_formula", False),
+                    "sheet_names": r.get("sheet_names", []),
                 }
                 for r in results
             ],

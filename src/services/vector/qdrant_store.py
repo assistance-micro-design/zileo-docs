@@ -30,6 +30,7 @@ from qdrant_client.models import (
 from src.core.config import settings
 from src.models.chunk import DocumentChunk
 from src.models.document import DocumentMetadata
+from src.models.unified import UnifiedMetadata
 
 
 logger = logging.getLogger(__name__)
@@ -297,6 +298,137 @@ class QdrantVectorStore:
             "skipped_chunks": skipped,
             "document_id": document_metadata.document_id,
             "collection": self.COLLECTION_NAME,
+        }
+
+    async def store_unified_chunks(
+        self,
+        chunks: list[DocumentChunk],
+        unified_metadata: UnifiedMetadata,
+    ) -> dict[str, Any]:
+        """Stocke les chunks avec embeddings et metadata unifiée (Excel/Word).
+
+        Args:
+            chunks: Liste des chunks a stocker (avec embeddings).
+            unified_metadata: Metadata unifiée du document parent.
+
+        Returns:
+            Dictionnaire avec statistiques de stockage:
+            - stored_chunks: Nombre de chunks stockes
+            - skipped_chunks: Nombre de chunks sans embedding
+            - document_id: ID du document
+            - collection: Nom de la collection
+
+        Example:
+            >>> result = await store.store_unified_chunks(chunks, unified_meta)
+            >>> print(f"Stored {result['stored_chunks']} chunks")
+        """
+        points: list[PointStruct] = []
+        skipped = 0
+
+        for chunk in chunks:
+            if chunk.embedding is None:
+                skipped += 1
+                continue
+
+            payload = self._build_unified_payload(chunk, unified_metadata)
+            point_id = self._generate_point_id(chunk.metadata.chunk_id)
+
+            points.append(
+                PointStruct(
+                    id=point_id,
+                    vector=chunk.embedding,
+                    payload=payload,
+                )
+            )
+
+        # Upsert par batch pour performance
+        batch_size = 100
+        for i in range(0, len(points), batch_size):
+            batch = points[i : i + batch_size]
+            await asyncio.to_thread(
+                self.client.upsert,
+                collection_name=self.COLLECTION_NAME,
+                points=batch,
+            )
+
+        logger.info(
+            "Stored %d unified chunks for document %s (skipped %d without embeddings)",
+            len(points),
+            unified_metadata.document_id,
+            skipped,
+        )
+
+        return {
+            "stored_chunks": len(points),
+            "skipped_chunks": skipped,
+            "document_id": unified_metadata.document_id,
+            "collection": self.COLLECTION_NAME,
+        }
+
+    def _build_unified_payload(
+        self,
+        chunk: DocumentChunk,
+        unified_meta: UnifiedMetadata,
+    ) -> dict[str, Any]:
+        """Construit le payload pour documents unifiés (Excel/Word).
+
+        Args:
+            chunk: Chunk a stocker.
+            unified_meta: Metadata unifiée du document parent.
+
+        Returns:
+            Dictionnaire du payload avec toutes les metadonnees.
+        """
+        meta = chunk.metadata
+
+        # Sanitize content to remove problematic Unicode characters
+        content = _sanitize_text(chunk.content)
+        content_preview = content[:500] if content else ""
+
+        return {
+            # --- Identifiants du chunk ---
+            "chunk_id": meta.chunk_id,
+            "document_id": meta.document_id,
+            "parent_chunk_id": meta.parent_chunk_id or "",
+            # --- Contenu textuel ---
+            "content": content,
+            "content_preview": content_preview,
+            # --- Localisation dans le document ---
+            "page_numbers": meta.page_numbers,
+            "start_page": meta.start_page,
+            "end_page": meta.end_page,
+            "chunk_index": meta.chunk_index,
+            "total_chunks": meta.total_chunks,
+            # --- Structure hierarchique ---
+            "section_title": meta.section_title or "",
+            "section_hierarchy": meta.section_hierarchy,
+            # --- Type de contenu detecte ---
+            "content_type": meta.content_type,
+            "has_table": meta.has_table,
+            "has_image": meta.has_image,
+            "has_equation": meta.has_equation,
+            # --- Type de document (NOUVEAU) ---
+            "document_type": unified_meta.document_type.value,
+            "has_formula": unified_meta.has_formulas,
+            "sheet_names": unified_meta.sheet_names,
+            # --- Statistiques du chunk ---
+            "token_count": meta.token_count,
+            "char_count": meta.char_count,
+            "word_count": meta.word_count,
+            # --- Contexte environnant ---
+            "preceding_context": meta.preceding_context,
+            "following_context": meta.following_context,
+            # --- Metadonnees document denormalisees ---
+            "doc_filename": unified_meta.filename,
+            "doc_title": unified_meta.title or "",
+            "doc_author": unified_meta.author or "",
+            "doc_total_pages": unified_meta.page_count or 0,
+            "doc_file_hash": "",  # Non disponible pour documents unifiés
+            # --- Horodatages ---
+            "ingested_at": unified_meta.indexed_at.isoformat(),
+            "doc_creation_date": (
+                unified_meta.created_at.isoformat() if unified_meta.created_at else None
+            ),
         }
 
     def _build_payload(

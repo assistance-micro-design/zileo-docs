@@ -281,11 +281,15 @@ class SearchDocumentsParams(BaseModel):
     Attributes:
         query: Requete de recherche.
         top_k: Nombre de resultats.
+        score_threshold: Score minimum de similarite.
         filters: Filtres optionnels.
     """
 
     query: Annotated[str, Field(description="Requete de recherche")]
     top_k: Annotated[int, Field(default=5, ge=1, le=100, description="Nombre de resultats")]
+    score_threshold: Annotated[
+        float, Field(default=0.7, ge=0.0, le=1.0, description="Score minimum de similarite")
+    ]
     filters: dict[str, Any] | None = Field(
         default=None,
         description="Filtres optionnels",
@@ -339,4 +343,101 @@ class ReadDocumentContentParams(BaseModel):
     include_chunks_detail: bool = Field(
         default=False,
         description="Inclure les metadonnees detaillees de chaque chunk.",
+    )
+
+
+class UnifiedIndexDocumentParams(BaseModel):
+    """Paramètres du tool MCP index_document (unifié PDF/Excel/Word).
+
+    Attributes:
+        file_path: Chemin absolu vers le fichier.
+        force_ocr: PDF uniquement: forcer OCR même si texte natif.
+        sheets: Excel uniquement: noms des feuilles à indexer.
+        table_format: Format de sortie des tableaux.
+    """
+
+    file_path: Annotated[
+        str, Field(description="Chemin absolu vers le document. Ex: /data/docs/rapport.xlsx")
+    ]
+    force_ocr: bool = Field(
+        default=False,
+        description="PDF uniquement: forcer OCR même si le document contient du texte",
+    )
+    sheets: list[str] | None = Field(
+        default=None,
+        description="Excel uniquement: noms des feuilles à indexer (toutes si vide)",
+    )
+    table_format: str = Field(
+        default="markdown",
+        description="Format des tableaux extraits: markdown, html ou json",
+    )
+
+
+class UnifiedIndexDocumentResult(BaseModel):
+    """Résultat de l'indexation d'un document unifié.
+
+    Attributes:
+        document_id: Identifiant unique du document indexé.
+        document_type: Type de document (pdf, excel, word).
+        filename: Nom du fichier.
+        chunks_stored: Nombre de chunks indexés.
+        has_tables: Document contient des tableaux.
+        has_formulas: Document contient des formules (Excel).
+        has_images: Document contient des images.
+        sheet_names: Noms des feuilles (Excel uniquement).
+    """
+
+    document_id: str
+    document_type: str
+    filename: str
+    chunks_stored: int
+    has_tables: bool = False
+    has_formulas: bool = False
+    has_images: bool = False
+    sheet_names: list[str] | None = None
+    processing_time_seconds: float | None = None
+
+
+class GetExcelFormulasParams(BaseModel):
+    """Paramètres du tool MCP get_excel_formulas.
+
+    Attributes:
+        document_id: ID du document Excel indexé.
+        sheet: Filtrer par nom de feuille.
+        cell_range: Filtrer par plage de cellules.
+    """
+
+    document_id: Annotated[
+        str, Field(description="ID du document Excel (retourné par index_document)")
+    ]
+    sheet: str | None = Field(
+        default=None,
+        description="Filtrer par nom de feuille",
+    )
+    cell_range: str | None = Field(
+        default=None,
+        description="Filtrer par plage de cellules. Ex: 'A1:D10'",
+    )
+
+
+class ListAvailableDocumentsParams(BaseModel):
+    """Paramètres du tool MCP list_available_documents.
+
+    Attributes:
+        type_filter: Filtrer par type de document.
+        subdirectory: Sous-dossier à explorer.
+        recursive: Explorer récursivement.
+    """
+
+    type_filter: str = Field(
+        default="all",
+        description="Filtrer par type: pdf, excel, word, all",
+    )
+    subdirectory: str = Field(
+        default="",
+        description="Sous-dossier relatif à explorer",
+    )
+    recursive: bool = Field(
+        default=True,
+        description="Explorer récursivement les sous-dossiers",
     )

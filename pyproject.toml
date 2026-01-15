@@ -43,6 +43,15 @@ dependencies = [
     "tenacity>=8.2.0",
     "python-multipart>=0.0.9",
     "structlog>=24.1.0",
+
+    # Excel Processing (Sprint 2)
+    "openpyxl>=3.1.0",
+    "xlrd>=2.0.0",
+
+    # Word Processing (Sprint 3)
+    "docx2python>=2.0.0",
+    "python-docx>=1.0.0",
+    "Pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]
@@ -155,6 +164,16 @@ module = [
     "structlog.*",
     "mcp",
     "mcp.*",
+    "openpyxl",
+    "openpyxl.*",
+    "xlrd",
+    "xlrd.*",
+    "docx2python",
+    "docx2python.*",
+    "docx",
+    "docx.*",
+    "PIL",
+    "PIL.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

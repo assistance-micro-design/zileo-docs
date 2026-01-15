@@ -78,35 +78,58 @@ Endpoint : `POST /mcp`
 
 | Tool | Description |
 |------|-------------|
-| `index_document` | Extrait et indexe un PDF |
-| `search_documents` | Recherche semantique dans les PDFs indexes |
+| `index_document` | Extrait et indexe un document (PDF, Excel, Word) |
+| `search_documents` | Recherche semantique dans les documents indexes |
 | `get_document` | Recupere les metadonnees d'un document |
 | `delete_document` | Supprime un document de l'index |
 | `list_indexed_documents` | Liste tous les documents indexes |
-| `list_available_pdfs` | Liste les PDFs disponibles |
+| `list_available_documents` | Liste les documents disponibles (PDF, Excel, Word) |
+| `list_available_pdfs` | Alias de list_available_documents (compatibilite) |
 | `read_document_content` | Lit le contenu Markdown complet d'un document |
+| `get_excel_formulas` | Recupere les formules d'un Excel indexe |
 
 #### index_document
 
-Extrait et indexe un PDF pour la recherche semantique.
+Extrait et indexe un document (PDF, Excel, Word) pour la recherche semantique.
 Etape obligatoire avant search_documents.
 
-**Parametres** :
-- `file_path` (requis) : Chemin absolu vers le PDF. Ex: /data/docs/rapport.pdf
-- `force_ocr` : Forcer OCR meme si le PDF contient du texte (defaut: false)
-- `table_format` : Format des tableaux extraits: 'markdown' ou 'html' (defaut: markdown)
+**Formats supportes** :
+- PDF (.pdf) : texte, tableaux, images, OCR
+- Excel (.xlsx, .xls) : donnees, formules, feuilles multiples
+- Word (.docx) : texte, tableaux, images
 
-**Retour** : document_id, metadonnees, nombre de passages indexes
+**Parametres** :
+- `file_path` (requis) : Chemin absolu vers le document. Ex: /data/docs/rapport.xlsx
+- `force_ocr` : PDF uniquement - Forcer OCR meme si texte natif (defaut: false)
+- `sheets` : Excel uniquement - Noms des feuilles a indexer (toutes si vide)
+- `table_format` : Format des tableaux: 'markdown', 'html' ou 'json' (defaut: markdown)
+
+**Retour** :
+- `document_id` : Identifiant unique
+- `document_type` : Type detecte (pdf, excel, word)
+- `filename` : Nom du fichier
+- `chunks_stored` : Nombre de chunks indexes
+- `has_tables` : Presence de tableaux
+- `has_formulas` : Excel - Presence de formules
+- `has_images` : Presence d'images
+- `sheet_names` : Excel - Liste des feuilles
 
 #### search_documents
 
-Recherche dans les PDFs indexes par similarite semantique.
+Recherche dans les documents indexes par similarite semantique.
 Requiert: documents indexes via index_document.
 
 **Parametres** :
 - `query` (requis) : Question en langage naturel. Ex: 'comment configurer X?'
 - `top_k` : Nombre de passages a retourner (1-100, defaut: 5)
-- `filters` : Filtres optionnels (document_id, doc_filename, has_table, has_image)
+- `filters` : Filtres optionnels :
+  - `document_id` : Limiter a un document specifique
+  - `doc_filename` : Filtrer par nom de fichier
+  - `document_type` : Filtrer par type (pdf, excel, word)
+  - `has_table` : Chunks contenant des tableaux
+  - `has_image` : Chunks contenant des images
+  - `has_formula` : Excel - Chunks avec formules
+  - `sheet_name` : Excel - Filtrer par feuille
 
 **Retour** : Passages pertinents avec score et numero de page
 
@@ -139,16 +162,64 @@ Utiliser pour connaitre les document_id disponibles.
 
 **Retour** : Liste des documents avec document_id, filename, title, total_chunks, ingested_at
 
-#### list_available_pdfs
+#### list_available_documents
 
-Liste les fichiers PDF disponibles dans le dossier monte.
-Utiliser pour savoir quels PDFs peuvent etre indexes.
+Liste les fichiers disponibles pour indexation (PDF, Excel, Word).
+Utiliser pour savoir quels documents peuvent etre indexes.
 
 **Parametres** :
-- `subdirectory` (optionnel) : Sous-dossier a scanner
+- `type_filter` (optionnel) : Filtrer par type: 'pdf', 'excel', 'word', 'all' (defaut: all)
+- `subdirectory` (optionnel) : Sous-dossier relatif a scanner
 - `recursive` (optionnel) : Scanner recursivement (defaut: true)
 
-**Retour** : Liste des fichiers avec path, filename, size_mb
+**Retour** :
+- `base_path` : Chemin du dossier scanne
+- `total_files` : Nombre total de fichiers
+- `by_type` : Statistiques par type {pdf: N, excel: M, ...}
+- `files` : Liste des fichiers avec:
+  - `filename` : Nom du fichier
+  - `path` : Chemin absolu (pour index_document)
+  - `relative_path` : Chemin relatif
+  - `type` : Type de document (pdf, excel, word)
+  - `size_mb` : Taille en MB
+  - `extension` : Extension du fichier
+
+#### list_available_pdfs
+
+Alias de `list_available_documents` pour compatibilite.
+Utiliser `list_available_documents` de preference.
+
+#### get_excel_formulas
+
+Recupere toutes les formules d'un document Excel indexe.
+Requiert: document Excel indexe via index_document.
+
+**Parametres** :
+- `document_id` (requis) : ID du document Excel (retourne par index_document)
+- `sheet` (optionnel) : Filtrer par nom de feuille
+- `cell_range` (optionnel) : Filtrer par plage de cellules. Ex: 'A1:D10'
+
+**Retour** :
+- `document_id` : ID du document
+- `total_formulas` : Nombre de formules trouvees
+- `formulas` : Liste des formules avec:
+  - `sheet` : Nom de la feuille
+  - `cell` : Reference de cellule (ex: C10)
+  - `formula` : Formule brute (ex: =SUM(C2:C9))
+  - `result` : Resultat calcule
+
+**Exemple d'utilisation** :
+
+```json
+// Toutes les formules
+{"document_id": "doc-abc123"}
+
+// Formules de la feuille "Data"
+{"document_id": "doc-abc123", "sheet": "Data"}
+
+// Formules dans la plage A1:D10
+{"document_id": "doc-abc123", "cell_range": "A1:D10"}
+```
 
 #### read_document_content
 

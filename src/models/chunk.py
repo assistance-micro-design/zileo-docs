@@ -36,6 +36,17 @@ class ChunkMetadata:
     has_image: bool = False
     has_equation: bool = False
 
+    # === Type de document (NOUVEAU - multi-format) ===
+    document_type: str = "pdf"  # pdf, excel, word
+
+    # === Spécifique Excel (NOUVEAU) ===
+    sheet_name: str | None = None
+    has_formula: bool = False
+    formulas: list[dict[str, object]] | None = None
+
+    # === Spécifique Word (NOUVEAU) ===
+    heading_level: int | None = None
+
     # === Statistiques ===
     token_count: int = 0
     char_count: int = 0
@@ -62,6 +73,11 @@ class ChunkMetadata:
             "has_table": self.has_table,
             "has_image": self.has_image,
             "has_equation": self.has_equation,
+            "document_type": self.document_type,
+            "sheet_name": self.sheet_name,
+            "has_formula": self.has_formula,
+            "formulas": self.formulas,
+            "heading_level": self.heading_level,
             "token_count": self.token_count,
             "char_count": self.char_count,
             "word_count": self.word_count,
@@ -74,7 +90,7 @@ class ChunkMetadata:
 
         Qdrant supporte: str, int, float, bool, list (de scalaires).
         """
-        return {
+        payload: dict[str, object] = {
             "chunk_id": self.chunk_id,
             "document_id": self.document_id,
             "parent_chunk_id": self.parent_chunk_id or "",
@@ -89,10 +105,22 @@ class ChunkMetadata:
             "has_table": self.has_table,
             "has_image": self.has_image,
             "has_equation": self.has_equation,
+            "document_type": self.document_type,
+            "has_formula": self.has_formula,
             "token_count": self.token_count,
             "char_count": self.char_count,
             "word_count": self.word_count,
         }
+
+        # Champs optionnels (évite null dans Qdrant)
+        if self.sheet_name:
+            payload["sheet_name"] = self.sheet_name
+        if self.formulas:
+            payload["formulas"] = self.formulas
+        if self.heading_level is not None:
+            payload["heading_level"] = self.heading_level
+
+        return payload
 
 
 @dataclass
