@@ -21,6 +21,7 @@ from src.main import app
 from src.mcp.server import MCPServer
 from src.mcp.tools.get_document import GetDocumentTool
 from src.mcp.tools.index_document import IndexDocumentTool
+from src.mcp.tools.read_document_content import ReadDocumentContentTool
 from src.mcp.tools.search import SearchDocumentsTool
 from src.services.pipeline.orchestrator import PDFPipelineOrchestrator
 
@@ -278,7 +279,7 @@ class TestMCPServer:
         """Test l'initialisation du serveur MCP."""
         assert mcp_server_instance.name is not None
         assert mcp_server_instance.version is not None
-        assert len(mcp_server_instance.tools) == 6
+        assert len(mcp_server_instance.tools) == 7
 
     def test_mcp_tools_registered(self, mcp_server_instance: MCPServer) -> None:
         """Test que tous les tools sont enregistres."""
@@ -289,6 +290,7 @@ class TestMCPServer:
             "delete_document",
             "list_indexed_documents",
             "list_available_pdfs",
+            "read_document_content",
         ]
         for tool_name in expected_tools:
             assert tool_name in mcp_server_instance.tools
@@ -343,7 +345,7 @@ class TestMCPServer:
         )
         assert "result" in response
         assert "tools" in response["result"]
-        assert len(response["result"]["tools"]) == 6
+        assert len(response["result"]["tools"]) == 7
 
     @pytest.mark.asyncio
     async def test_mcp_initialize(self, mcp_server_instance: MCPServer) -> None:
@@ -468,6 +470,162 @@ class TestMCPTools:
 
         with pytest.raises(DocumentNotFoundError):
             await tool.execute({"document_id": "nonexistent-doc"})
+
+    @pytest.mark.asyncio
+    async def test_read_document_content_tool_not_found(self) -> None:
+        """Test que read_document_content leve une erreur si document introuvable."""
+        tool = ReadDocumentContentTool()
+
+        mock_store = AsyncMock()
+        mock_store.get_document_chunks = AsyncMock(return_value=[])
+        mock_store.initialize = AsyncMock()
+        tool._vector_store = mock_store
+        tool._initialized = True
+
+        with pytest.raises(DocumentNotFoundError):
+            await tool.execute({"document_id": "nonexistent-doc"})
+
+    @pytest.mark.asyncio
+    async def test_read_document_content_tool_success(self) -> None:
+        """Test la lecture reussie d'un document."""
+        tool = ReadDocumentContentTool()
+
+        mock_chunks = [
+            {
+                "chunk_id": "chunk-1",
+                "chunk_index": 0,
+                "content": "# Title\n\nFirst paragraph.",
+                "page_numbers": [0],
+                "doc_filename": "test.pdf",
+                "doc_total_pages": 2,
+                "token_count": 25,
+                "char_count": 75,
+            },
+            {
+                "chunk_id": "chunk-2",
+                "chunk_index": 1,
+                "content": "## Section\n\nSecond paragraph.",
+                "page_numbers": [1],
+                "doc_filename": "test.pdf",
+                "doc_total_pages": 2,
+                "token_count": 30,
+                "char_count": 90,
+            },
+        ]
+
+        mock_store = AsyncMock()
+        mock_store.get_document_chunks = AsyncMock(return_value=mock_chunks)
+        mock_store.initialize = AsyncMock()
+        tool._vector_store = mock_store
+        tool._initialized = True
+
+        result = await tool.execute({"document_id": "doc-test"})
+
+        assert result["document_id"] == "doc-test"
+        assert result["filename"] == "test.pdf"
+        assert result["total_pages"] == 2
+        assert result["total_chunks"] == 2
+        assert result["total_tokens"] == 55
+        assert "# Title" in result["content"]
+        assert "## Section" in result["content"]
+
+    @pytest.mark.asyncio
+    async def test_read_document_content_with_page_filter(self) -> None:
+        """Test la lecture avec filtrage par pages."""
+        tool = ReadDocumentContentTool()
+
+        mock_chunks = [
+            {
+                "chunk_id": "chunk-1",
+                "chunk_index": 0,
+                "content": "Page 1 content",
+                "page_numbers": [0],
+                "doc_filename": "test.pdf",
+                "doc_total_pages": 3,
+                "token_count": 10,
+                "char_count": 30,
+            },
+            {
+                "chunk_id": "chunk-2",
+                "chunk_index": 1,
+                "content": "Page 2 content",
+                "page_numbers": [1],
+                "doc_filename": "test.pdf",
+                "doc_total_pages": 3,
+                "token_count": 10,
+                "char_count": 30,
+            },
+            {
+                "chunk_id": "chunk-3",
+                "chunk_index": 2,
+                "content": "Page 3 content",
+                "page_numbers": [2],
+                "doc_filename": "test.pdf",
+                "doc_total_pages": 3,
+                "token_count": 10,
+                "char_count": 30,
+            },
+        ]
+
+        mock_store = AsyncMock()
+        mock_store.get_document_chunks = AsyncMock(return_value=mock_chunks)
+        mock_store.initialize = AsyncMock()
+        tool._vector_store = mock_store
+        tool._initialized = True
+
+        result = await tool.execute({
+            "document_id": "doc-test",
+            "page_start": 2,
+            "page_end": 2,
+        })
+
+        assert result["chunks_returned"] == 1
+        assert result["pages_returned"] == [2]
+        assert "Page 2 content" in result["content"]
+        assert "Page 1 content" not in result["content"]
+        assert "Page 3 content" not in result["content"]
+
+    @pytest.mark.asyncio
+    async def test_read_document_content_with_chunks_detail(self) -> None:
+        """Test la lecture avec details des chunks."""
+        tool = ReadDocumentContentTool()
+
+        mock_chunks = [
+            {
+                "chunk_id": "chunk-1",
+                "chunk_index": 0,
+                "content": "Content with table",
+                "page_numbers": [0],
+                "doc_filename": "test.pdf",
+                "doc_total_pages": 1,
+                "section_title": "Introduction",
+                "content_type": "text",
+                "token_count": 15,
+                "char_count": 45,
+                "has_table": True,
+                "has_image": False,
+            },
+        ]
+
+        mock_store = AsyncMock()
+        mock_store.get_document_chunks = AsyncMock(return_value=mock_chunks)
+        mock_store.initialize = AsyncMock()
+        tool._vector_store = mock_store
+        tool._initialized = True
+
+        result = await tool.execute({
+            "document_id": "doc-test",
+            "include_chunks_detail": True,
+        })
+
+        assert "chunks_detail" in result
+        assert len(result["chunks_detail"]) == 1
+        detail = result["chunks_detail"][0]
+        assert detail["chunk_index"] == 0
+        assert detail["page_numbers"] == [1]
+        assert detail["section_title"] == "Introduction"
+        assert detail["has_table"] is True
+        assert detail["has_image"] is False
 
 
 # =============================================================================

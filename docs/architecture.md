@@ -82,6 +82,16 @@ Chaque chunk stocke des metadonnees riches pour le filtrage :
 src/
 ├── api/           # Endpoints REST
 ├── mcp/           # Serveur MCP et tools
+│   ├── server.py          # MCPServer principal
+│   └── tools/             # Tools MCP
+│       ├── base.py        # BaseMCPTool (classe abstraite)
+│       ├── index_document.py
+│       ├── search.py
+│       ├── get_document.py
+│       ├── delete_document.py
+│       ├── list_indexed_documents.py
+│       ├── list_available_pdfs.py
+│       └── read_document_content.py
 ├── services/      # Logique metier (pipeline)
 ├── models/        # Schemas Pydantic
 └── core/          # Configuration et exceptions
@@ -91,3 +101,75 @@ tests/
 ├── integration/   # Tests avec services externes
 └── e2e/           # Tests bout-en-bout
 ```
+
+## Architecture des Tools MCP
+
+### BaseMCPTool
+
+Tous les tools MCP heritent de `BaseMCPTool`, une classe abstraite qui fournit :
+
+- **Structure commune** : `name`, `description`, `input_schema`
+- **Initialisation lazy** : Pattern idempotent avec `_initialized`
+- **Template method** : `execute()` appelle `_ensure_initialized()` puis `_do_execute()`
+
+```python
+class BaseMCPTool(ABC):
+    name: ClassVar[str]
+    description: ClassVar[str]
+    input_schema: ClassVar[dict[str, Any]]
+
+    async def execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        await self._ensure_initialized()
+        return await self._do_execute(arguments)
+
+    @abstractmethod
+    async def _do_initialize(self) -> None: ...
+
+    @abstractmethod
+    async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]: ...
+```
+
+### Injection de Dependances
+
+Les tools partagent leurs dependances (vector store, embedder) via injection :
+
+```python
+class MCPServer:
+    def __init__(self) -> None:
+        self._shared_vector_store = QdrantVectorStore()
+        self._shared_embedder = MistralEmbedder()
+
+        # Injection dans les tools
+        self._search_tool = SearchDocumentsTool(
+            vector_store=self._shared_vector_store,
+            embedder=self._shared_embedder,
+        )
+```
+
+**Avantages** :
+- Une seule connexion Qdrant partagee
+- Testabilite amelioree (injection de mocks)
+- Reduction des ressources
+
+### Initialisation Parallele
+
+Le `MCPServer` initialise tous les tools en parallele :
+
+```python
+async def initialize(self) -> None:
+    await asyncio.gather(
+        *(tool.initialize() for tool in self.tools.values())
+    )
+```
+
+### Liste des Tools
+
+| Tool | Fichier | Dependances |
+|------|---------|-------------|
+| `index_document` | `index_document.py` | Orchestrator, VectorStore |
+| `search_documents` | `search.py` | VectorStore, Embedder |
+| `get_document` | `get_document.py` | VectorStore |
+| `delete_document` | `delete_document.py` | VectorStore |
+| `list_indexed_documents` | `list_indexed_documents.py` | VectorStore |
+| `list_available_pdfs` | `list_available_pdfs.py` | FileSystem |
+| `read_document_content` | `read_document_content.py` | VectorStore |

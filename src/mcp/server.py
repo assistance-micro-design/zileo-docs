@@ -20,6 +20,7 @@ from src.mcp.tools.get_document import GetDocumentTool
 from src.mcp.tools.index_document import IndexDocumentTool
 from src.mcp.tools.list_available_pdfs import ListAvailablePdfsTool
 from src.mcp.tools.list_indexed_documents import ListIndexedDocumentsTool
+from src.mcp.tools.read_document_content import ReadDocumentContentTool
 from src.mcp.tools.search import SearchDocumentsTool
 from src.services.embedding.mistral_embedder import MistralEmbedder
 from src.services.vector.qdrant_store import QdrantVectorStore
@@ -38,6 +39,7 @@ class MCPServer:
     - delete_document: Supprimer un document de l'index vectoriel
     - list_indexed_documents: Lister tous les documents indexes
     - list_available_pdfs: Lister les fichiers PDF disponibles
+    - read_document_content: Lire le contenu Markdown complet d'un document
 
     Attributes:
         name: Nom du serveur MCP.
@@ -83,6 +85,9 @@ class MCPServer:
             vector_store=self._shared_vector_store,
         )
         self._list_available_pdfs = ListAvailablePdfsTool()
+        self._read_document_content = ReadDocumentContentTool(
+            vector_store=self._shared_vector_store,
+        )
 
         # Registry des tools
         self.tools: dict[str, BaseMCPTool] = {
@@ -92,6 +97,7 @@ class MCPServer:
             "delete_document": self._delete_document,
             "list_indexed_documents": self._list_indexed_documents,
             "list_available_pdfs": self._list_available_pdfs,
+            "read_document_content": self._read_document_content,
         }
 
         # Refactoring #5: Routing optimise (defini une seule fois)

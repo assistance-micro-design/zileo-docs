@@ -76,6 +76,16 @@ Endpoint : `POST /mcp`
 
 ### Tools MCP
 
+| Tool | Description |
+|------|-------------|
+| `index_document` | Extrait et indexe un PDF |
+| `search_documents` | Recherche semantique dans les PDFs indexes |
+| `get_document` | Recupere les metadonnees d'un document |
+| `delete_document` | Supprime un document de l'index |
+| `list_indexed_documents` | Liste tous les documents indexes |
+| `list_available_pdfs` | Liste les PDFs disponibles |
+| `read_document_content` | Lit le contenu Markdown complet d'un document |
+
 #### index_document
 
 Extrait et indexe un PDF pour la recherche semantique.
@@ -139,6 +149,37 @@ Utiliser pour savoir quels PDFs peuvent etre indexes.
 - `recursive` (optionnel) : Scanner recursivement (defaut: true)
 
 **Retour** : Liste des fichiers avec path, filename, size_mb
+
+#### read_document_content
+
+Lit le contenu Markdown complet d'un document indexe.
+Utiliser pour lire/analyser un document entier ou des pages specifiques.
+
+**Parametres** :
+- `document_id` (requis) : ID du document (retourne par index_document ou list_indexed_documents)
+- `page_start` (optionnel) : Page de debut (1-indexed, inclus)
+- `page_end` (optionnel) : Page de fin (1-indexed, inclus)
+- `include_chunks_detail` (optionnel) : Inclure les metadonnees de chaque chunk (defaut: false)
+
+**Retour** :
+- `document_id`, `filename` : Identifiants du document
+- `total_pages`, `total_chunks`, `total_tokens` : Statistiques du document complet
+- `pages_returned`, `chunks_returned`, `tokens_returned` : Statistiques de la selection
+- `content` : Contenu Markdown complet
+- `chunks_detail` : Metadonnees par chunk (si demande)
+
+**Exemple d'utilisation** :
+
+```json
+// Lire tout le document
+{"document_id": "doc-abc123"}
+
+// Lire pages 5 a 10
+{"document_id": "doc-abc123", "page_start": 5, "page_end": 10}
+
+// Lire avec details des chunks
+{"document_id": "doc-abc123", "include_chunks_detail": true}
+```
 
 ---
 

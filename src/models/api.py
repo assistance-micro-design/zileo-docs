@@ -308,3 +308,33 @@ class DeleteDocumentParams(BaseModel):
     """
 
     document_id: Annotated[str, Field(description="ID du document a supprimer")]
+
+
+class ReadDocumentContentParams(BaseModel):
+    """Parametres du tool MCP read_document_content.
+
+    Attributes:
+        document_id: ID du document indexe.
+        page_start: Page de debut (1-indexed, inclus).
+        page_end: Page de fin (1-indexed, inclus).
+        include_chunks_detail: Inclure metadonnees par chunk.
+    """
+
+    document_id: Annotated[
+        str,
+        Field(description="ID du document (retourne par index_document ou list_indexed_documents)"),
+    ]
+    page_start: int | None = Field(
+        default=None,
+        ge=1,
+        description="Page de debut (1-indexed). Si omis, commence au debut.",
+    )
+    page_end: int | None = Field(
+        default=None,
+        ge=1,
+        description="Page de fin (1-indexed). Si omis, va jusqu'a la fin.",
+    )
+    include_chunks_detail: bool = Field(
+        default=False,
+        description="Inclure les metadonnees detaillees de chaque chunk.",
+    )
