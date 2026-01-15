@@ -242,6 +242,12 @@ Le projet utilise un typage statique strict avec mypy. Les types personnalises s
 
 Pour plus de details, voir [Type Safety](type-safety.md).
 
+## Code Style
+
+Le projet suit des conventions strictes pour maintenir la lisibilite : elimination des blocs `else` au profit de guard clauses, early returns, et dict dispatch.
+
+Pour plus de details, voir [Code Style](code-style.md).
+
 ### Validation
 
 ```bash

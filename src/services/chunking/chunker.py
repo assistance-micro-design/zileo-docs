@@ -340,23 +340,23 @@ class SmartChunker:
             test_chunk = current_chunk + para + "\n\n"
             token_count = self._count_tokens(test_chunk)
 
+            # Cas simple: le paragraphe tient dans le chunk
             if token_count <= self.chunk_size:
-                # Le paragraphe tient dans le chunk courant
                 current_chunk = test_chunk
-            else:
-                # Sauvegarder et demarrer un nouveau chunk avec overlap
-                if self._should_save_chunk(current_chunk):
-                    chunks.append(
-                        (
-                            current_chunk.strip(),
-                            dict(current_section),
-                            "text",
-                        )
-                    )
+                continue
 
-                # Extraire l'overlap de la fin du chunk precedent
-                overlap = self._get_overlap(current_chunk)
-                current_chunk = overlap + para + "\n\n"
+            # Chunk plein: sauvegarder et recommencer avec overlap
+            if self._should_save_chunk(current_chunk):
+                chunks.append(
+                    (
+                        current_chunk.strip(),
+                        dict(current_section),
+                        "text",
+                    )
+                )
+
+            overlap = self._get_overlap(current_chunk)
+            current_chunk = overlap + para + "\n\n"
 
         # Sauvegarder le dernier chunk
         if self._should_save_chunk(current_chunk):

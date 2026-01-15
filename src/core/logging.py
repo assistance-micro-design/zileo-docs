@@ -30,14 +30,12 @@ def setup_logging() -> None:
         structlog.processors.UnicodeDecoder(),
     ]
 
-    # Renderer selon le format configure
-    renderer: structlog.types.Processor
-    if settings.LOG_FORMAT == "json":
-        # Format JSON pour production
-        renderer = structlog.processors.JSONRenderer()
-    else:
-        # Format console coloree pour dev
-        renderer = structlog.dev.ConsoleRenderer(colors=True)
+    # Renderer selon le format configure (ternaire - 2 options seulement)
+    renderer: structlog.types.Processor = (
+        structlog.processors.JSONRenderer()
+        if settings.LOG_FORMAT == "json"
+        else structlog.dev.ConsoleRenderer(colors=True)
+    )
 
     structlog.configure(
         processors=[

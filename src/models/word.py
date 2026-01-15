@@ -111,14 +111,11 @@ class WordTable(BaseModel):
 
         lines: list[str] = []
 
-        # Déterminer les en-têtes
-        if self.headers:
-            headers = self.headers
-            data_rows = self.rows
-        else:
-            # Première ligne comme en-têtes
-            headers = [cell.text for cell in self.rows[0]]
-            data_rows = self.rows[1:] if len(self.rows) > 1 else []
+        # Headers: explicites ou première ligne
+        headers = self.headers or [cell.text for cell in self.rows[0]]
+
+        # Data: toutes les lignes si headers explicites, sinon skip première
+        data_rows = self.rows if self.headers else self.rows[1:]
 
         # En-têtes
         lines.append("| " + " | ".join(headers) + " |")

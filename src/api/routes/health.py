@@ -35,13 +35,8 @@ async def health_check() -> HealthResponse:
     # Verifier Mistral API (via cle API configuree)
     mistral_status = _check_mistral_config()
 
-    # Determiner le statut global
-    if qdrant_status == "healthy" and mistral_status == "healthy":
-        overall_status = "healthy"
-    elif qdrant_status == "unhealthy" or mistral_status == "unhealthy":
-        overall_status = "degraded"
-    else:
-        overall_status = "healthy"
+    # Determiner le statut global (guard clause - une seule condition)
+    overall_status = _compute_health_status(qdrant_status, mistral_status)
 
     return HealthResponse(
         status=overall_status,
@@ -83,6 +78,21 @@ async def readiness() -> dict[str, str]:
     if qdrant_status == "healthy":
         return {"status": "ready"}
     return {"status": "not_ready", "reason": "qdrant_unavailable"}
+
+
+def _compute_health_status(qdrant: str, mistral: str) -> str:
+    """Calcule le statut global de sante.
+
+    Args:
+        qdrant: Statut Qdrant (healthy/unhealthy/unknown).
+        mistral: Statut Mistral (healthy/unhealthy/unknown).
+
+    Returns:
+        Statut global: healthy ou degraded.
+    """
+    if "unhealthy" in (qdrant, mistral):
+        return "degraded"
+    return "healthy"
 
 
 async def _check_qdrant() -> str:

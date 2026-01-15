@@ -32,6 +32,23 @@ from src.services.vector.qdrant_store import QdrantVectorStore
 logger = logging.getLogger(__name__)
 
 
+def _format_tool_error(error: Exception) -> str:
+    """Formate une erreur pour reponse MCP.
+
+    Args:
+        error: Exception a formater.
+
+    Returns:
+        Texte d'erreur formate pour le LLM.
+    """
+    if isinstance(error, MCPZileoPDFError):
+        return error.to_llm_format()
+    return (
+        f"ERROR [INTERNAL_ERROR]: {error!s}\n"
+        "SUGGESTION: Erreur inattendue. Reessayer ou contacter le support."
+    )
+
+
 class MCPServer:
     """Serveur MCP pour le traitement de documents PDF.
 
@@ -347,15 +364,14 @@ class MCPServer:
         Returns:
             Reponse JSON-RPC avec isError=True.
         """
-        if isinstance(error, MCPZileoPDFError):
-            logger.warning("Tool error: %s", error)
-            error_text = error.to_llm_format()
-        else:
-            logger.exception("Tool execution error: %s", error)
-            error_text = (
-                f"ERROR [INTERNAL_ERROR]: {error!s}\n"
-                "SUGGESTION: Erreur inattendue. Reessayer ou contacter le support."
-            )
+        # Logging: ternaire pour selectionner la fonction de log
+        log_func = (
+            logger.warning if isinstance(error, MCPZileoPDFError) else logger.exception
+        )
+        log_func("Tool error: %s", error)
+
+        # Formatage: helper pour separer les responsabilites
+        error_text = _format_tool_error(error)
 
         return {
             "jsonrpc": "2.0",

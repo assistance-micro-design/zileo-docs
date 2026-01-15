@@ -203,14 +203,14 @@ class PDFPipelineOrchestrator:
         analyzer = DocumentAnalyzer(pdf_path, original_filename=original_filename)
         analysis = await analyzer.analyze()
 
-        # Determiner les pages a traiter
+        # Default: utiliser l'analyse
+        pages_for_native = analysis.pages_for_local_extraction
+        pages_for_ocr = analysis.pages_for_ocr
+
+        # Override si force_ocr
         if options.get("force_ocr", False):
-            # Forcer OCR sur toutes les pages
-            pages_for_native: list[int] = []
+            pages_for_native = []
             pages_for_ocr = list(range(analysis.metadata.total_pages))
-        else:
-            pages_for_native = analysis.pages_for_local_extraction
-            pages_for_ocr = analysis.pages_for_ocr
 
         # Phase 2: Extraction native (pages simples)
         native_content: dict[int, ExtractedContent] = {}
@@ -315,29 +315,30 @@ class PDFPipelineOrchestrator:
         pdf_path = Path(pdf_path)
         results: dict[int, ExtractedContent | OCRResult] = {}
 
+        # Cas force_ocr: tout par OCR
         if force_ocr:
-            # Tout par OCR
             ocr_results = await self.ocr_processor.process_pages(pdf_path, page_numbers)
             results.update(ocr_results)
-        else:
-            # Analyser d'abord pour determiner la methode
-            analyzer = DocumentAnalyzer(pdf_path)
-            analysis = await analyzer.analyze()
+            return results
 
-            # Separer les pages
-            pages_native = [p for p in page_numbers if p in analysis.pages_for_local_extraction]
-            pages_ocr = [p for p in page_numbers if p in analysis.pages_for_ocr]
+        # Cas normal: analyser puis router
+        analyzer = DocumentAnalyzer(pdf_path)
+        analysis = await analyzer.analyze()
 
-            # Extraire nativement
-            if pages_native:
-                extractor = NativeContentExtractor(pdf_path)
-                native_results = await extractor.extract_pages(pages_native)
-                results.update(native_results)
+        # Separer les pages
+        pages_native = [p for p in page_numbers if p in analysis.pages_for_local_extraction]
+        pages_ocr = [p for p in page_numbers if p in analysis.pages_for_ocr]
 
-            # Extraire par OCR
-            if pages_ocr:
-                ocr_results = await self.ocr_processor.process_pages(pdf_path, pages_ocr)
-                results.update(ocr_results)
+        # Extraire nativement
+        if pages_native:
+            extractor = NativeContentExtractor(pdf_path)
+            native_results = await extractor.extract_pages(pages_native)
+            results.update(native_results)
+
+        # Extraire par OCR
+        if pages_ocr:
+            ocr_results = await self.ocr_processor.process_pages(pdf_path, pages_ocr)
+            results.update(ocr_results)
 
         return results
 

@@ -191,6 +191,43 @@ class ExcelExtractor:
             merged_cells=merged,
         )
 
+
+    def _detect_cell_type(
+        self,
+        value: CellValue,
+        formula_value: str | None,
+    ) -> tuple[CellType, CellValue, str | None]:
+        """Detecte le type de cellule et normalise la valeur.
+
+        Args:
+            value: Valeur de la cellule.
+            formula_value: Valeur brute (peut contenir formule).
+
+        Returns:
+            Tuple (cell_type, normalized_value, formula).
+        """
+        # Formule Excel
+        if isinstance(formula_value, str) and formula_value.startswith("="):
+            return CellType.FORMULA, value, formula_value
+
+        # Cellule vide
+        if value is None:
+            return CellType.EMPTY, None, None
+
+        # Boolean (avant number car bool est subclass de int)
+        if isinstance(value, bool):
+            return CellType.BOOLEAN, value, None
+
+        # Nombre
+        if isinstance(value, (int, float)):
+            return CellType.NUMBER, value, None
+
+        # Date
+        if isinstance(value, datetime):
+            return CellType.DATE, value.isoformat(), None
+
+        return CellType.TEXT, str(value) if value else None, None
+
     def _process_cell(
         self,
         cell_formula: Cell,
@@ -200,25 +237,9 @@ class ExcelExtractor:
     ) -> ExcelCell:
         """Traite une cellule et détermine son type."""
         col_letter = get_column_letter(col)
-        formula: str | None = None
         value: CellValue = cell_value.value
 
-        # Vérifier si c'est une formule
-        if isinstance(cell_formula.value, str) and cell_formula.value.startswith("="):
-            formula = cell_formula.value
-            cell_type = CellType.FORMULA
-        elif value is None:
-            cell_type = CellType.EMPTY
-        elif isinstance(value, bool):
-            cell_type = CellType.BOOLEAN
-        elif isinstance(value, (int, float)):
-            cell_type = CellType.NUMBER
-        elif isinstance(value, datetime):
-            cell_type = CellType.DATE
-            value = value.isoformat()
-        else:
-            cell_type = CellType.TEXT
-            value = str(value) if value else None
+        cell_type, value, formula = self._detect_cell_type(value, cell_formula.value)
 
         return ExcelCell(
             row=row,
@@ -280,6 +301,43 @@ class ExcelExtractor:
 
         return list(set(matches))
 
+
+    def _detect_xls_cell_type(
+        self,
+        value: CellValue,
+        cell_type_xlrd: int,
+        datemode: int,
+    ) -> tuple[CellType, CellValue]:
+        """Detecte le type de cellule pour fichier .xls.
+
+        Args:
+            value: Valeur de la cellule.
+            cell_type_xlrd: Type xlrd de la cellule.
+            datemode: Mode de date du workbook.
+
+        Returns:
+            Tuple (cell_type, normalized_value).
+        """
+        if cell_type_xlrd == xlrd.XL_CELL_EMPTY:
+            return CellType.EMPTY, value
+
+        if cell_type_xlrd == xlrd.XL_CELL_NUMBER:
+            return CellType.NUMBER, value
+
+        if cell_type_xlrd == xlrd.XL_CELL_DATE:
+            # Convertir la date Excel
+            if isinstance(value, float):
+                value = xlrd.xldate_as_datetime(value, datemode).isoformat()
+            return CellType.DATE, value
+
+        if cell_type_xlrd == xlrd.XL_CELL_BOOLEAN:
+            return CellType.BOOLEAN, bool(value)
+
+        if cell_type_xlrd == xlrd.XL_CELL_ERROR:
+            return CellType.ERROR, value
+
+        return CellType.TEXT, str(value) if value else None
+
     async def _extract_xls(self, path: Path) -> ExcelDocument:
         """Extrait les données d'un fichier .xls legacy avec xlrd."""
         wb = xlrd.open_workbook(str(path))
@@ -298,23 +356,9 @@ class ExcelExtractor:
                     cell_type_xlrd = ws.cell_type(row_idx, col_idx)
 
                     # Convertir type xlrd vers notre enum
-                    if cell_type_xlrd == xlrd.XL_CELL_EMPTY:
-                        cell_type = CellType.EMPTY
-                    elif cell_type_xlrd == xlrd.XL_CELL_NUMBER:
-                        cell_type = CellType.NUMBER
-                    elif cell_type_xlrd == xlrd.XL_CELL_DATE:
-                        cell_type = CellType.DATE
-                        # Convertir la date Excel
-                        if isinstance(value, float):
-                            value = xlrd.xldate_as_datetime(value, wb.datemode).isoformat()
-                    elif cell_type_xlrd == xlrd.XL_CELL_BOOLEAN:
-                        cell_type = CellType.BOOLEAN
-                        value = bool(value)
-                    elif cell_type_xlrd == xlrd.XL_CELL_ERROR:
-                        cell_type = CellType.ERROR
-                    else:
-                        cell_type = CellType.TEXT
-                        value = str(value) if value else None
+                    cell_type, value = self._detect_xls_cell_type(
+                        value, cell_type_xlrd, wb.datemode
+                    )
 
                     row_cells.append(
                         ExcelCell(

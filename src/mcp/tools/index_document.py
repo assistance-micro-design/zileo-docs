@@ -131,15 +131,15 @@ class IndexDocumentTool(BaseMCPTool):
 
         start_time = datetime.now(UTC)
 
-        # Router vers le bon pipeline
+        # Cas PDF: pipeline dedie
         if doc_type == DocumentType.PDF:
             result = await self._index_pdf(file_path, params)
-        else:
-            result = await self._index_unified(file_path, doc_type, params)
+            result["processing_time_seconds"] = (datetime.now(UTC) - start_time).total_seconds()
+            return result
 
-        end_time = datetime.now(UTC)
-        result["processing_time_seconds"] = (end_time - start_time).total_seconds()
-
+        # Autres formats: pipeline unifie
+        result = await self._index_unified(file_path, doc_type, params)
+        result["processing_time_seconds"] = (datetime.now(UTC) - start_time).total_seconds()
         return result
 
     async def _index_pdf(

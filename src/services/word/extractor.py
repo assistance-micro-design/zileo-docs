@@ -80,43 +80,45 @@ class WordExtractor:
         # - Une section texte: [[[paragraph1, paragraph2, ...]]]
         # - Un tableau: [[row1], [row2], ...] où row = [[cell1], [cell2], ...]
         for section in doc.body:
+            # Tables: traitement et continue
             if self._is_table_section(section):
-                # C'est un tableau
                 table = self._extract_table_from_section(section)
-                if table.rows:
-                    tables.append(table)
-                    content_blocks.append(
-                        ContentBlock(
-                            content_type=ContentType.TABLE,
-                            order=order,
-                            table=table,
-                        )
+                if not table.rows:
+                    continue
+                tables.append(table)
+                content_blocks.append(
+                    ContentBlock(
+                        content_type=ContentType.TABLE,
+                        order=order,
+                        table=table,
                     )
-                    order += 1
-            else:
-                # C'est une section texte
-                for column in section:
-                    for cell in column:
-                        # cell est une liste de paragraphes
-                        if isinstance(cell, list):
-                            for para_text in cell:
-                                if isinstance(para_text, str) and para_text.strip():
-                                    para = self._extract_paragraph(para_text)
-                                    paragraphs.append(para)
-                                    word_count += len(para_text.split())
+                )
+                order += 1
+                continue
 
-                                    content_blocks.append(
-                                        ContentBlock(
-                                            content_type=(
-                                                ContentType.HEADING
-                                                if para.level != HeadingLevel.BODY
-                                                else ContentType.PARAGRAPH
-                                            ),
-                                            order=order,
-                                            paragraph=para,
-                                        )
+            # Sections texte (plus de else)
+            for column in section:
+                for cell in column:
+                    # cell est une liste de paragraphes
+                    if isinstance(cell, list):
+                        for para_text in cell:
+                            if isinstance(para_text, str) and para_text.strip():
+                                para = self._extract_paragraph(para_text)
+                                paragraphs.append(para)
+                                word_count += len(para_text.split())
+
+                                content_blocks.append(
+                                    ContentBlock(
+                                        content_type=(
+                                            ContentType.HEADING
+                                            if para.level != HeadingLevel.BODY
+                                            else ContentType.PARAGRAPH
+                                        ),
+                                        order=order,
+                                        paragraph=para,
                                     )
-                                    order += 1
+                                )
+                                order += 1
 
         # Extraire les images
         if self.extract_images and doc.images:
