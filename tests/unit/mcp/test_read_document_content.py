@@ -230,10 +230,12 @@ class TestPageFiltering:
         tool_with_mock: ReadDocumentContentTool,
     ) -> None:
         """Test le filtrage avec page_start."""
-        result = await tool_with_mock.execute({
-            "document_id": "doc-test",
-            "page_start": 2,
-        })
+        result = await tool_with_mock.execute(
+            {
+                "document_id": "doc-test",
+                "page_start": 2,
+            }
+        )
 
         # Chunks contenant au moins une page >= 2 (1-indexed)
         # Chunk 1: pages [0] (page 1) -> exclu
@@ -251,10 +253,12 @@ class TestPageFiltering:
         tool_with_mock: ReadDocumentContentTool,
     ) -> None:
         """Test le filtrage avec page_end."""
-        result = await tool_with_mock.execute({
-            "document_id": "doc-test",
-            "page_end": 1,
-        })
+        result = await tool_with_mock.execute(
+            {
+                "document_id": "doc-test",
+                "page_end": 1,
+            }
+        )
 
         assert 3 not in result["pages_returned"]
 
@@ -264,11 +268,13 @@ class TestPageFiltering:
         tool_with_mock: ReadDocumentContentTool,
     ) -> None:
         """Test le filtrage avec plage de pages."""
-        result = await tool_with_mock.execute({
-            "document_id": "doc-test",
-            "page_start": 2,
-            "page_end": 2,
-        })
+        result = await tool_with_mock.execute(
+            {
+                "document_id": "doc-test",
+                "page_start": 2,
+                "page_end": 2,
+            }
+        )
 
         assert 2 in result["pages_returned"]
 
@@ -279,10 +285,12 @@ class TestPageFiltering:
     ) -> None:
         """Test que le filtrage reduit les tokens retournes."""
         full_result = await tool_with_mock.execute({"document_id": "doc-test"})
-        filtered_result = await tool_with_mock.execute({
-            "document_id": "doc-test",
-            "page_start": 3,
-        })
+        filtered_result = await tool_with_mock.execute(
+            {
+                "document_id": "doc-test",
+                "page_start": 3,
+            }
+        )
 
         assert filtered_result["tokens_returned"] < full_result["tokens_returned"]
         assert filtered_result["total_tokens"] == full_result["total_tokens"]
@@ -293,11 +301,13 @@ class TestPageFiltering:
         tool_with_mock: ReadDocumentContentTool,
     ) -> None:
         """Test que le filtrage preserve les stats du document complet."""
-        result = await tool_with_mock.execute({
-            "document_id": "doc-test",
-            "page_start": 2,
-            "page_end": 2,
-        })
+        result = await tool_with_mock.execute(
+            {
+                "document_id": "doc-test",
+                "page_start": 2,
+                "page_end": 2,
+            }
+        )
 
         assert result["total_pages"] == 3
         assert result["total_chunks"] == 4
@@ -323,10 +333,12 @@ class TestChunksDetail:
         tool_with_mock: ReadDocumentContentTool,
     ) -> None:
         """Test l'inclusion des details."""
-        result = await tool_with_mock.execute({
-            "document_id": "doc-test",
-            "include_chunks_detail": True,
-        })
+        result = await tool_with_mock.execute(
+            {
+                "document_id": "doc-test",
+                "include_chunks_detail": True,
+            }
+        )
 
         assert "chunks_detail" in result
         assert len(result["chunks_detail"]) == 4
@@ -337,10 +349,12 @@ class TestChunksDetail:
         tool_with_mock: ReadDocumentContentTool,
     ) -> None:
         """Test la structure des details."""
-        result = await tool_with_mock.execute({
-            "document_id": "doc-test",
-            "include_chunks_detail": True,
-        })
+        result = await tool_with_mock.execute(
+            {
+                "document_id": "doc-test",
+                "include_chunks_detail": True,
+            }
+        )
 
         detail = result["chunks_detail"][0]
         assert "chunk_index" in detail
@@ -357,10 +371,12 @@ class TestChunksDetail:
         tool_with_mock: ReadDocumentContentTool,
     ) -> None:
         """Test que les pages dans detail sont 1-indexed."""
-        result = await tool_with_mock.execute({
-            "document_id": "doc-test",
-            "include_chunks_detail": True,
-        })
+        result = await tool_with_mock.execute(
+            {
+                "document_id": "doc-test",
+                "include_chunks_detail": True,
+            }
+        )
 
         assert result["chunks_detail"][0]["page_numbers"] == [1]
 
@@ -370,11 +386,13 @@ class TestChunksDetail:
         tool_with_mock: ReadDocumentContentTool,
     ) -> None:
         """Test que les details respectent le filtre de pages."""
-        result = await tool_with_mock.execute({
-            "document_id": "doc-test",
-            "page_start": 3,
-            "include_chunks_detail": True,
-        })
+        result = await tool_with_mock.execute(
+            {
+                "document_id": "doc-test",
+                "page_start": 3,
+                "include_chunks_detail": True,
+            }
+        )
 
         assert len(result["chunks_detail"]) < 4
 
@@ -384,14 +402,14 @@ class TestChunksDetail:
         tool_with_mock: ReadDocumentContentTool,
     ) -> None:
         """Test le flag has_table dans les details."""
-        result = await tool_with_mock.execute({
-            "document_id": "doc-test",
-            "include_chunks_detail": True,
-        })
-
-        chunk_with_table = next(
-            c for c in result["chunks_detail"] if c["chunk_index"] == 1
+        result = await tool_with_mock.execute(
+            {
+                "document_id": "doc-test",
+                "include_chunks_detail": True,
+            }
         )
+
+        chunk_with_table = next(c for c in result["chunks_detail"] if c["chunk_index"] == 1)
         assert chunk_with_table["has_table"] is True
 
     @pytest.mark.asyncio
@@ -400,14 +418,14 @@ class TestChunksDetail:
         tool_with_mock: ReadDocumentContentTool,
     ) -> None:
         """Test le flag has_image dans les details."""
-        result = await tool_with_mock.execute({
-            "document_id": "doc-test",
-            "include_chunks_detail": True,
-        })
-
-        chunk_with_image = next(
-            c for c in result["chunks_detail"] if c["chunk_index"] == 2
+        result = await tool_with_mock.execute(
+            {
+                "document_id": "doc-test",
+                "include_chunks_detail": True,
+            }
         )
+
+        chunk_with_image = next(c for c in result["chunks_detail"] if c["chunk_index"] == 2)
         assert chunk_with_image["has_image"] is True
 
 
@@ -467,12 +485,14 @@ class TestChunkOrdering:
             {"chunk_id": "2", "chunk_index": 1, "content": "Second", "page_numbers": [1]},
         ]
         for c in shuffled_chunks:
-            c.update({
-                "doc_filename": "test.pdf",
-                "doc_total_pages": 3,
-                "token_count": 10,
-                "char_count": 30,
-            })
+            c.update(
+                {
+                    "doc_filename": "test.pdf",
+                    "doc_total_pages": 3,
+                    "token_count": 10,
+                    "char_count": 30,
+                }
+            )
 
         mock_vector_store.get_document_chunks = AsyncMock(return_value=shuffled_chunks)
         tool = ReadDocumentContentTool(vector_store=mock_vector_store)

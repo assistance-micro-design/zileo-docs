@@ -247,7 +247,9 @@ class ExtractPDFParams(BaseModel):
         table_format: Format des tableaux extraits.
     """
 
-    file_path: Annotated[str, Field(description="Chemin absolu vers le PDF. Ex: /data/docs/rapport.pdf")]
+    file_path: Annotated[
+        str, Field(description="Chemin absolu vers le PDF. Ex: /data/docs/rapport.pdf")
+    ]
     force_ocr: bool = Field(
         default=False,
         description="Forcer OCR meme si le PDF contient du texte",

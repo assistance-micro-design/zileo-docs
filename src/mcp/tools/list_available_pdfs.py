@@ -107,13 +107,15 @@ class ListAvailablePdfsTool(BaseMCPTool):
         for pdf_path in scan_path.glob(pattern):
             if pdf_path.is_file():
                 stat = pdf_path.stat()
-                pdf_files.append({
-                    "filename": pdf_path.name,
-                    "path": str(pdf_path),
-                    "relative_path": str(pdf_path.relative_to(self._documents_path)),
-                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                    "modified_at": stat.st_mtime,
-                })
+                pdf_files.append(
+                    {
+                        "filename": pdf_path.name,
+                        "path": str(pdf_path),
+                        "relative_path": str(pdf_path.relative_to(self._documents_path)),
+                        "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                        "modified_at": stat.st_mtime,
+                    }
+                )
 
         # Trier par nom
         pdf_files.sort(key=lambda x: x["filename"].lower())

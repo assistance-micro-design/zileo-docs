@@ -9,8 +9,9 @@ import asyncio
 import base64
 import re
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import fitz  # PyMuPDF
 from mistralai import Mistral
@@ -24,6 +25,27 @@ from src.models.extraction import (
     OCRResult,
     TableData,
 )
+
+
+class OCRImageProtocol(Protocol):
+    """Protocol pour une image dans la reponse OCR Mistral."""
+
+    description: str
+    bbox: list[float] | None
+    base64: str | None
+
+
+class OCRPageProtocol(Protocol):
+    """Protocol pour une page dans la reponse OCR Mistral."""
+
+    markdown: str
+    images: Sequence[OCRImageProtocol]
+
+
+class OCRResponseProtocol(Protocol):
+    """Protocol pour la reponse de l'API OCR Mistral."""
+
+    pages: Sequence[OCRPageProtocol]
 
 
 class MistralOCRProcessor:
@@ -148,7 +170,7 @@ class MistralOCRProcessor:
     async def _call_ocr_api(
         self,
         img_base64: str,
-    ) -> Any:
+    ) -> OCRResponseProtocol | None:
         """Appelle l'API Mistral OCR.
 
         Args:
@@ -270,7 +292,7 @@ class MistralOCRProcessor:
 
     def _extract_images(
         self,
-        page_content: Any,
+        page_content: OCRPageProtocol,
         include_base64: bool,
     ) -> list[ImageData]:
         """Extrait informations sur les images.

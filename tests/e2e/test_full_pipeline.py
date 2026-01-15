@@ -573,11 +573,13 @@ class TestMCPTools:
         tool._vector_store = mock_store
         tool._initialized = True
 
-        result = await tool.execute({
-            "document_id": "doc-test",
-            "page_start": 2,
-            "page_end": 2,
-        })
+        result = await tool.execute(
+            {
+                "document_id": "doc-test",
+                "page_start": 2,
+                "page_end": 2,
+            }
+        )
 
         assert result["chunks_returned"] == 1
         assert result["pages_returned"] == [2]
@@ -613,10 +615,12 @@ class TestMCPTools:
         tool._vector_store = mock_store
         tool._initialized = True
 
-        result = await tool.execute({
-            "document_id": "doc-test",
-            "include_chunks_detail": True,
-        })
+        result = await tool.execute(
+            {
+                "document_id": "doc-test",
+                "include_chunks_detail": True,
+            }
+        )
 
         assert "chunks_detail" in result
         assert len(result["chunks_detail"]) == 1

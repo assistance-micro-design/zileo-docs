@@ -173,3 +173,16 @@ async def initialize(self) -> None:
 | `list_indexed_documents` | `list_indexed_documents.py` | VectorStore |
 | `list_available_pdfs` | `list_available_pdfs.py` | FileSystem |
 | `read_document_content` | `read_document_content.py` | VectorStore |
+
+## Type Safety
+
+Le projet utilise un typage statique strict avec mypy. Les types personnalises sont definis dans des modules `types.py` dedies (ex: `src/mcp/types.py`).
+
+Pour plus de details, voir [Type Safety](type-safety.md).
+
+### Validation
+
+```bash
+mypy src/
+# Success: no issues found in N source files
+```

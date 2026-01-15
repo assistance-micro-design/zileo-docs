@@ -22,6 +22,7 @@ from src.mcp.tools.list_available_pdfs import ListAvailablePdfsTool
 from src.mcp.tools.list_indexed_documents import ListIndexedDocumentsTool
 from src.mcp.tools.read_document_content import ReadDocumentContentTool
 from src.mcp.tools.search import SearchDocumentsTool
+from src.mcp.types import RequestId
 from src.services.embedding.mistral_embedder import MistralEmbedder
 from src.services.vector.qdrant_store import QdrantVectorStore
 
@@ -102,7 +103,7 @@ class MCPServer:
 
         # Refactoring #5: Routing optimise (defini une seule fois)
         self._method_handlers: dict[
-            str, Callable[[Any, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]]
+            str, Callable[[RequestId, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]]
         ] = {
             "initialize": self._handle_initialize,
             "tools/list": self._handle_tools_list,
@@ -124,9 +125,7 @@ class MCPServer:
         s'assurer que les connexions aux services externes sont etablies.
         """
         if not self._initialized:
-            await asyncio.gather(
-                *(tool.initialize() for tool in self.tools.values())
-            )
+            await asyncio.gather(*(tool.initialize() for tool in self.tools.values()))
             self._initialized = True
             logger.info("MCP Server services initialized")
 
@@ -164,7 +163,7 @@ class MCPServer:
 
     async def _route_request(
         self,
-        request_id: Any,
+        request_id: RequestId,
         method: str,
         request: dict[str, Any],
     ) -> dict[str, Any]:
@@ -208,7 +207,7 @@ class MCPServer:
 
     async def _handle_initialize(
         self,
-        request_id: Any,
+        request_id: RequestId,
         _params: dict[str, Any],
     ) -> dict[str, Any]:
         """Gere la requete d'initialisation MCP.
@@ -241,7 +240,7 @@ class MCPServer:
 
     async def _handle_tools_list(
         self,
-        request_id: Any,
+        request_id: RequestId,
         _params: dict[str, Any],
     ) -> dict[str, Any]:
         """Gere la requete de liste des tools.
@@ -272,7 +271,7 @@ class MCPServer:
 
     async def _handle_tools_call(
         self,
-        request_id: Any,
+        request_id: RequestId,
         params: dict[str, Any],
     ) -> dict[str, Any]:
         """Gere l'appel d'un tool.
@@ -324,7 +323,7 @@ class MCPServer:
 
     def _tool_error_response(
         self,
-        request_id: Any,
+        request_id: RequestId,
         error: Exception,
     ) -> dict[str, Any]:
         """Construit une reponse d'erreur pour un tool MCP.
@@ -364,7 +363,7 @@ class MCPServer:
 
     def _error_response(
         self,
-        request_id: Any,
+        request_id: RequestId,
         code: int,
         message: str,
     ) -> dict[str, Any]:
