@@ -298,3 +298,13 @@ class GetDocumentParams(BaseModel):
     """
 
     document_id: Annotated[str, Field(description="ID du document")]
+
+
+class DeleteDocumentParams(BaseModel):
+    """Parametres du tool MCP delete_document.
+
+    Attributes:
+        document_id: ID du document a supprimer de l'index.
+    """
+
+    document_id: Annotated[str, Field(description="ID du document a supprimer")]

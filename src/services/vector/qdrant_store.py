@@ -635,3 +635,67 @@ class QdrantVectorStore:
             "indexed_vectors_count": info.indexed_vectors_count,
             "status": str(info.status),
         }
+
+    async def list_documents(self) -> list[dict[str, Any]]:
+        """Liste tous les documents indexes dans la collection.
+
+        Recupere les documents uniques en scrollant la collection
+        et en groupant par document_id.
+
+        Returns:
+            Liste de dictionnaires avec les infos de chaque document:
+            - document_id: ID unique du document
+            - filename: Nom du fichier
+            - title: Titre du document
+            - author: Auteur
+            - total_pages: Nombre de pages
+            - total_chunks: Nombre de chunks
+            - ingested_at: Date d'ingestion
+
+        Example:
+            >>> docs = await store.list_documents()
+            >>> for doc in docs:
+            ...     print(f"{doc['filename']}: {doc['total_chunks']} chunks")
+        """
+        # Scroll pour recuperer tous les points (metadata seulement)
+        documents: dict[str, dict[str, Any]] = {}
+        offset = None
+        batch_size = 100
+
+        while True:
+            results, next_offset = await asyncio.to_thread(
+                self.client.scroll,
+                collection_name=self.COLLECTION_NAME,
+                scroll_filter=None,
+                limit=batch_size,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+
+            for point in results:
+                if not point.payload:
+                    continue
+
+                doc_id = point.payload.get("document_id")
+                if not doc_id or doc_id in documents:
+                    # Skip si pas d'ID ou deja vu (on compte les chunks)
+                    if doc_id and doc_id in documents:
+                        documents[doc_id]["total_chunks"] += 1
+                    continue
+
+                documents[doc_id] = {
+                    "document_id": doc_id,
+                    "filename": point.payload.get("doc_filename", ""),
+                    "title": point.payload.get("doc_title", ""),
+                    "author": point.payload.get("doc_author", ""),
+                    "total_pages": point.payload.get("doc_total_pages", 0),
+                    "total_chunks": 1,
+                    "ingested_at": point.payload.get("ingested_at", ""),
+                }
+
+            if next_offset is None:
+                break
+            offset = next_offset
+
+        return list(documents.values())

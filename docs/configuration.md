@@ -46,6 +46,12 @@ Toutes les configurations se font via variables d'environnement. Copier `.env.ex
 | `MAX_PDF_SIZE_MB` | `50` | Taille max d'un PDF en MB |
 | `MAX_PDF_PAGES` | `1000` | Nombre max de pages par PDF |
 
+### Chemins
+
+| Variable | Defaut | Description |
+|----------|--------|-------------|
+| `DOCUMENTS_PATH` | `/app/documents` | Dossier contenant les PDFs disponibles |
+
 ---
 
 ## Exemple de Configuration
@@ -94,6 +100,21 @@ MAX_PDF_PAGES=1000
 En mode Docker, les variables sont passees via `docker-compose.yml` ou fichier `.env`.
 
 Le service Qdrant est configure automatiquement avec le hostname `qdrant` dans le reseau Docker.
+
+### Volumes Montes
+
+| Volume | Container | Description |
+|--------|-----------|-------------|
+| `./data` | `/app/data` | Donnees persistantes |
+| `/chemin/vers/pdfs` | `/app/documents` | PDFs disponibles (lecture seule) |
+
+Exemple dans `docker-compose.yml` :
+
+```yaml
+volumes:
+  - ./data:/app/data
+  - /home/user/Documents:/app/documents:ro
+```
 
 ---
 

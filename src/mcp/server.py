@@ -12,8 +12,11 @@ from typing import Any
 
 from src.core.config import settings
 from src.core.exceptions import MCPZileoPDFError
+from src.mcp.tools.delete_document import DeleteDocumentTool
 from src.mcp.tools.get_document import GetDocumentTool
 from src.mcp.tools.index_document import IndexDocumentTool
+from src.mcp.tools.list_available_pdfs import ListAvailablePdfsTool
+from src.mcp.tools.list_indexed_documents import ListIndexedDocumentsTool
 from src.mcp.tools.search import SearchDocumentsTool
 
 
@@ -27,6 +30,9 @@ class MCPServer:
     - index_document: Extraire et indexer un PDF dans la base vectorielle
     - search_documents: Recherche semantique dans les documents indexes
     - get_document: Obtenir les informations d'un document indexe
+    - delete_document: Supprimer un document de l'index vectoriel
+    - list_indexed_documents: Lister tous les documents indexes
+    - list_available_pdfs: Lister les fichiers PDF disponibles
 
     Attributes:
         name: Nom du serveur MCP.
@@ -56,12 +62,18 @@ class MCPServer:
         self._index_document = IndexDocumentTool()
         self._search_documents = SearchDocumentsTool()
         self._get_document = GetDocumentTool()
+        self._delete_document = DeleteDocumentTool()
+        self._list_indexed_documents = ListIndexedDocumentsTool()
+        self._list_available_pdfs = ListAvailablePdfsTool()
 
         # Registry des tools
         self.tools: dict[str, Any] = {
             "index_document": self._index_document,
             "search_documents": self._search_documents,
             "get_document": self._get_document,
+            "delete_document": self._delete_document,
+            "list_indexed_documents": self._list_indexed_documents,
+            "list_available_pdfs": self._list_available_pdfs,
         }
 
         logger.info(
@@ -81,6 +93,9 @@ class MCPServer:
             await self._index_document.initialize()
             await self._search_documents.initialize()
             await self._get_document.initialize()
+            await self._delete_document.initialize()
+            await self._list_indexed_documents.initialize()
+            await self._list_available_pdfs.initialize()
             self._initialized = True
             logger.info("MCP Server services initialized")
 

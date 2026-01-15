@@ -82,6 +82,12 @@ class Settings(BaseSettings):
         description="Nombre max de pages par PDF",
     )
 
+    # === Paths ===
+    DOCUMENTS_PATH: str = Field(
+        default="/app/documents",
+        description="Chemin vers le dossier contenant les PDFs disponibles",
+    )
+
     # === Logging ===
     LOG_LEVEL: str = Field(
         default="INFO",

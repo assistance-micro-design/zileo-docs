@@ -16,7 +16,9 @@
 | Endpoint | Methode | Description |
 |----------|---------|-------------|
 | `/api/v1/documents/index` | POST | Indexer un nouveau PDF |
-| `/api/v1/documents/{document_id}/stats` | GET | Statistiques d'un document |
+| `/api/v1/documents/{document_id}` | GET | Informations d'un document |
+| `/api/v1/documents/{document_id}` | DELETE | Supprimer un document de l'index |
+| `/api/v1/documents` | GET | Statistiques de la collection |
 
 #### POST /api/v1/documents/index
 
@@ -107,6 +109,36 @@ Utiliser pour verifier si un document existe ou voir son contenu.
 - `document_id` (requis) : ID du document (retourne par index_document)
 
 **Retour** : Metadonnees, nombre de pages, apercu des passages
+
+#### delete_document
+
+Supprime un document de l'index vectoriel (Qdrant).
+Ne supprime PAS le fichier PDF source.
+
+**Parametres** :
+- `document_id` (requis) : ID du document a supprimer
+
+**Retour** : Nombre de chunks supprimes, statut (deleted/not_found)
+
+#### list_indexed_documents
+
+Liste tous les documents deja indexes dans Qdrant.
+Utiliser pour connaitre les document_id disponibles.
+
+**Parametres** : Aucun
+
+**Retour** : Liste des documents avec document_id, filename, title, total_chunks, ingested_at
+
+#### list_available_pdfs
+
+Liste les fichiers PDF disponibles dans le dossier monte.
+Utiliser pour savoir quels PDFs peuvent etre indexes.
+
+**Parametres** :
+- `subdirectory` (optionnel) : Sous-dossier a scanner
+- `recursive` (optionnel) : Scanner recursivement (defaut: true)
+
+**Retour** : Liste des fichiers avec path, filename, size_mb
 
 ---
 
