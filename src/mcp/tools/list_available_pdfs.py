@@ -7,12 +7,13 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from src.core.config import settings
+from src.mcp.tools.base import BaseMCPTool
 
 
 logger = logging.getLogger(__name__)
 
 
-class ListAvailablePdfsTool:
+class ListAvailablePdfsTool(BaseMCPTool):
     """Tool MCP pour lister les fichiers PDF disponibles.
 
     Ce tool permet au LLM de decouvrir les fichiers PDF
@@ -56,12 +57,13 @@ class ListAvailablePdfsTool:
 
     def __init__(self) -> None:
         """Initialise le tool."""
+        super().__init__()
         self._documents_path = Path(settings.DOCUMENTS_PATH)
 
-    async def initialize(self) -> None:
+    async def _do_initialize(self) -> None:
         """Pas d'initialisation requise pour ce tool."""
 
-    async def execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
+    async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Liste les fichiers PDF disponibles.
 
         Args:

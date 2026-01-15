@@ -6,6 +6,7 @@ import logging
 from typing import Any, ClassVar
 
 from src.core.exceptions import EmptyQueryError
+from src.mcp.tools.base import BaseMCPTool
 from src.models.api import SearchDocumentsParams
 from src.services.embedding.mistral_embedder import MistralEmbedder
 from src.services.vector.qdrant_store import QdrantVectorStore
@@ -14,7 +15,7 @@ from src.services.vector.qdrant_store import QdrantVectorStore
 logger = logging.getLogger(__name__)
 
 
-class SearchDocumentsTool:
+class SearchDocumentsTool(BaseMCPTool):
     """Tool MCP pour la recherche semantique dans les documents indexes.
 
     Ce tool permet de rechercher des informations dans les documents
@@ -80,23 +81,26 @@ class SearchDocumentsTool:
         "required": ["query"],
     }
 
-    def __init__(self) -> None:
-        """Initialise le tool de recherche."""
-        self._embedder = MistralEmbedder()
-        self._vector_store = QdrantVectorStore()
-        self._initialized = False
+    def __init__(
+        self,
+        vector_store: QdrantVectorStore | None = None,
+        embedder: MistralEmbedder | None = None,
+    ) -> None:
+        """Initialise le tool de recherche.
 
-    async def initialize(self) -> None:
-        """Initialise le vector store.
-
-        Doit etre appele avant execute() pour garantir
-        que la connexion a Qdrant est etablie.
+        Args:
+            vector_store: Instance partagee du vector store (injection).
+            embedder: Instance partagee de l'embedder (injection).
         """
-        if not self._initialized:
-            await self._vector_store.initialize()
-            self._initialized = True
+        super().__init__()
+        self._embedder = embedder or MistralEmbedder()
+        self._vector_store = vector_store or QdrantVectorStore()
 
-    async def execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
+    async def _do_initialize(self) -> None:
+        """Initialise le vector store."""
+        await self._vector_store.initialize()
+
+    async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute la recherche semantique.
 
         Args:
@@ -122,10 +126,6 @@ class SearchDocumentsTool:
             EmptyQueryError: Si la requete est vide.
             NoResultsError: Si aucun resultat n'est trouve.
         """
-        # S'assurer que les services sont initialises
-        if not self._initialized:
-            await self.initialize()
-
         # Valider les parametres
         params = SearchDocumentsParams(**arguments)
 

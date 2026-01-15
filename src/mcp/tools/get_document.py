@@ -6,6 +6,7 @@ import logging
 from typing import Any, ClassVar
 
 from src.core.exceptions import DocumentNotFoundError
+from src.mcp.tools.base import BaseMCPTool
 from src.models.api import GetDocumentParams
 from src.services.vector.qdrant_store import QdrantVectorStore
 
@@ -13,7 +14,7 @@ from src.services.vector.qdrant_store import QdrantVectorStore
 logger = logging.getLogger(__name__)
 
 
-class GetDocumentTool:
+class GetDocumentTool(BaseMCPTool):
     """Tool MCP pour obtenir les informations d'un document indexe.
 
     Ce tool permet de recuperer les metadonnees et les chunks
@@ -49,22 +50,20 @@ class GetDocumentTool:
         "required": ["document_id"],
     }
 
-    def __init__(self) -> None:
-        """Initialise le tool."""
-        self._vector_store = QdrantVectorStore()
-        self._initialized = False
+    def __init__(self, vector_store: QdrantVectorStore | None = None) -> None:
+        """Initialise le tool.
 
-    async def initialize(self) -> None:
-        """Initialise le vector store.
-
-        Doit etre appele avant execute() pour garantir
-        que la connexion a Qdrant est etablie.
+        Args:
+            vector_store: Instance partagee du vector store (injection).
         """
-        if not self._initialized:
-            await self._vector_store.initialize()
-            self._initialized = True
+        super().__init__()
+        self._vector_store = vector_store or QdrantVectorStore()
 
-    async def execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
+    async def _do_initialize(self) -> None:
+        """Initialise le vector store."""
+        await self._vector_store.initialize()
+
+    async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Recupere les informations d'un document.
 
         Args:
@@ -85,10 +84,6 @@ class GetDocumentTool:
         Raises:
             DocumentNotFoundError: Si le document n'existe pas.
         """
-        # S'assurer que les services sont initialises
-        if not self._initialized:
-            await self.initialize()
-
         # Valider les parametres
         params = GetDocumentParams(**arguments)
 

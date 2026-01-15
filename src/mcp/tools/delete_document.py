@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar
 
+from src.mcp.tools.base import BaseMCPTool
 from src.models.api import DeleteDocumentParams
 from src.services.vector.qdrant_store import QdrantVectorStore
 
@@ -12,7 +13,7 @@ from src.services.vector.qdrant_store import QdrantVectorStore
 logger = logging.getLogger(__name__)
 
 
-class DeleteDocumentTool:
+class DeleteDocumentTool(BaseMCPTool):
     """Tool MCP pour supprimer un document de l'index vectoriel.
 
     Ce tool supprime uniquement les donnees du document dans Qdrant.
@@ -48,22 +49,20 @@ class DeleteDocumentTool:
         "required": ["document_id"],
     }
 
-    def __init__(self) -> None:
-        """Initialise le tool de suppression."""
-        self._vector_store = QdrantVectorStore()
-        self._initialized = False
+    def __init__(self, vector_store: QdrantVectorStore | None = None) -> None:
+        """Initialise le tool de suppression.
 
-    async def initialize(self) -> None:
-        """Initialise le vector store.
-
-        Doit etre appele avant execute() pour garantir
-        que la connexion a Qdrant est etablie.
+        Args:
+            vector_store: Instance partagee du vector store (injection).
         """
-        if not self._initialized:
-            await self._vector_store.initialize()
-            self._initialized = True
+        super().__init__()
+        self._vector_store = vector_store or QdrantVectorStore()
 
-    async def execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
+    async def _do_initialize(self) -> None:
+        """Initialise le vector store."""
+        await self._vector_store.initialize()
+
+    async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Supprime un document de l'index vectoriel.
 
         Args:
@@ -76,10 +75,6 @@ class DeleteDocumentTool:
                 - chunks_deleted: Nombre de chunks supprimes
                 - status: "deleted" si supprime, "not_found" si inexistant
         """
-        # S'assurer que les services sont initialises
-        if not self._initialized:
-            await self.initialize()
-
         # Valider les parametres
         params = DeleteDocumentParams(**arguments)
 

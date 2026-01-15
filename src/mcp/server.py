@@ -6,18 +6,23 @@ les outils de traitement PDF aux clients MCP (Claude, etc.).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+from collections.abc import Callable, Coroutine
 from typing import Any
 
 from src.core.config import settings
 from src.core.exceptions import MCPZileoPDFError
+from src.mcp.tools.base import BaseMCPTool
 from src.mcp.tools.delete_document import DeleteDocumentTool
 from src.mcp.tools.get_document import GetDocumentTool
 from src.mcp.tools.index_document import IndexDocumentTool
 from src.mcp.tools.list_available_pdfs import ListAvailablePdfsTool
 from src.mcp.tools.list_indexed_documents import ListIndexedDocumentsTool
 from src.mcp.tools.search import SearchDocumentsTool
+from src.services.embedding.mistral_embedder import MistralEmbedder
+from src.services.vector.qdrant_store import QdrantVectorStore
 
 
 logger = logging.getLogger(__name__)
@@ -53,27 +58,49 @@ class MCPServer:
     """
 
     def __init__(self) -> None:
-        """Initialise le serveur MCP."""
+        """Initialise le serveur MCP avec injection de dependances."""
         self.name = settings.APP_NAME
         self.version = settings.APP_VERSION
         self._initialized = False
 
-        # Instancier les tools
+        # Dependances partagees (Refactoring #3: DI)
+        self._shared_vector_store = QdrantVectorStore()
+        self._shared_embedder = MistralEmbedder()
+
+        # Instancier les tools avec injection de dependances
         self._index_document = IndexDocumentTool()
-        self._search_documents = SearchDocumentsTool()
-        self._get_document = GetDocumentTool()
-        self._delete_document = DeleteDocumentTool()
-        self._list_indexed_documents = ListIndexedDocumentsTool()
+        self._search_documents = SearchDocumentsTool(
+            vector_store=self._shared_vector_store,
+            embedder=self._shared_embedder,
+        )
+        self._get_document = GetDocumentTool(
+            vector_store=self._shared_vector_store,
+        )
+        self._delete_document = DeleteDocumentTool(
+            vector_store=self._shared_vector_store,
+        )
+        self._list_indexed_documents = ListIndexedDocumentsTool(
+            vector_store=self._shared_vector_store,
+        )
         self._list_available_pdfs = ListAvailablePdfsTool()
 
         # Registry des tools
-        self.tools: dict[str, Any] = {
+        self.tools: dict[str, BaseMCPTool] = {
             "index_document": self._index_document,
             "search_documents": self._search_documents,
             "get_document": self._get_document,
             "delete_document": self._delete_document,
             "list_indexed_documents": self._list_indexed_documents,
             "list_available_pdfs": self._list_available_pdfs,
+        }
+
+        # Refactoring #5: Routing optimise (defini une seule fois)
+        self._method_handlers: dict[
+            str, Callable[[Any, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]]
+        ] = {
+            "initialize": self._handle_initialize,
+            "tools/list": self._handle_tools_list,
+            "tools/call": self._handle_tools_call,
         }
 
         logger.info(
@@ -84,18 +111,16 @@ class MCPServer:
         )
 
     async def initialize(self) -> None:
-        """Initialise les services dependants.
+        """Initialise tous les tools en parallele.
 
+        Refactoring #2: Utilise asyncio.gather pour l'initialisation parallele.
         Doit etre appele avant de traiter des requetes pour
         s'assurer que les connexions aux services externes sont etablies.
         """
         if not self._initialized:
-            await self._index_document.initialize()
-            await self._search_documents.initialize()
-            await self._get_document.initialize()
-            await self._delete_document.initialize()
-            await self._list_indexed_documents.initialize()
-            await self._list_available_pdfs.initialize()
+            await asyncio.gather(
+                *(tool.initialize() for tool in self.tools.values())
+            )
             self._initialized = True
             logger.info("MCP Server services initialized")
 
@@ -139,6 +164,8 @@ class MCPServer:
     ) -> dict[str, Any]:
         """Route la requete vers le handler approprie.
 
+        Refactoring #5: Utilise le dictionnaire de handlers predefini.
+
         Args:
             request_id: ID de la requete.
             method: Methode a appeler.
@@ -162,17 +189,10 @@ class MCPServer:
                 "Invalid Request: method is required",
             )
 
-        # Router la requete
-        handlers: dict[str, Any] = {
-            "initialize": lambda: self._handle_initialize(request_id, request.get("params", {})),
-            "tools/list": lambda: self._handle_tools_list(request_id),
-            "tools/call": lambda: self._handle_tools_call(request_id, request.get("params", {})),
-        }
-
-        handler = handlers.get(method)
+        # Router la requete via le dictionnaire predefini
+        handler = self._method_handlers.get(method)
         if handler:
-            result: dict[str, Any] = await handler()
-            return result
+            return await handler(request_id, request.get("params", {}))
 
         return self._error_response(
             request_id,
@@ -189,7 +209,7 @@ class MCPServer:
 
         Args:
             request_id: ID de la requete.
-            params: Parametres d'initialisation.
+            _params: Parametres d'initialisation (non utilises).
 
         Returns:
             Reponse avec les capabilities du serveur.
@@ -213,25 +233,28 @@ class MCPServer:
             },
         }
 
-    async def _handle_tools_list(self, request_id: Any) -> dict[str, Any]:
+    async def _handle_tools_list(
+        self,
+        request_id: Any,
+        _params: dict[str, Any],
+    ) -> dict[str, Any]:
         """Gere la requete de liste des tools.
 
         Args:
             request_id: ID de la requete.
+            _params: Parametres (non utilises).
 
         Returns:
             Liste des tools disponibles avec leurs schemas.
         """
-        tools_list = []
-
-        for tool in self.tools.values():
-            tools_list.append(
-                {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "inputSchema": tool.input_schema,
-                }
-            )
+        tools_list = [
+            {
+                "name": tool.name,
+                "description": tool.description,
+                "inputSchema": tool.input_schema,
+            }
+            for tool in self.tools.values()
+        ]
 
         return {
             "jsonrpc": "2.0",
@@ -289,41 +312,49 @@ class MCPServer:
                 },
             }
 
-        except MCPZileoPDFError as e:
-            # Erreur applicative avec suggestion pour le LLM
-            logger.warning("Tool error: %s", e)
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": e.to_llm_format(),
-                        }
-                    ],
-                    "isError": True,
-                },
-            }
-        except Exception as e:
-            # Erreur inattendue
-            logger.exception("Tool execution error: %s", e)
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": (
-                                f"ERROR [INTERNAL_ERROR]: {e!s}\n"
-                                "SUGGESTION: Erreur inattendue. Reessayer ou contacter le support."
-                            ),
-                        }
-                    ],
-                    "isError": True,
-                },
-            }
+        except (MCPZileoPDFError, Exception) as e:
+            # Refactoring #6: Formatage d'erreur extrait
+            return self._tool_error_response(request_id, e)
+
+    def _tool_error_response(
+        self,
+        request_id: Any,
+        error: Exception,
+    ) -> dict[str, Any]:
+        """Construit une reponse d'erreur pour un tool MCP.
+
+        Refactoring #6: Methode extraite pour le formatage d'erreurs.
+
+        Args:
+            request_id: ID de la requete.
+            error: Exception levee.
+
+        Returns:
+            Reponse JSON-RPC avec isError=True.
+        """
+        if isinstance(error, MCPZileoPDFError):
+            logger.warning("Tool error: %s", error)
+            error_text = error.to_llm_format()
+        else:
+            logger.exception("Tool execution error: %s", error)
+            error_text = (
+                f"ERROR [INTERNAL_ERROR]: {error!s}\n"
+                "SUGGESTION: Erreur inattendue. Reessayer ou contacter le support."
+            )
+
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": error_text,
+                    }
+                ],
+                "isError": True,
+            },
+        }
 
     def _error_response(
         self,

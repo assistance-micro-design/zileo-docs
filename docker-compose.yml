@@ -23,7 +23,7 @@ services:
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pdf_documents}
     volumes:
       - ./data:/app/data
-      - /home/seb/Documents:/app/documents:ro
+      - ${DOCUMENTS_PATH:-./data/documents}:/app/documents:ro
     depends_on:
       qdrant:
         condition: service_healthy

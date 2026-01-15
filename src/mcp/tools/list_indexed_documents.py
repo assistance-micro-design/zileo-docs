@@ -5,13 +5,14 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar
 
+from src.mcp.tools.base import BaseMCPTool
 from src.services.vector.qdrant_store import QdrantVectorStore
 
 
 logger = logging.getLogger(__name__)
 
 
-class ListIndexedDocumentsTool:
+class ListIndexedDocumentsTool(BaseMCPTool):
     """Tool MCP pour lister tous les documents indexes dans Qdrant.
 
     Ce tool permet au LLM de decouvrir les documents disponibles
@@ -43,22 +44,20 @@ class ListIndexedDocumentsTool:
         "required": [],
     }
 
-    def __init__(self) -> None:
-        """Initialise le tool."""
-        self._vector_store = QdrantVectorStore()
-        self._initialized = False
+    def __init__(self, vector_store: QdrantVectorStore | None = None) -> None:
+        """Initialise le tool.
 
-    async def initialize(self) -> None:
-        """Initialise le vector store.
-
-        Doit etre appele avant execute() pour garantir
-        que la connexion a Qdrant est etablie.
+        Args:
+            vector_store: Instance partagee du vector store (injection).
         """
-        if not self._initialized:
-            await self._vector_store.initialize()
-            self._initialized = True
+        super().__init__()
+        self._vector_store = vector_store or QdrantVectorStore()
 
-    async def execute(self, _arguments: dict[str, Any]) -> dict[str, Any]:
+    async def _do_initialize(self) -> None:
+        """Initialise le vector store."""
+        await self._vector_store.initialize()
+
+    async def _do_execute(self, _arguments: dict[str, Any]) -> dict[str, Any]:
         """Liste tous les documents indexes.
 
         Args:
@@ -76,10 +75,6 @@ class ListIndexedDocumentsTool:
                     - total_chunks: Nombre de chunks
                     - ingested_at: Date d'ingestion
         """
-        # S'assurer que les services sont initialises
-        if not self._initialized:
-            await self.initialize()
-
         logger.info("Listing indexed documents")
 
         # Recuperer la liste des documents

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from src.core.exceptions import PDFNotFoundError
+from src.mcp.tools.base import BaseMCPTool
 from src.models.api import ExtractPDFParams
 from src.services.pipeline.orchestrator import PDFPipelineOrchestrator
 
@@ -14,7 +15,7 @@ from src.services.pipeline.orchestrator import PDFPipelineOrchestrator
 logger = logging.getLogger(__name__)
 
 
-class IndexDocumentTool:
+class IndexDocumentTool(BaseMCPTool):
     """Tool MCP pour extraire et indexer un PDF dans la base vectorielle.
 
     Ce tool execute le pipeline complet:
@@ -66,20 +67,14 @@ class IndexDocumentTool:
 
     def __init__(self) -> None:
         """Initialise le tool d'indexation."""
+        super().__init__()
         self._orchestrator = PDFPipelineOrchestrator()
-        self._initialized = False
 
-    async def initialize(self) -> None:
-        """Initialise les services (vector store).
+    async def _do_initialize(self) -> None:
+        """Initialise les services (vector store)."""
+        await self._orchestrator.initialize()
 
-        Doit etre appele avant execute() pour garantir
-        que la collection Qdrant existe.
-        """
-        if not self._initialized:
-            await self._orchestrator.initialize()
-            self._initialized = True
-
-    async def execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
+    async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute l'indexation du PDF.
 
         Args:
@@ -102,10 +97,6 @@ class IndexDocumentTool:
             PDFNotFoundError: Si le fichier n'existe pas.
             PDFCorruptedError: Si le fichier n'est pas un PDF valide.
         """
-        # S'assurer que les services sont initialises
-        if not self._initialized:
-            await self.initialize()
-
         # Valider les parametres
         params = ExtractPDFParams(**arguments)
         pdf_path = Path(params.file_path)
