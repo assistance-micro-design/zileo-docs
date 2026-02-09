@@ -47,6 +47,8 @@ class IndexDocumentTool(BaseMCPTool):
     description: ClassVar[str] = (
         "Extrait et indexe un document (PDF/Excel/Word) pour la recherche semantique. "
         "Etape obligatoire avant search_documents. "
+        "IMPORTANT: Si le document est deja indexe, retourne l'ID existant sans re-indexer. "
+        "Pour re-indexer, supprimer d'abord avec delete_document. "
         "Retourne: document_id, type, metadonnees, nombre de passages indexes."
     )
 
@@ -120,6 +122,28 @@ class IndexDocumentTool(BaseMCPTool):
 
         if not file_path.exists():
             raise PDFNotFoundError(str(file_path))
+
+        # Verification doublon : le fichier est-il deja indexe ?
+        existing = await self._vector_store.find_document_by_filename(file_path.name)
+        if existing:
+            logger.info(
+                "Document deja indexe: %s (document_id=%s, chunks=%d)",
+                file_path.name,
+                existing["document_id"],
+                existing["total_chunks"],
+            )
+            return {
+                "already_indexed": True,
+                "document_id": existing["document_id"],
+                "filename": file_path.name,
+                "total_chunks": existing["total_chunks"],
+                "ingested_at": existing["ingested_at"],
+                "message": (
+                    "Ce document est deja indexe. "
+                    "Utilisez le document_id pour search_documents. "
+                    "Pour re-indexer, supprimez d'abord avec delete_document."
+                ),
+            }
 
         # Detecter le type de document
         doc_type = self._router.detect_type(file_path)

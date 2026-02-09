@@ -22,6 +22,7 @@ from qdrant_client.models import (
     MatchText,
     MatchValue,
     PayloadSchemaType,
+    PayloadSelectorInclude,
     PointStruct,
     Range,
     TextIndexParams,
@@ -281,8 +282,8 @@ class QdrantVectorStore:
                 )
             )
 
-        # Upsert par batch pour performance
-        batch_size = 100
+        # Upsert par batch (20 pour rester sous la limite payload Qdrant)
+        batch_size = 20
         for i in range(0, len(points), batch_size):
             batch = points[i : i + batch_size]
             await asyncio.to_thread(
@@ -346,8 +347,8 @@ class QdrantVectorStore:
                 )
             )
 
-        # Upsert par batch pour performance
-        batch_size = 100
+        # Upsert par batch (20 pour rester sous la limite payload Qdrant)
+        batch_size = 20
         for i in range(0, len(points), batch_size):
             batch = points[i : i + batch_size]
             await asyncio.to_thread(
@@ -799,6 +800,18 @@ class QdrantVectorStore:
         offset = None
         batch_size = 100
 
+        # Ne recuperer que les champs necessaires (pas le contenu textuel)
+        payload_fields = PayloadSelectorInclude(
+            include=[
+                "document_id",
+                "doc_filename",
+                "doc_title",
+                "doc_author",
+                "doc_total_pages",
+                "ingested_at",
+            ],
+        )
+
         while True:
             results, next_offset = await asyncio.to_thread(
                 self.client.scroll,
@@ -806,7 +819,7 @@ class QdrantVectorStore:
                 scroll_filter=None,
                 limit=batch_size,
                 offset=offset,
-                with_payload=True,
+                with_payload=payload_fields,
                 with_vectors=False,
             )
 
@@ -836,3 +849,67 @@ class QdrantVectorStore:
             offset = next_offset
 
         return list(documents.values())
+
+    async def find_document_by_filename(self, filename: str) -> dict[str, Any] | None:
+        """Cherche un document deja indexe par son nom de fichier.
+
+        Utilise l'index KEYWORD sur doc_filename pour une recherche performante.
+
+        Args:
+            filename: Nom du fichier (basename, ex: "rapport.pdf").
+
+        Returns:
+            Dictionnaire avec document_id, filename, total_chunks, ingested_at
+            ou None si aucun document ne correspond.
+
+        Example:
+            >>> result = await store.find_document_by_filename("rapport.pdf")
+            >>> if result:
+            ...     print(f"Deja indexe: {result['document_id']}")
+        """
+        results, _next_offset = await asyncio.to_thread(
+            self.client.scroll,
+            collection_name=self.COLLECTION_NAME,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(
+                        key="doc_filename",
+                        match=MatchValue(value=filename),
+                    ),
+                ]
+            ),
+            limit=1,
+            with_payload=True,
+            with_vectors=False,
+        )
+
+        if not results:
+            return None
+
+        point = results[0]
+        if not point.payload:
+            return None
+
+        doc_id = point.payload.get("document_id", "")
+
+        # Compter le nombre total de chunks pour ce document
+        count_result = await asyncio.to_thread(
+            self.client.count,
+            collection_name=self.COLLECTION_NAME,
+            count_filter=Filter(
+                must=[
+                    FieldCondition(
+                        key="document_id",
+                        match=MatchValue(value=doc_id),
+                    ),
+                ]
+            ),
+            exact=True,
+        )
+
+        return {
+            "document_id": doc_id,
+            "filename": filename,
+            "total_chunks": count_result.count,
+            "ingested_at": point.payload.get("ingested_at", ""),
+        }
