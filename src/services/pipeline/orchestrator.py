@@ -215,52 +215,10 @@ class PDFPipelineOrchestrator:
             pages_for_ocr = list(range(analysis.metadata.total_pages))
 
         # Phase 2: Extraction native (pages simples)
-        native_content: dict[int, ExtractedContent] = {}
-        if pages_for_native:
-            try:
-                extractor = NativeContentExtractor(pdf_path)
-                native_content = await extractor.extract_pages(pages_for_native)
-            except Exception as e:
-                errors.append(
-                    {
-                        "phase": "native_extraction",
-                        "error": str(e),
-                        "pages": pages_for_native,
-                    }
-                )
+        native_content = await self._extract_native_pages(pdf_path, pages_for_native, errors)
 
         # Phase 3: OCR (pages complexes)
-        ocr_content: dict[int, OCRResult] = {}
-        if pages_for_ocr and not options.get("skip_ocr", False):
-            try:
-                ocr_options = {
-                    "table_format": options.get("table_format", settings.OCR_TABLE_FORMAT),
-                    "include_image_base64": options.get("include_images", False),
-                }
-                ocr_content = await self.ocr_processor.process_pages(
-                    pdf_path,
-                    pages_for_ocr,
-                    ocr_options,
-                )
-
-                # Compter les erreurs OCR
-                for page_num, result in ocr_content.items():
-                    if result.confidence_score == 0.0 and "Error" in result.markdown_content:
-                        errors.append(
-                            {
-                                "phase": "ocr",
-                                "error": result.markdown_content,
-                                "page": page_num,
-                            }
-                        )
-            except Exception as e:
-                errors.append(
-                    {
-                        "phase": "ocr",
-                        "error": str(e),
-                        "pages": pages_for_ocr,
-                    }
-                )
+        ocr_content = await self._extract_ocr_pages(pdf_path, pages_for_ocr, options, errors)
 
         # Calculer temps de traitement
         end_time = datetime.now(UTC)
@@ -279,6 +237,52 @@ class PDFPipelineOrchestrator:
             total_errors=len(errors),
             errors=errors,
         )
+
+    async def _extract_native_pages(
+        self,
+        pdf_path: Path,
+        pages: list[int],
+        errors: list[dict[str, Any]],
+    ) -> dict[int, ExtractedContent]:
+        """Phase 2: Extraction native des pages simples."""
+        if not pages:
+            return {}
+        try:
+            extractor = NativeContentExtractor(pdf_path)
+            return await extractor.extract_pages(pages)
+        except Exception as e:
+            errors.append({"phase": "native_extraction", "error": str(e), "pages": pages})
+            return {}
+
+    async def _extract_ocr_pages(
+        self,
+        pdf_path: Path,
+        pages: list[int],
+        options: dict[str, Any],
+        errors: list[dict[str, Any]],
+    ) -> dict[int, OCRResult]:
+        """Phase 3: Extraction OCR des pages complexes."""
+        if not pages or options.get("skip_ocr", False):
+            return {}
+        try:
+            ocr_options = {
+                "table_format": options.get("table_format", settings.OCR_TABLE_FORMAT),
+                "include_image_base64": options.get("include_images", False),
+            }
+            ocr_content = await self.ocr_processor.process_pages(
+                pdf_path,
+                pages,
+                ocr_options,
+            )
+            for page_num, result in ocr_content.items():
+                if result.confidence_score == 0.0 and "Error" in result.markdown_content:
+                    errors.append(
+                        {"phase": "ocr", "error": result.markdown_content, "page": page_num}
+                    )
+            return ocr_content
+        except Exception as e:
+            errors.append({"phase": "ocr", "error": str(e), "pages": pages})
+            return {}
 
     async def analyze_only(
         self,
@@ -387,62 +391,88 @@ class PDFPipelineOrchestrator:
 
         # Phases 1-3: Extraction (via process_document existant)
         extraction_result = await self.process_document(pdf_path, options)
-
-        # Recuperer les erreurs d'extraction
         errors.extend(extraction_result.errors)
 
-        # Initialiser les resultats
-        chunks: list[DocumentChunk] = []
-        chunks_generated = 0
-        chunks_embedded = 0
-        chunks_stored = 0
-        vector_store_result: dict[str, Any] = {}
-
         # Phase 4: Chunking + Embedding
-        if not options.get("skip_embedding", False):
-            try:
-                # 4a. Chunking semantique
-                chunks = await self.chunker.chunk_document(
-                    document_id=extraction_result.analysis.metadata.document_id,
-                    native_content=extraction_result.native_content,
-                    ocr_content=extraction_result.ocr_content,
-                    metadata=extraction_result.analysis.metadata,
-                )
-                chunks_generated = len(chunks)
-
-                # 4b. Embeddings Mistral
-                if chunks:
-                    chunks = await self.embedder.embed_chunks(chunks, use_enriched=True)
-                    chunks_embedded = sum(1 for c in chunks if c.has_embedding)
-
-            except Exception as e:
-                errors.append(
-                    {
-                        "phase": "chunking_embedding",
-                        "error": str(e),
-                    }
-                )
+        chunks, chunks_generated, chunks_embedded = await self._chunk_and_embed(
+            extraction_result, options, errors
+        )
 
         # Phase 5: Stockage vectoriel
-        if chunks and not options.get("skip_storage", False):
-            try:
-                vector_store_result = await self.vector_store.store_chunks(
-                    chunks=chunks,
-                    document_metadata=extraction_result.analysis.metadata,
-                )
-                chunks_stored = vector_store_result.get("stored_chunks", 0)
-            except Exception as e:
-                errors.append(
-                    {
-                        "phase": "vector_storage",
-                        "error": str(e),
-                    }
-                )
+        vector_store_result, chunks_stored = await self._store_indexed_chunks(
+            chunks, extraction_result, options, errors
+        )
 
-        # Calculer temps total
-        end_time = datetime.now(UTC)
-        total_processing_time = (end_time - start_time).total_seconds()
+        return self._build_processing_result(
+            extraction_result,
+            chunks,
+            chunks_generated,
+            chunks_embedded,
+            vector_store_result,
+            chunks_stored,
+            errors,
+            start_time,
+        )
 
+    async def _chunk_and_embed(
+        self,
+        extraction_result: ProcessingResult,
+        options: dict[str, Any],
+        errors: list[dict[str, Any]],
+    ) -> tuple[list[DocumentChunk], int, int]:
+        """Phase 4: Chunking semantique + Embeddings Mistral."""
+        if options.get("skip_embedding", False):
+            return [], 0, 0
+        try:
+            chunks = await self.chunker.chunk_document(
+                document_id=extraction_result.analysis.metadata.document_id,
+                native_content=extraction_result.native_content,
+                ocr_content=extraction_result.ocr_content,
+                metadata=extraction_result.analysis.metadata,
+            )
+            chunks_generated = len(chunks)
+            chunks_embedded = 0
+            if chunks:
+                chunks = await self.embedder.embed_chunks(chunks, use_enriched=True)
+                chunks_embedded = sum(1 for c in chunks if c.has_embedding)
+            return chunks, chunks_generated, chunks_embedded
+        except Exception as e:
+            errors.append({"phase": "chunking_embedding", "error": str(e)})
+            return [], 0, 0
+
+    async def _store_indexed_chunks(
+        self,
+        chunks: list[DocumentChunk],
+        extraction_result: ProcessingResult,
+        options: dict[str, Any],
+        errors: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], int]:
+        """Phase 5: Stockage vectoriel dans Qdrant."""
+        if not chunks or options.get("skip_storage", False):
+            return {}, 0
+        try:
+            result = await self.vector_store.store_chunks(
+                chunks=chunks,
+                document_metadata=extraction_result.analysis.metadata,
+            )
+            return result, result.get("stored_chunks", 0)
+        except Exception as e:
+            errors.append({"phase": "vector_storage", "error": str(e)})
+            return {}, 0
+
+    def _build_processing_result(
+        self,
+        extraction_result: ProcessingResult,
+        chunks: list[DocumentChunk],
+        chunks_generated: int,
+        chunks_embedded: int,
+        vector_store_result: dict[str, Any],
+        chunks_stored: int,
+        errors: list[dict[str, Any]],
+        start_time: datetime,
+    ) -> ProcessingResult:
+        """Assemble le ProcessingResult final."""
+        total_processing_time = (datetime.now(UTC) - start_time).total_seconds()
         return ProcessingResult(
             analysis=extraction_result.analysis,
             native_content=extraction_result.native_content,

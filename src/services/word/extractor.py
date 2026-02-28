@@ -77,71 +77,27 @@ class WordExtractor:
         tables: list[WordTable] = []
         images: list[WordImage] = []
         lists: list[WordList] = []
-
         order = 0
         word_count = 0
 
-        # docx2python structure:
-        # body = [section1, section2, ...] où chaque section est soit:
-        # - Une section texte: [[[paragraph1, paragraph2, ...]]]
-        # - Un tableau: [[row1], [row2], ...] où row = [[cell1], [cell2], ...]
-        for section in doc.body:
-            # Tables: traitement et continue
-            if self._is_table_section(section):
-                table = self._extract_table_from_section(section)
-                if not table.rows:
-                    continue
-                tables.append(table)
-                content_blocks.append(
-                    ContentBlock(
-                        content_type=ContentType.TABLE,
-                        order=order,
-                        table=table,
-                    )
-                )
-                order += 1
-                continue
+        # Traitement des sections (texte + tableaux)
+        order, word_count = self._process_body_sections(
+            doc.body,
+            content_blocks,
+            paragraphs,
+            tables,
+            order,
+            word_count,
+        )
 
-            # Sections texte (plus de else)
-            for column in section:
-                for cell in column:
-                    # cell est une liste de paragraphes
-                    if isinstance(cell, list):
-                        for para_text in cell:
-                            if isinstance(para_text, str) and para_text.strip():
-                                para = self._extract_paragraph(para_text)
-                                paragraphs.append(para)
-                                word_count += len(para_text.split())
+        # Extraction des images
+        order = self._process_images(
+            doc,
+            content_blocks,
+            images,
+            order,
+        )
 
-                                content_blocks.append(
-                                    ContentBlock(
-                                        content_type=(
-                                            ContentType.HEADING
-                                            if para.level != HeadingLevel.BODY
-                                            else ContentType.PARAGRAPH
-                                        ),
-                                        order=order,
-                                        paragraph=para,
-                                    )
-                                )
-                                order += 1
-
-        # Extraire les images
-        if self.extract_images and doc.images:
-            for img_name, img_data in doc.images.items():
-                image = self._process_image(img_name, img_data)
-                if image:
-                    images.append(image)
-                    content_blocks.append(
-                        ContentBlock(
-                            content_type=ContentType.IMAGE,
-                            order=order,
-                            image=image,
-                        )
-                    )
-                    order += 1
-
-        # Métadonnées
         metadata = self._extract_metadata(doc)
 
         return WordDocument(
@@ -155,6 +111,70 @@ class WordExtractor:
             metadata=metadata,
             word_count=word_count,
         )
+
+    def _process_body_sections(
+        self,
+        body: list[Any],
+        content_blocks: list[ContentBlock],
+        paragraphs: list[WordParagraph],
+        tables: list[WordTable],
+        order: int,
+        word_count: int,
+    ) -> tuple[int, int]:
+        """Traite les sections du body (texte et tableaux)."""
+        for section in body:
+            if self._is_table_section(section):
+                table = self._extract_table_from_section(section)
+                if not table.rows:
+                    continue
+                tables.append(table)
+                content_blocks.append(
+                    ContentBlock(content_type=ContentType.TABLE, order=order, table=table)
+                )
+                order += 1
+                continue
+
+            for column in section:
+                for cell in column:
+                    if not isinstance(cell, list):
+                        continue
+                    for para_text in cell:
+                        if not (isinstance(para_text, str) and para_text.strip()):
+                            continue
+                        para = self._extract_paragraph(para_text)
+                        paragraphs.append(para)
+                        word_count += len(para_text.split())
+                        ct = (
+                            ContentType.HEADING
+                            if para.level != HeadingLevel.BODY
+                            else ContentType.PARAGRAPH
+                        )
+                        content_blocks.append(
+                            ContentBlock(content_type=ct, order=order, paragraph=para)
+                        )
+                        order += 1
+        return order, word_count
+
+    def _process_images(
+        self,
+        doc: Any,
+        content_blocks: list[ContentBlock],
+        images: list[WordImage],
+        order: int,
+    ) -> int:
+        """Extrait et ajoute les images du document."""
+        if not self.extract_images or not doc.images:
+            return order
+        for img_name, img_data in doc.images.items():
+            image = self._process_image(img_name, img_data)
+            if not image:
+                continue
+            images.append(image)
+            content_blocks.append(
+                ContentBlock(content_type=ContentType.IMAGE, order=order, image=image)
+            )
+            order += 1
+        return order
 
     def _is_table_section(self, section: list[Any]) -> bool:
         """Détermine si une section est un tableau.

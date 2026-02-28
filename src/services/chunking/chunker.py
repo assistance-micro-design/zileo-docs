@@ -285,92 +285,73 @@ class SmartChunker:
         current_chunk = ""
         current_section: dict[str, object] = {"title": None, "hierarchy": []}
 
-        # Decouper par paragraphes (double saut de ligne)
         paragraphs = re.split(r"\n\n+", content)
 
         for raw_para in paragraphs:
             para = raw_para.strip()
-            if not para:
+            if not para or self.PAGE_MARKER_PATTERN.match(para):
                 continue
 
-            # Ignorer les marqueurs de page
-            if self.PAGE_MARKER_PATTERN.match(para):
-                continue
-
-            # Detecter si c'est un header
+            # Header: save current chunk + update section
             header_match = re.match(r"^(#{1,6})\s+(.+)$", para)
             if header_match:
-                # Sauvegarder le chunk courant avant de changer de section
-                if self._should_save_chunk(current_chunk):
-                    chunks.append(
-                        (
-                            current_chunk.strip(),
-                            dict(current_section),
-                            "text",
-                        )
-                    )
-                    current_chunk = ""
-
-                # Mettre a jour la section courante
+                self._save_current_chunk(chunks, current_chunk, current_section)
+                current_chunk = header_match.group(0) + "\n\n"
                 current_section = {
                     "title": header_match.group(2),
                     "hierarchy": self._get_hierarchy_at(content.find(para), sections),
                 }
-                current_chunk = para + "\n\n"
                 continue
 
-            # Verifier si le paragraphe est dans une region protegee
+            # Protected region: save current chunk + add protected element
             is_protected, region_type = self._is_in_protected(para, content, protected_regions)
-
             if is_protected:
-                # Sauvegarder le chunk courant
-                if self._should_save_chunk(current_chunk):
-                    chunks.append(
-                        (
-                            current_chunk.strip(),
-                            dict(current_section),
-                            "text",
-                        )
-                    )
-                    current_chunk = ""
-
-                # L'element protege forme son propre chunk
-                chunks.append((para, dict(current_section), region_type))
+                current_chunk = self._flush_and_add_protected(
+                    chunks,
+                    current_chunk,
+                    current_section,
+                    para,
+                    region_type,
+                )
                 continue
 
-            # Verifier la taille avec ce paragraphe
+            # Normal paragraph: check size
             test_chunk = current_chunk + para + "\n\n"
-            token_count = self._count_tokens(test_chunk)
-
-            # Cas simple: le paragraphe tient dans le chunk
-            if token_count <= self.chunk_size:
+            if self._count_tokens(test_chunk) <= self.chunk_size:
                 current_chunk = test_chunk
                 continue
 
-            # Chunk plein: sauvegarder et recommencer avec overlap
-            if self._should_save_chunk(current_chunk):
-                chunks.append(
-                    (
-                        current_chunk.strip(),
-                        dict(current_section),
-                        "text",
-                    )
-                )
-
+            # Chunk full: save and restart with overlap
+            self._save_current_chunk(chunks, current_chunk, current_section)
             overlap = self._get_overlap(current_chunk)
             current_chunk = overlap + para + "\n\n"
 
-        # Sauvegarder le dernier chunk
-        if self._should_save_chunk(current_chunk):
-            chunks.append(
-                (
-                    current_chunk.strip(),
-                    dict(current_section),
-                    "text",
-                )
-            )
-
+        # Save last chunk
+        self._save_current_chunk(chunks, current_chunk, current_section)
         return chunks
+
+    def _save_current_chunk(
+        self,
+        chunks: list[tuple[str, dict[str, object], str]],
+        chunk: str,
+        section_info: dict[str, object],
+    ) -> None:
+        """Valide et ajoute le chunk courant a la liste."""
+        if self._should_save_chunk(chunk):
+            chunks.append((chunk.strip(), dict(section_info), "text"))
+
+    def _flush_and_add_protected(
+        self,
+        chunks: list[tuple[str, dict[str, object], str]],
+        current_chunk: str,
+        current_section: dict[str, object],
+        para: str,
+        region_type: str,
+    ) -> str:
+        """Sauvegarde le chunk courant et ajoute l'element protege."""
+        self._save_current_chunk(chunks, current_chunk, current_section)
+        chunks.append((para, dict(current_section), region_type))
+        return ""
 
     def _build_document_chunks(
         self,
@@ -393,55 +374,20 @@ class SmartChunker:
         chunks: list[DocumentChunk] = []
 
         for i, (content, section_info, content_type) in enumerate(raw_chunks):
-            # Determiner les pages du chunk
             pages = self._get_pages_for_chunk(content, merged_content, page_mapping)
-
-            # Extraire le contexte environnant
-            chunk_start = merged_content.find(content)
-            context_size = 100
-
-            preceding_start = max(0, chunk_start - context_size)
-            preceding = merged_content[preceding_start:chunk_start]
-
-            following_end = min(len(merged_content), chunk_start + len(content) + context_size)
-            following = merged_content[chunk_start + len(content) : following_end]
-
-            # Extraire la hierarchie comme liste de str
-            hierarchy_raw = section_info.get("hierarchy", [])
-            hierarchy: list[str] = (
-                [str(h) for h in hierarchy_raw] if isinstance(hierarchy_raw, list) else []
+            preceding, following = self._extract_chunk_context(content, merged_content)
+            chunk_metadata = self._build_chunk_metadata(
+                content,
+                section_info,
+                content_type,
+                i,
+                document_id,
+                pages,
+                preceding,
+                following,
             )
 
-            # Extraire le titre de section
-            section_title_raw = section_info.get("title")
-            section_title: str | None = (
-                str(section_title_raw) if section_title_raw is not None else None
-            )
-
-            # Construire les metadonnees
-            chunk_metadata = ChunkMetadata(
-                chunk_id=f"{document_id}_chunk_{i}",
-                document_id=document_id,
-                page_numbers=pages,
-                start_page=min(pages) if pages else 0,
-                end_page=max(pages) if pages else 0,
-                section_title=section_title,
-                section_hierarchy=hierarchy,
-                chunk_index=i,
-                content_type=content_type,
-                has_table=self._has_table(content),
-                has_image=self._has_image(content),
-                has_equation=self._has_equation(content),
-                token_count=self._count_tokens(content),
-                char_count=len(content),
-                word_count=len(content.split()),
-                preceding_context=preceding.strip(),
-                following_context=following.strip(),
-            )
-
-            # Contenu enrichi pour meilleur embedding
             enriched = self._enrich_for_embedding(content, chunk_metadata)
-
             chunks.append(
                 DocumentChunk(
                     content=content,
@@ -451,6 +397,58 @@ class SmartChunker:
             )
 
         return chunks
+
+    def _extract_chunk_context(
+        self, content: str, merged_content: str, context_size: int = 100
+    ) -> tuple[str, str]:
+        """Extrait le contexte precedent et suivant d'un chunk."""
+        chunk_start = merged_content.find(content)
+        preceding_start = max(0, chunk_start - context_size)
+        preceding = merged_content[preceding_start:chunk_start]
+        following_end = min(len(merged_content), chunk_start + len(content) + context_size)
+        following = merged_content[chunk_start + len(content) : following_end]
+        return preceding.strip(), following.strip()
+
+    def _build_chunk_metadata(
+        self,
+        content: str,
+        section_info: dict[str, object],
+        content_type: str,
+        index: int,
+        document_id: str,
+        pages: list[int],
+        preceding: str,
+        following: str,
+    ) -> ChunkMetadata:
+        """Construit les metadonnees d'un chunk."""
+        hierarchy_raw = section_info.get("hierarchy", [])
+        hierarchy: list[str] = (
+            [str(h) for h in hierarchy_raw] if isinstance(hierarchy_raw, list) else []
+        )
+        section_title_raw = section_info.get("title")
+        section_title: str | None = (
+            str(section_title_raw) if section_title_raw is not None else None
+        )
+
+        return ChunkMetadata(
+            chunk_id=f"{document_id}_chunk_{index}",
+            document_id=document_id,
+            page_numbers=pages,
+            start_page=min(pages) if pages else 0,
+            end_page=max(pages) if pages else 0,
+            section_title=section_title,
+            section_hierarchy=hierarchy,
+            chunk_index=index,
+            content_type=content_type,
+            has_table=self._has_table(content),
+            has_image=self._has_image(content),
+            has_equation=self._has_equation(content),
+            token_count=self._count_tokens(content),
+            char_count=len(content),
+            word_count=len(content.split()),
+            preceding_context=preceding,
+            following_context=following,
+        )
 
     def _should_save_chunk(self, chunk: str) -> bool:
         """Verifie si le chunk doit etre sauvegarde.

@@ -12,7 +12,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import fitz  # PyMuPDF
 
@@ -94,35 +94,14 @@ class DocumentAnalyzer:
                     settings.MAX_PDF_PAGES,
                 )
 
-            # 1. Extraire metadonnees
             metadata = self._extract_metadata()
-
-            # 2. Analyser chaque page
             pages = [self._analyze_page(i) for i in range(len(self._doc))]
 
-            # 3. Mettre a jour statistiques
             metadata.total_pages = len(pages)
             metadata.total_images = sum(p.image_count for p in pages)
             metadata.total_tables = sum(p.table_count for p in pages)
 
-            # 4. Construire plan d'extraction
-            pages_local = [p.page_number for p in pages if p.extraction_method == "pymupdf"]
-            pages_ocr = [p.page_number for p in pages if p.extraction_method == "mistral_ocr"]
-
-            # 5. Calculer estimations
-            estimated_tokens = sum(p.native_text_length // 4 for p in pages)
-            estimated_cost = len(pages_ocr) * 0.002  # $2/1000 pages
-            estimated_time = len(pages_ocr) * 0.5 + len(pages_local) * 0.05
-
-            return DocumentAnalysisResult(
-                metadata=metadata,
-                pages=pages,
-                pages_for_local_extraction=pages_local,
-                pages_for_ocr=pages_ocr,
-                estimated_tokens=estimated_tokens,
-                estimated_ocr_cost=estimated_cost,
-                estimated_processing_time_seconds=estimated_time,
-            )
+            return self._compute_extraction_plan(metadata, pages)
 
         except fitz.FileDataError as e:
             raise PDFCorruptedError(str(self.pdf_path), str(e)) from e
@@ -130,6 +109,25 @@ class DocumentAnalyzer:
             if self._doc:
                 self._doc.close()
                 self._doc = None
+
+    def _compute_extraction_plan(
+        self,
+        metadata: DocumentMetadata,
+        pages: list[PageAnalysis],
+    ) -> DocumentAnalysisResult:
+        """Construit le plan d'extraction et les estimations."""
+        pages_local = [p.page_number for p in pages if p.extraction_method == "pymupdf"]
+        pages_ocr = [p.page_number for p in pages if p.extraction_method == "mistral_ocr"]
+
+        return DocumentAnalysisResult(
+            metadata=metadata,
+            pages=pages,
+            pages_for_local_extraction=pages_local,
+            pages_for_ocr=pages_ocr,
+            estimated_tokens=sum(p.native_text_length // 4 for p in pages),
+            estimated_ocr_cost=len(pages_ocr) * 0.002,
+            estimated_processing_time_seconds=len(pages_ocr) * 0.5 + len(pages_local) * 0.05,
+        )
 
     def _validate_file(self) -> None:
         """Valide que le fichier existe et respecte les limites.
@@ -198,57 +196,62 @@ class DocumentAnalyzer:
             raise RuntimeError(msg)
 
         page: fitz.Page = self._doc[page_num]
+        features = self._extract_page_features(page)
 
-        # Texte natif
+        page_type = self._classify_page(
+            has_native_text=features["has_native_text"],
+            has_images=features["has_images"],
+            has_tables=features["table_count"] > 0,
+            has_charts=features["has_charts"],
+            image_coverage=features["image_coverage"],
+        )
+
+        return PageAnalysis(
+            page_number=page_num,
+            page_type=page_type,
+            has_native_text=features["has_native_text"],
+            native_text_length=features["text_length"],
+            has_images=features["has_images"],
+            image_count=features["image_count"],
+            image_coverage_ratio=features["image_coverage"],
+            has_tables=features["table_count"] > 0,
+            table_count=features["table_count"],
+            has_charts=features["has_charts"],
+            width=page.rect.width,
+            height=page.rect.height,
+            rotation=page.rotation,
+            extraction_method=self._decide_extraction_method(page_type),
+            priority=self._get_priority(page_type),
+        )
+
+    def _extract_page_features(self, page: fitz.Page) -> dict[str, Any]:
+        """Extrait les features brutes d'une page (texte, images, tableaux, dessins)."""
         text = page.get_text("text")
         text_length = len(text.strip())
         has_native_text = text_length >= self.MIN_TEXT_FOR_NATIVE
 
-        # Images
         images = page.get_images(full=True)
         significant_images = self._filter_significant_images(page, images)
         image_coverage = self._calculate_image_coverage(page, significant_images)
 
-        # Tableaux
         tables = page.find_tables()
         table_count = len(tables.tables) if tables else 0
 
-        # Graphiques (heuristique basee sur le nombre de dessins)
         drawings = page.get_drawings()
         has_charts = (
             len(drawings) > self.CHART_DRAWING_THRESHOLD
             and text_length < self.CHART_TEXT_MAX_LENGTH
         )
 
-        # Classification
-        page_type = self._classify_page(
-            has_native_text=has_native_text,
-            has_images=len(significant_images) > 0,
-            has_tables=table_count > 0,
-            has_charts=has_charts,
-            image_coverage=image_coverage,
-        )
-
-        # Methode d'extraction
-        extraction_method = self._decide_extraction_method(page_type)
-
-        return PageAnalysis(
-            page_number=page_num,
-            page_type=page_type,
-            has_native_text=has_native_text,
-            native_text_length=text_length,
-            has_images=len(significant_images) > 0,
-            image_count=len(significant_images),
-            image_coverage_ratio=image_coverage,
-            has_tables=table_count > 0,
-            table_count=table_count,
-            has_charts=has_charts,
-            width=page.rect.width,
-            height=page.rect.height,
-            rotation=page.rotation,
-            extraction_method=extraction_method,
-            priority=self._get_priority(page_type),
-        )
+        return {
+            "text_length": text_length,
+            "has_native_text": has_native_text,
+            "has_images": len(significant_images) > 0,
+            "image_count": len(significant_images),
+            "image_coverage": image_coverage,
+            "table_count": table_count,
+            "has_charts": has_charts,
+        }
 
     def _classify_page(
         self,

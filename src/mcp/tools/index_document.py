@@ -126,24 +126,7 @@ class IndexDocumentTool(BaseMCPTool):
         # Verification doublon : le fichier est-il deja indexe ?
         existing = await self._vector_store.find_document_by_filename(file_path.name)
         if existing:
-            logger.info(
-                "Document deja indexe: %s (document_id=%s, chunks=%d)",
-                file_path.name,
-                existing["document_id"],
-                existing["total_chunks"],
-            )
-            return {
-                "already_indexed": True,
-                "document_id": existing["document_id"],
-                "filename": file_path.name,
-                "total_chunks": existing["total_chunks"],
-                "ingested_at": existing["ingested_at"],
-                "message": (
-                    "Ce document est deja indexe. "
-                    "Utilisez le document_id pour search_documents. "
-                    "Pour re-indexer, supprimez d'abord avec delete_document."
-                ),
-            }
+            return self._build_already_indexed_response(existing, file_path.name)
 
         # Detecter le type de document
         doc_type = self._router.detect_type(file_path)
@@ -167,6 +150,29 @@ class IndexDocumentTool(BaseMCPTool):
         result = await self._index_unified(file_path, doc_type, params)
         result["processing_time_seconds"] = (datetime.now(UTC) - start_time).total_seconds()
         return result
+
+    def _build_already_indexed_response(
+        self, existing: dict[str, Any], filename: str
+    ) -> dict[str, Any]:
+        """Construit la reponse pour un document deja indexe."""
+        logger.info(
+            "Document deja indexe: %s (document_id=%s, chunks=%d)",
+            filename,
+            existing["document_id"],
+            existing["total_chunks"],
+        )
+        return {
+            "already_indexed": True,
+            "document_id": existing["document_id"],
+            "filename": filename,
+            "total_chunks": existing["total_chunks"],
+            "ingested_at": existing["ingested_at"],
+            "message": (
+                "Ce document est deja indexe. "
+                "Utilisez le document_id pour search_documents. "
+                "Pour re-indexer, supprimez d'abord avec delete_document."
+            ),
+        }
 
     async def _index_pdf(
         self,
@@ -292,20 +298,65 @@ class IndexDocumentTool(BaseMCPTool):
         """
         chunks: list[DocumentChunk] = []
 
-        # Chunk principal avec le contenu Markdown complet
+        main_chunk = self._create_main_chunk(doc)
+        if main_chunk:
+            chunks.append(main_chunk)
+
+        chunks.extend(self._create_overflow_chunks(doc, len(chunks)))
+
+        formula_chunk = self._create_formula_chunk(doc, len(chunks))
+        if formula_chunk:
+            chunks.append(formula_chunk)
+
+        for chunk in chunks:
+            chunk.metadata.total_chunks = len(chunks)
+        return chunks
+
+    def _create_main_chunk(self, doc: UnifiedDocument) -> DocumentChunk | None:
+        """Cree le chunk principal (max 8000 chars)."""
         main_content = doc.content_markdown
-        if main_content.strip():
-            chunk_id = f"{doc.document_id}_main"
-            chunk_content = main_content[:8000]  # Limite pour embedding
+        if not main_content.strip():
+            return None
+        chunk_content = main_content[:8000]
+        return DocumentChunk(
+            content=chunk_content,
+            metadata=ChunkMetadata(
+                chunk_id=f"{doc.document_id}_main",
+                document_id=doc.document_id,
+                chunk_index=0,
+                char_count=len(chunk_content),
+                section_title=doc.metadata.title or doc.filename,
+                document_type=doc.document_type.value,
+                has_table=doc.metadata.has_tables,
+                has_image=doc.metadata.has_images,
+                has_formula=doc.metadata.has_formulas,
+            ),
+            content_with_context=self._enrich_content(chunk_content, doc),
+        )
+
+    def _create_overflow_chunks(
+        self, doc: UnifiedDocument, start_index: int
+    ) -> list[DocumentChunk]:
+        """Cree les chunks supplementaires pour le contenu au-dela de 8000 chars."""
+        main_content = doc.content_markdown
+        if len(main_content) <= 8000:
+            return []
+        remaining = main_content[8000:]
+        chunk_size = 4000
+        overlap = 200
+        chunks: list[DocumentChunk] = []
+        for i, start in enumerate(range(0, len(remaining), chunk_size - overlap)):
+            chunk_content = remaining[start : start + chunk_size]
+            if not chunk_content.strip():
+                continue
             chunks.append(
                 DocumentChunk(
                     content=chunk_content,
                     metadata=ChunkMetadata(
-                        chunk_id=chunk_id,
+                        chunk_id=f"{doc.document_id}_part_{i + 1}",
                         document_id=doc.document_id,
-                        chunk_index=0,
+                        chunk_index=start_index + len(chunks),
                         char_count=len(chunk_content),
-                        section_title=doc.metadata.title or doc.filename,
                         document_type=doc.document_type.value,
                         has_table=doc.metadata.has_tables,
                         has_image=doc.metadata.has_images,
@@ -314,60 +365,28 @@ class IndexDocumentTool(BaseMCPTool):
                     content_with_context=self._enrich_content(chunk_content, doc),
                 )
             )
-
-        # Chunks additionnels pour le contenu restant
-        if len(main_content) > 8000:
-            remaining = main_content[8000:]
-            chunk_size = 4000
-            overlap = 200
-
-            for i, start in enumerate(range(0, len(remaining), chunk_size - overlap)):
-                chunk_content = remaining[start : start + chunk_size]
-                if chunk_content.strip():
-                    chunk_id = f"{doc.document_id}_part_{i + 1}"
-                    chunks.append(
-                        DocumentChunk(
-                            content=chunk_content,
-                            metadata=ChunkMetadata(
-                                chunk_id=chunk_id,
-                                document_id=doc.document_id,
-                                chunk_index=len(chunks),
-                                char_count=len(chunk_content),
-                                document_type=doc.document_type.value,
-                                has_table=doc.metadata.has_tables,
-                                has_image=doc.metadata.has_images,
-                                has_formula=doc.metadata.has_formulas,
-                            ),
-                            content_with_context=self._enrich_content(chunk_content, doc),
-                        )
-                    )
-
-        # Chunks pour les formules Excel (si presentes)
-        if doc.structured_data.formulas:
-            formulas_content = self._format_formulas_for_chunk(doc.structured_data.formulas)
-            if formulas_content:
-                chunk_id = f"{doc.document_id}_formulas"
-                chunks.append(
-                    DocumentChunk(
-                        content=formulas_content,
-                        metadata=ChunkMetadata(
-                            chunk_id=chunk_id,
-                            document_id=doc.document_id,
-                            chunk_index=len(chunks),
-                            char_count=len(formulas_content),
-                            section_title="Formules Excel",
-                            document_type=doc.document_type.value,
-                            has_formula=True,
-                        ),
-                        content_with_context=f"FORMULES EXCEL - {doc.filename}\n\n{formulas_content}",
-                    )
-                )
-
-        # Mettre a jour total_chunks
-        for chunk in chunks:
-            chunk.metadata.total_chunks = len(chunks)
-
         return chunks
+
+    def _create_formula_chunk(self, doc: UnifiedDocument, chunk_index: int) -> DocumentChunk | None:
+        """Cree le chunk des formules Excel."""
+        if not doc.structured_data.formulas:
+            return None
+        formulas_content = self._format_formulas_for_chunk(doc.structured_data.formulas)
+        if not formulas_content:
+            return None
+        return DocumentChunk(
+            content=formulas_content,
+            metadata=ChunkMetadata(
+                chunk_id=f"{doc.document_id}_formulas",
+                document_id=doc.document_id,
+                chunk_index=chunk_index,
+                char_count=len(formulas_content),
+                section_title="Formules Excel",
+                document_type=doc.document_type.value,
+                has_formula=True,
+            ),
+            content_with_context=f"FORMULES EXCEL - {doc.filename}\n\n{formulas_content}",
+        )
 
     def _enrich_content(self, content: str, doc: UnifiedDocument) -> str:
         """Enrichit le contenu pour meilleur embedding.

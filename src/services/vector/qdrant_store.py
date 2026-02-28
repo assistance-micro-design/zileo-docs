@@ -38,6 +38,15 @@ from src.models.unified import UnifiedMetadata
 
 logger = logging.getLogger(__name__)
 
+# Tables de mapping pour _build_filter (approche table-driven)
+_MATCH_FILTER_KEYS: tuple[str, ...] = (
+    "document_id",
+    "content_type",
+    "section_title",
+    "doc_filename",
+)
+_BOOL_FILTER_KEYS: tuple[str, ...] = ("has_table", "has_image", "has_equation")
+
 
 def _sanitize_text(text: str | None) -> str:
     """Nettoie le texte des caracteres Unicode problematiques.
@@ -263,48 +272,13 @@ class QdrantVectorStore:
             >>> result = await store.store_chunks(chunks, doc_meta)
             >>> print(f"Stored {result['stored_chunks']} chunks")
         """
-        points: list[PointStruct] = []
-        skipped = 0
 
-        for chunk in chunks:
-            if chunk.embedding is None:
-                skipped += 1
-                continue
+        def payload_builder(chunk: DocumentChunk) -> dict[str, Any]:
+            return self._build_payload(chunk, document_metadata)
 
-            payload = self._build_payload(chunk, document_metadata)
-            point_id = self._generate_point_id(chunk.metadata.chunk_id)
-
-            points.append(
-                PointStruct(
-                    id=point_id,
-                    vector=chunk.embedding,
-                    payload=payload,
-                )
-            )
-
-        # Upsert par batch (20 pour rester sous la limite payload Qdrant)
-        batch_size = 20
-        for i in range(0, len(points), batch_size):
-            batch = points[i : i + batch_size]
-            await asyncio.to_thread(
-                self.client.upsert,
-                collection_name=self.COLLECTION_NAME,
-                points=batch,
-            )
-
-        logger.info(
-            "Stored %d chunks for document %s (skipped %d without embeddings)",
-            len(points),
-            document_metadata.document_id,
-            skipped,
+        return await self._store_chunks_internal(
+            chunks, document_metadata.document_id, payload_builder
         )
-
-        return {
-            "stored_chunks": len(points),
-            "skipped_chunks": skipped,
-            "document_id": document_metadata.document_id,
-            "collection": self.COLLECTION_NAME,
-        }
 
     async def store_unified_chunks(
         self,
@@ -328,26 +302,61 @@ class QdrantVectorStore:
             >>> result = await store.store_unified_chunks(chunks, unified_meta)
             >>> print(f"Stored {result['stored_chunks']} chunks")
         """
+
+        def payload_builder(chunk: DocumentChunk) -> dict[str, Any]:
+            return self._build_unified_payload(chunk, unified_metadata)
+
+        return await self._store_chunks_internal(
+            chunks, unified_metadata.document_id, payload_builder
+        )
+
+    async def _store_chunks_internal(
+        self,
+        chunks: list[DocumentChunk],
+        document_id: str,
+        payload_builder: Any,
+    ) -> dict[str, Any]:
+        """Pipeline commun de stockage : build points + upsert + stats."""
+        points, skipped = self._build_points(chunks, payload_builder)
+        await self._upsert_points(points)
+
+        logger.info(
+            "Stored %d chunks for document %s (skipped %d without embeddings)",
+            len(points),
+            document_id,
+            skipped,
+        )
+
+        return {
+            "stored_chunks": len(points),
+            "skipped_chunks": skipped,
+            "document_id": document_id,
+            "collection": self.COLLECTION_NAME,
+        }
+
+    def _build_points(
+        self,
+        chunks: list[DocumentChunk],
+        payload_builder: Any,
+    ) -> tuple[list[PointStruct], int]:
+        """Construit les PointStruct a partir des chunks."""
         points: list[PointStruct] = []
         skipped = 0
-
         for chunk in chunks:
             if chunk.embedding is None:
                 skipped += 1
                 continue
-
-            payload = self._build_unified_payload(chunk, unified_metadata)
-            point_id = self._generate_point_id(chunk.metadata.chunk_id)
-
             points.append(
                 PointStruct(
-                    id=point_id,
+                    id=self._generate_point_id(chunk.metadata.chunk_id),
                     vector=chunk.embedding,
-                    payload=payload,
+                    payload=payload_builder(chunk),
                 )
             )
+        return points, skipped
 
-        # Upsert par batch (20 pour rester sous la limite payload Qdrant)
+    async def _upsert_points(self, points: list[PointStruct]) -> None:
+        """Upsert par batch de 20 points dans Qdrant."""
         batch_size = 20
         for i in range(0, len(points), batch_size):
             batch = points[i : i + batch_size]
@@ -356,20 +365,6 @@ class QdrantVectorStore:
                 collection_name=self.COLLECTION_NAME,
                 points=batch,
             )
-
-        logger.info(
-            "Stored %d unified chunks for document %s (skipped %d without embeddings)",
-            len(points),
-            unified_metadata.document_id,
-            skipped,
-        )
-
-        return {
-            "stored_chunks": len(points),
-            "skipped_chunks": skipped,
-            "document_id": unified_metadata.document_id,
-            "collection": self.COLLECTION_NAME,
-        }
 
     def _build_unified_payload(
         self,
@@ -560,6 +555,10 @@ class QdrantVectorStore:
             with_payload=True,
         )
 
+        return self._format_search_results(response.points)
+
+    def _format_search_results(self, points: list[Any]) -> list[dict[str, Any]]:
+        """Transforme les points Qdrant en resultats de recherche."""
         return [
             {
                 "chunk_id": hit.payload["chunk_id"] if hit.payload else None,
@@ -572,7 +571,7 @@ class QdrantVectorStore:
                 "content_type": hit.payload.get("content_type") if hit.payload else None,
                 "doc_filename": hit.payload.get("doc_filename") if hit.payload else None,
             }
-            for hit in response.points
+            for hit in points
         ]
 
     def _build_filter(self, filters: dict[str, Any]) -> Filter | None:
@@ -594,90 +593,53 @@ class QdrantVectorStore:
             Filtre Qdrant ou None si aucune condition.
         """
         conditions: list[FieldCondition] = []
+        conditions.extend(self._build_match_conditions(filters))
+        conditions.extend(self._build_bool_conditions(filters))
 
-        # Filtrage par document
-        if "document_id" in filters:
-            conditions.append(
-                FieldCondition(
-                    key="document_id",
-                    match=MatchValue(value=filters["document_id"]),
-                )
-            )
+        range_cond = self._build_range_condition(filters)
+        if range_cond:
+            conditions.append(range_cond)
 
-        # Filtrage par type
-        if "content_type" in filters:
-            conditions.append(
-                FieldCondition(
-                    key="content_type",
-                    match=MatchValue(value=filters["content_type"]),
-                )
-            )
-
-        # Filtrage par page
-        if "page_range" in filters:
-            start, end = filters["page_range"]
-            conditions.append(
-                FieldCondition(
-                    key="start_page",
-                    range=Range(gte=start, lte=end),
-                )
-            )
-
-        # Filtrage tableaux
-        if filters.get("has_table"):
-            conditions.append(
-                FieldCondition(
-                    key="has_table",
-                    match=MatchValue(value=True),
-                )
-            )
-
-        # Filtrage images
-        if filters.get("has_image"):
-            conditions.append(
-                FieldCondition(
-                    key="has_image",
-                    match=MatchValue(value=True),
-                )
-            )
-
-        # Filtrage equations
-        if filters.get("has_equation"):
-            conditions.append(
-                FieldCondition(
-                    key="has_equation",
-                    match=MatchValue(value=True),
-                )
-            )
-
-        # Filtrage section
-        if "section_title" in filters:
-            conditions.append(
-                FieldCondition(
-                    key="section_title",
-                    match=MatchValue(value=filters["section_title"]),
-                )
-            )
-
-        # Recherche full-text
-        if "text_search" in filters:
-            conditions.append(
-                FieldCondition(
-                    key="content",
-                    match=MatchText(text=filters["text_search"]),
-                )
-            )
-
-        # Filtrage par filename
-        if "doc_filename" in filters:
-            conditions.append(
-                FieldCondition(
-                    key="doc_filename",
-                    match=MatchValue(value=filters["doc_filename"]),
-                )
-            )
+        text_cond = self._build_text_search_condition(filters)
+        if text_cond:
+            conditions.append(text_cond)
 
         return Filter(must=conditions) if conditions else None
+
+    def _build_match_conditions(self, filters: dict[str, Any]) -> list[FieldCondition]:
+        """Construit les conditions MatchValue pour filtres keyword."""
+        return [
+            FieldCondition(key=key, match=MatchValue(value=filters[key]))
+            for key in _MATCH_FILTER_KEYS
+            if key in filters
+        ]
+
+    def _build_bool_conditions(self, filters: dict[str, Any]) -> list[FieldCondition]:
+        """Construit les conditions booleennes (has_table, has_image, etc.)."""
+        return [
+            FieldCondition(key=key, match=MatchValue(value=True))
+            for key in _BOOL_FILTER_KEYS
+            if filters.get(key)
+        ]
+
+    def _build_range_condition(self, filters: dict[str, Any]) -> FieldCondition | None:
+        """Construit la condition de filtre page_range."""
+        if "page_range" not in filters:
+            return None
+        start, end = filters["page_range"]
+        return FieldCondition(
+            key="start_page",
+            range=Range(gte=start, lte=end),
+        )
+
+    def _build_text_search_condition(self, filters: dict[str, Any]) -> FieldCondition | None:
+        """Construit la condition de recherche full-text."""
+        if "text_search" not in filters:
+            return None
+        return FieldCondition(
+            key="content",
+            match=MatchText(text=filters["text_search"]),
+        )
 
     async def delete_document(self, document_id: str) -> int:
         """Supprime tous les chunks d'un document.
