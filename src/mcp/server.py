@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""Serveur MCP (Model Context Protocol) pour le traitement PDF.
+"""Serveur MCP (Model Context Protocol) pour le traitement de documents.
 
 Ce module implemente un serveur MCP compatible JSON-RPC 2.0 qui expose
-les outils de traitement PDF aux clients MCP (Claude, etc.).
+les outils de traitement de documents (PDF, Excel, Word) aux clients MCP (Claude, etc.).
 """
 
 from __future__ import annotations
@@ -44,17 +44,18 @@ def _format_tool_error(error: Exception) -> str:
     """
     if isinstance(error, MCPZileoPDFError):
         return error.to_llm_format()
+    logger.error("Unexpected tool error: %s", error)
     return (
-        f"ERROR [INTERNAL_ERROR]: {error!s}\n"
-        "SUGGESTION: Erreur inattendue. Reessayer ou contacter le support."
+        "ERROR [INTERNAL_ERROR]: Une erreur inattendue s'est produite.\n"
+        "SUGGESTION: Reessayer ou contacter le support."
     )
 
 
 class MCPServer:
-    """Serveur MCP pour le traitement de documents PDF.
+    """Serveur MCP pour le traitement de documents (PDF, Excel, Word).
 
     Ce serveur expose des outils MCP via le protocole JSON-RPC 2.0:
-    - index_document: Extraire et indexer un PDF dans la base vectorielle
+    - index_document: Extraire et indexer un document dans la base vectorielle
     - search_documents: Recherche semantique dans les documents indexes
     - get_document: Obtenir les informations d'un document indexe
     - delete_document: Supprimer un document de l'index vectoriel
@@ -183,7 +184,7 @@ class MCPServer:
             return self._error_response(
                 request_id,
                 -32603,
-                f"Internal error: {e!s}",
+                "Internal server error",
             )
 
     async def _route_request(

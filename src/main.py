@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
         description=(
-            "Serveur MCP pour l'extraction et la vectorisation de documents PDF. "
+            "Serveur MCP pour l'extraction et la vectorisation de documents (PDF, Excel, Word). "
             "Expose une API REST et un serveur MCP JSON-RPC 2.0."
         ),
         lifespan=lifespan,
@@ -147,7 +147,7 @@ def create_app() -> FastAPI:
                 "id": None,
                 "error": {
                     "code": -32700,
-                    "message": f"Parse error: {e!s}",
+                    "message": "Parse error",
                 },
             }
 

@@ -1,9 +1,10 @@
-"""Tests unitaires pour IndexDocumentTool - protection double indexation.
+"""Tests unitaires pour IndexDocumentTool.
 
 Ces tests verifient:
 - La detection de documents deja indexes (guard doublon)
 - L'indexation normale quand le document est nouveau
 - La description du tool mise a jour
+- La protection anti-path-traversal
 """
 
 from __future__ import annotations
@@ -192,3 +193,61 @@ class TestDuplicateIndexationGuard:
         assert "document_id" in result
         # Le pipeline PDF a bien ete appele
         tool_with_mocks._pdf_orchestrator.process_and_index.assert_called_once()
+
+
+class TestPathTraversalProtection:
+    """Tests pour la protection anti-path-traversal de index_document."""
+
+    @pytest.mark.asyncio
+    async def test_path_traversal_blocked(self, tool_with_mocks: IndexDocumentTool) -> None:
+        """Un chemin hors du dossier documents est rejete."""
+        with patch("src.mcp.tools.index_document.settings") as mock_settings:
+            mock_settings.DOCUMENTS_PATH = "/app/documents"
+            with patch("src.mcp.tools.index_document.Path") as mock_path_cls:
+                mock_file = MagicMock()
+                mock_file.resolve.return_value = MagicMock()
+                mock_file.resolve.return_value.is_relative_to.return_value = False
+                mock_path_cls.return_value = mock_file
+
+                mock_docs = MagicMock()
+                mock_docs.resolve.return_value = MagicMock()
+
+                def path_side_effect(arg):  # type: ignore[no-untyped-def]
+                    if arg == "/app/documents":
+                        return mock_docs
+                    return mock_file
+
+                mock_path_cls.side_effect = path_side_effect
+
+                result = await tool_with_mocks.execute({"file_path": "/etc/passwd"})
+
+        assert "error" in result
+        assert "within documents directory" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_valid_path_allowed(self, tool_with_mocks: IndexDocumentTool) -> None:
+        """Un chemin dans le dossier documents passe la validation."""
+        from src.core.exceptions import SourceFileNotFoundError
+
+        with patch("src.mcp.tools.index_document.settings") as mock_settings:
+            mock_settings.DOCUMENTS_PATH = "/app/documents"
+            with patch("src.mcp.tools.index_document.Path") as mock_path_cls:
+                mock_file = MagicMock()
+                mock_file.resolve.return_value = MagicMock()
+                mock_file.resolve.return_value.is_relative_to.return_value = True
+                mock_file.exists.return_value = False
+                mock_file.name = "test.pdf"
+                mock_file.__str__ = lambda _self: "/app/documents/test.pdf"
+
+                mock_docs = MagicMock()
+                mock_docs.resolve.return_value = MagicMock()
+
+                def path_side_effect(arg):  # type: ignore[no-untyped-def]
+                    if arg == "/app/documents":
+                        return mock_docs
+                    return mock_file
+
+                mock_path_cls.side_effect = path_side_effect
+
+                with pytest.raises(SourceFileNotFoundError):
+                    await tool_with_mocks.execute({"file_path": "/app/documents/test.pdf"})

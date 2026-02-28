@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from src.core.exceptions import PDFNotFoundError
+from src.core.exceptions import SourceFileNotFoundError
 from src.models.document import PageType
 from src.services.pdf.analyzer import DocumentAnalyzer
 
@@ -85,7 +85,7 @@ class TestDocumentAnalyzer:
 
         analyzer = DocumentAnalyzer(pdf_path)
 
-        with pytest.raises(PDFNotFoundError) as exc_info:
+        with pytest.raises(SourceFileNotFoundError) as exc_info:
             await analyzer.analyze()
 
         assert "nonexistent.pdf" in str(exc_info.value)

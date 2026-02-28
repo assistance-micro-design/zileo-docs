@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     # === Paths ===
     DOCUMENTS_PATH: str = Field(
         default="/app/documents",
-        description="Chemin vers le dossier contenant les PDFs disponibles",
+        description="Chemin vers le dossier contenant les documents disponibles (PDF, Excel, Word)",
     )
 
     # === Rate Limiting ===

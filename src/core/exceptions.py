@@ -85,13 +85,13 @@ class PDFError(MCPZileoPDFError):
         super().__init__(message, code, details, suggestion, parameter, retry)
 
 
-class PDFNotFoundError(PDFError):
-    """Fichier PDF introuvable."""
+class SourceFileNotFoundError(PDFError):
+    """Fichier source introuvable (PDF, Excel, Word)."""
 
     def __init__(self, file_path: str) -> None:
         super().__init__(
-            message=f"Fichier PDF introuvable: {file_path}",
-            code="PDF_NOT_FOUND",
+            message=f"Fichier introuvable: {file_path}",
+            code="SOURCE_FILE_NOT_FOUND",
             details={"file_path": file_path},
             suggestion="Verifier le chemin. Utiliser un chemin absolu commencant par /.",
             parameter="file_path",

@@ -18,9 +18,9 @@ from src.core.config import settings
 from src.core.exceptions import (
     DocumentNotFoundError,
     PDFCorruptedError,
-    PDFNotFoundError,
     PDFTooLargeError,
     PDFTooManyPagesError,
+    SourceFileNotFoundError,
 )
 from src.models.api import DeleteResult, ProcessingStatus
 
@@ -113,7 +113,7 @@ async def index_pdf(
             "errors": result.errors,
         }
 
-    except PDFNotFoundError as e:
+    except SourceFileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=e.message,

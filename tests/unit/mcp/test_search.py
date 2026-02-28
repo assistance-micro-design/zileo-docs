@@ -116,9 +116,7 @@ class TestSearchDocumentsExecution:
         tool_with_mock: SearchDocumentsTool,
         mock_vector_store: AsyncMock,
     ) -> None:
-        await tool_with_mock.execute(
-            {"query": "test", "filters": {"document_id": "doc-123"}}
-        )
+        await tool_with_mock.execute({"query": "test", "filters": {"document_id": "doc-123"}})
 
         call_kwargs = mock_vector_store.search.call_args
         assert call_kwargs.kwargs["filters"] == {"document_id": "doc-123"}

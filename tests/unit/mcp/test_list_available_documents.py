@@ -113,9 +113,7 @@ class TestPathTraversal:
     """Tests pour la protection anti-traversal."""
 
     @pytest.mark.asyncio
-    async def test_path_traversal_blocked(
-        self, tool_with_docs: ListAvailableDocumentsTool
-    ) -> None:
+    async def test_path_traversal_blocked(self, tool_with_docs: ListAvailableDocumentsTool) -> None:
         result = await tool_with_docs.execute({"subdirectory": "../../../etc"})
 
         assert result["total_files"] == 0

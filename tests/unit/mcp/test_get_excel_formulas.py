@@ -80,18 +80,14 @@ class TestGetExcelFormulasExecution:
 
     @pytest.mark.asyncio
     async def test_filter_by_sheet(self, tool_with_mock: GetExcelFormulasTool) -> None:
-        result = await tool_with_mock.execute(
-            {"document_id": "doc-excel", "sheet": "Sheet2"}
-        )
+        result = await tool_with_mock.execute({"document_id": "doc-excel", "sheet": "Sheet2"})
 
         assert result["total_formulas"] == 1
         assert result["formulas"][0]["sheet"] == "Sheet2"
 
     @pytest.mark.asyncio
     async def test_filter_by_cell_range(self, tool_with_mock: GetExcelFormulasTool) -> None:
-        result = await tool_with_mock.execute(
-            {"document_id": "doc-excel", "cell_range": "A1:A10"}
-        )
+        result = await tool_with_mock.execute({"document_id": "doc-excel", "cell_range": "A1:A10"})
 
         # Only A1 cells match
         assert all(f["cell"] == "A1" for f in result["formulas"])

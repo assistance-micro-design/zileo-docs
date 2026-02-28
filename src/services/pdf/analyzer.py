@@ -19,9 +19,9 @@ import fitz  # PyMuPDF
 from src.core.config import settings
 from src.core.exceptions import (
     PDFCorruptedError,
-    PDFNotFoundError,
     PDFTooLargeError,
     PDFTooManyPagesError,
+    SourceFileNotFoundError,
 )
 from src.models.document import (
     DocumentAnalysisResult,
@@ -76,7 +76,7 @@ class DocumentAnalyzer:
             et plan d'extraction.
 
         Raises:
-            PDFNotFoundError: Si le fichier n'existe pas.
+            SourceFileNotFoundError: Si le fichier n'existe pas.
             PDFCorruptedError: Si le fichier est corrompu.
             PDFTooLargeError: Si le fichier depasse la taille max.
             PDFTooManyPagesError: Si le fichier a trop de pages.
@@ -133,11 +133,11 @@ class DocumentAnalyzer:
         """Valide que le fichier existe et respecte les limites.
 
         Raises:
-            PDFNotFoundError: Si le fichier n'existe pas.
+            SourceFileNotFoundError: Si le fichier n'existe pas.
             PDFTooLargeError: Si le fichier depasse la taille max.
         """
         if not self.pdf_path.exists():
-            raise PDFNotFoundError(str(self.pdf_path))
+            raise SourceFileNotFoundError(str(self.pdf_path))
 
         size_mb = self.pdf_path.stat().st_size / (1024 * 1024)
         if size_mb > settings.MAX_PDF_SIZE_MB:

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from src.core.config import settings
-from src.core.exceptions import PDFNotFoundError
+from src.core.exceptions import SourceFileNotFoundError
 from src.mcp.tools.base import BaseMCPTool
 from src.models.api import UnifiedIndexDocumentParams
 from src.models.chunk import ChunkMetadata, DocumentChunk
@@ -113,7 +113,7 @@ class IndexDocumentTool(BaseMCPTool):
                 - processing_time_seconds: Temps de traitement
 
         Raises:
-            PDFNotFoundError: Si le fichier n'existe pas.
+            SourceFileNotFoundError: Si le fichier n'existe pas.
             ValueError: Si le format n'est pas supporté.
         """
         params = UnifiedIndexDocumentParams(**arguments)
@@ -129,7 +129,7 @@ class IndexDocumentTool(BaseMCPTool):
             }
 
         if not file_path.exists():
-            raise PDFNotFoundError(str(file_path))
+            raise SourceFileNotFoundError(str(file_path))
 
         # Verification doublon : le fichier est-il deja indexe ?
         existing = await self._vector_store.find_document_by_filename(file_path.name)

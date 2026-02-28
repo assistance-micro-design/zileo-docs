@@ -106,9 +106,7 @@ class TestDeleteDocument:
     """Tests pour DELETE /api/v1/documents/{document_id}."""
 
     @pytest.mark.asyncio
-    async def test_delete_document(
-        self, client: AsyncClient, mock_vector_store: AsyncMock
-    ) -> None:
+    async def test_delete_document(self, client: AsyncClient, mock_vector_store: AsyncMock) -> None:
         mock_vector_store.delete_document = AsyncMock(return_value=5)
 
         response = await client.delete("/api/v1/documents/doc-123")
@@ -123,9 +121,7 @@ class TestListStats:
     """Tests pour GET /api/v1/documents."""
 
     @pytest.mark.asyncio
-    async def test_list_stats(
-        self, client: AsyncClient, mock_vector_store: AsyncMock
-    ) -> None:
+    async def test_list_stats(self, client: AsyncClient, mock_vector_store: AsyncMock) -> None:
         mock_vector_store.get_stats = AsyncMock(
             return_value={"points_count": 100, "indexed_vectors_count": 100, "status": "green"}
         )

@@ -16,7 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.api.dependencies import get_embedder, get_vector_store
-from src.core.exceptions import DocumentNotFoundError, EmptyQueryError, PDFNotFoundError
+from src.core.exceptions import DocumentNotFoundError, EmptyQueryError, SourceFileNotFoundError
 from src.main import app
 from src.mcp.server import MCPServer
 from src.mcp.tools.get_document import GetDocumentTool
@@ -446,7 +446,7 @@ class TestMCPTools:
     async def test_index_document_tool_file_not_found(self) -> None:
         """Test que index_document leve une erreur si fichier introuvable."""
         tool = IndexDocumentTool()
-        with pytest.raises(PDFNotFoundError):
+        with pytest.raises(SourceFileNotFoundError):
             await tool.execute({"file_path": "/nonexistent/file.pdf"})
 
     @pytest.mark.asyncio

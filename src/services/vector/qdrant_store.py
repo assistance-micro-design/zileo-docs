@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""Stockage vectoriel avec Qdrant pour les chunks de documents PDF.
+"""Stockage vectoriel avec Qdrant pour les chunks de documents.
 
 Ce module gere le stockage, la recherche et la gestion des chunks
-de documents dans une base de donnees vectorielle Qdrant.
+de documents (PDF, Excel, Word) dans une base de donnees vectorielle Qdrant.
 """
 
 from __future__ import annotations

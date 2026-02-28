@@ -3,7 +3,7 @@
 """Classe de base abstraite pour les tools MCP.
 
 Ce module fournit une classe de base qui standardise le comportement
-de tous les tools MCP du serveur Zileo PDF.
+de tous les tools MCP du serveur Zileo RAG.
 """
 
 from __future__ import annotations

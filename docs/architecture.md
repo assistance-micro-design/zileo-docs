@@ -151,7 +151,7 @@ Les erreurs heritent de `MCPZileoPDFError` et fournissent un format `to_llm_form
 Hierarchie :
 ```
 MCPZileoPDFError
-  +-- PDFError (PDFNotFoundError, PDFCorruptedError, PDFTooLargeError, PDFTooManyPagesError)
+  +-- PDFError (SourceFileNotFoundError, PDFCorruptedError, PDFTooLargeError, PDFTooManyPagesError)
   +-- OCRError (OCRAPIError, OCRRateLimitError)
   +-- EmbeddingError (EmbeddingAPIError)
   +-- VectorStoreError (VectorStoreConnectionError, CollectionNotFoundError, DocumentNotFoundError)

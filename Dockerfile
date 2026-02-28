@@ -32,7 +32,7 @@ WORKDIR /app
 
 # Labels
 LABEL org.opencontainers.image.title="MCP Zileo RAG"
-LABEL org.opencontainers.image.description="MCP Server for PDF processing with OCR and vector search"
+LABEL org.opencontainers.image.description="MCP Server for document processing (PDF, Excel, Word) with OCR and vector search"
 LABEL org.opencontainers.image.version="0.1.0"
 
 # Copier le venv du builder
