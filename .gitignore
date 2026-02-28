@@ -48,6 +48,10 @@ logs/
 # Docker
 .docker/
 
+# Docs internes (specs, reviews)
+docs/specs/
+docs/reviews/
+
 # OS
 .DS_Store
 Thumbs.db
