@@ -8,6 +8,8 @@ Ce module contient les services pour:
 - OCR avec Mistral (Phase 3)
 """
 
+from __future__ import annotations
+
 from src.services.pdf.analyzer import DocumentAnalyzer
 from src.services.pdf.native_extractor import NativeContentExtractor
 from src.services.pdf.ocr_processor import MistralOCRProcessor

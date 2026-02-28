@@ -172,12 +172,14 @@ class GetExcelFormulasTool(BaseMCPTool):
             if sheet_filter and sheet != sheet_filter:
                 continue
 
-            formulas.append({
-                "sheet": sheet,
-                "cell": cell,
-                "formula": formula,
-                "result": result,
-            })
+            formulas.append(
+                {
+                    "sheet": sheet,
+                    "cell": cell,
+                    "formula": formula,
+                    "result": result,
+                }
+            )
 
         return formulas
 
@@ -223,10 +225,7 @@ class GetExcelFormulasTool(BaseMCPTool):
                 row = int(cell_match.group(2))
                 col_num = col_to_num(col)
 
-                if (
-                    start_col_num <= col_num <= end_col_num
-                    and start_row <= row <= end_row
-                ):
+                if start_col_num <= col_num <= end_col_num and start_row <= row <= end_row:
                     filtered.append(f)
 
         return filtered

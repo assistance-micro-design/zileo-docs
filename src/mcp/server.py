@@ -367,9 +367,7 @@ class MCPServer:
             Reponse JSON-RPC avec isError=True.
         """
         # Logging: ternaire pour selectionner la fonction de log
-        log_func = (
-            logger.warning if isinstance(error, MCPZileoPDFError) else logger.exception
-        )
+        log_func = logger.warning if isinstance(error, MCPZileoPDFError) else logger.exception
         log_func("Tool error: %s", error)
 
         # Formatage: helper pour separer les responsabilites

@@ -1,14 +1,18 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""MCP Tools pour le traitement PDF.
+"""MCP Tools pour le traitement de documents.
 
 Ce module expose les tools MCP disponibles pour le serveur.
 """
 
+from __future__ import annotations
+
 from src.mcp.tools.base import BaseMCPTool
 from src.mcp.tools.delete_document import DeleteDocumentTool
 from src.mcp.tools.get_document import GetDocumentTool
+from src.mcp.tools.get_excel_formulas import GetExcelFormulasTool
 from src.mcp.tools.index_document import IndexDocumentTool
+from src.mcp.tools.list_available_documents import ListAvailableDocumentsTool
 from src.mcp.tools.list_available_pdfs import ListAvailablePdfsTool
 from src.mcp.tools.list_indexed_documents import ListIndexedDocumentsTool
 from src.mcp.tools.read_document_content import ReadDocumentContentTool
@@ -19,7 +23,9 @@ __all__ = [
     "BaseMCPTool",
     "DeleteDocumentTool",
     "GetDocumentTool",
+    "GetExcelFormulasTool",
     "IndexDocumentTool",
+    "ListAvailableDocumentsTool",
     "ListAvailablePdfsTool",
     "ListIndexedDocumentsTool",
     "ReadDocumentContentTool",

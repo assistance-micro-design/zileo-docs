@@ -145,15 +145,17 @@ class ListAvailableDocumentsTool(BaseMCPTool):
                 continue
 
             stat = file_path.stat()
-            files.append({
-                "filename": file_path.name,
-                "path": str(file_path),
-                "relative_path": str(file_path.relative_to(self._documents_path)),
-                "type": doc_type,
-                "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                "extension": ext,
-                "modified_at": stat.st_mtime,
-            })
+            files.append(
+                {
+                    "filename": file_path.name,
+                    "path": str(file_path),
+                    "relative_path": str(file_path.relative_to(self._documents_path)),
+                    "type": doc_type,
+                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                    "extension": ext,
+                    "modified_at": stat.st_mtime,
+                }
+            )
 
         # Trier par type puis nom
         files.sort(key=lambda f: (f["type"], f["filename"].lower()))

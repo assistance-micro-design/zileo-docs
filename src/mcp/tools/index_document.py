@@ -198,13 +198,9 @@ class IndexDocumentTool(BaseMCPTool):
             "pages_processed_native": result.pages_processed_native,
             "pages_processed_ocr": result.pages_processed_ocr,
             "chunks_stored": result.chunks_stored,
-            "has_tables": any(
-                c.metadata.has_table for c in result.chunks if c.metadata.has_table
-            ),
+            "has_tables": any(c.metadata.has_table for c in result.chunks if c.metadata.has_table),
             "has_formulas": False,
-            "has_images": any(
-                c.metadata.has_image for c in result.chunks if c.metadata.has_image
-            ),
+            "has_images": any(c.metadata.has_image for c in result.chunks if c.metadata.has_image),
             "metadata": {
                 "title": result.analysis.metadata.title,
                 "author": result.analysis.metadata.author,

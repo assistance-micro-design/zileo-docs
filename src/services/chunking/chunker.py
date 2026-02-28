@@ -536,12 +536,11 @@ class SmartChunker:
 
         for section in sections:
             section_pos = section.get("position", 0)
-            if isinstance(section_pos, int) and section_pos <= pos:
-                section_hierarchy = section.get("hierarchy", [])
-                if isinstance(section_hierarchy, list):
-                    hierarchy = [str(h) for h in section_hierarchy]
-            else:
+            if not (isinstance(section_pos, int) and section_pos <= pos):
                 break
+            section_hierarchy = section.get("hierarchy", [])
+            if isinstance(section_hierarchy, list):
+                hierarchy = [str(h) for h in section_hierarchy]
 
         return hierarchy
 

@@ -22,9 +22,7 @@ def mock_vector_store() -> AsyncMock:
     store = AsyncMock()
     store.initialize = AsyncMock()
     store.find_document_by_filename = AsyncMock(return_value=None)
-    store.store_unified_chunks = AsyncMock(
-        return_value={"stored_chunks": 5}
-    )
+    store.store_unified_chunks = AsyncMock(return_value={"stored_chunks": 5})
     return store
 
 
@@ -119,9 +117,7 @@ class TestDuplicateIndexationGuard:
             mock_path.return_value.name = "rapport.pdf"
             mock_path.return_value.suffix = ".pdf"
 
-            result = await tool_with_mocks.execute(
-                {"file_path": "/data/docs/rapport.pdf"}
-            )
+            result = await tool_with_mocks.execute({"file_path": "/data/docs/rapport.pdf"})
 
         assert result["already_indexed"] is True
         assert result["document_id"] == "existing-doc-id"
@@ -130,9 +126,7 @@ class TestDuplicateIndexationGuard:
         assert "message" in result
 
     @pytest.mark.asyncio
-    async def test_already_indexed_skips_pipeline(
-        self, tool_with_mocks: IndexDocumentTool
-    ) -> None:
+    async def test_already_indexed_skips_pipeline(self, tool_with_mocks: IndexDocumentTool) -> None:
         """Le pipeline n'est PAS execute si le document est deja indexe."""
         tool_with_mocks._vector_store.find_document_by_filename = AsyncMock(
             return_value={
@@ -148,9 +142,7 @@ class TestDuplicateIndexationGuard:
             mock_path.return_value.name = "rapport.pdf"
             mock_path.return_value.suffix = ".pdf"
 
-            await tool_with_mocks.execute(
-                {"file_path": "/data/docs/rapport.pdf"}
-            )
+            await tool_with_mocks.execute({"file_path": "/data/docs/rapport.pdf"})
 
         # Le pipeline PDF ne doit PAS avoir ete appele
         tool_with_mocks._pdf_orchestrator.process_and_index.assert_not_called()
@@ -175,9 +167,7 @@ class TestDuplicateIndexationGuard:
             mock_path.return_value.exists.return_value = True
             mock_path.return_value.name = "rapport.pdf"
 
-            result = await tool_with_mocks.execute(
-                {"file_path": "/data/docs/rapport.pdf"}
-            )
+            result = await tool_with_mocks.execute({"file_path": "/data/docs/rapport.pdf"})
 
         assert "search_documents" in result["message"]
         assert "delete_document" in result["message"]
@@ -187,12 +177,8 @@ class TestDuplicateIndexationGuard:
         self, tool_with_mocks: IndexDocumentTool
     ) -> None:
         """Un nouveau fichier n'a pas le champ already_indexed."""
-        tool_with_mocks._vector_store.find_document_by_filename = AsyncMock(
-            return_value=None
-        )
-        tool_with_mocks._router.detect_type = MagicMock(
-            return_value=DocumentType.PDF
-        )
+        tool_with_mocks._vector_store.find_document_by_filename = AsyncMock(return_value=None)
+        tool_with_mocks._router.detect_type = MagicMock(return_value=DocumentType.PDF)
 
         with patch("src.mcp.tools.index_document.Path") as mock_path:
             mock_path.return_value.exists.return_value = True
@@ -200,9 +186,7 @@ class TestDuplicateIndexationGuard:
             mock_path.return_value.suffix = ".pdf"
             mock_path.return_value.__str__ = lambda _self: "/data/docs/nouveau.pdf"
 
-            result = await tool_with_mocks.execute(
-                {"file_path": "/data/docs/nouveau.pdf"}
-            )
+            result = await tool_with_mocks.execute({"file_path": "/data/docs/nouveau.pdf"})
 
         assert "already_indexed" not in result
         assert "document_id" in result

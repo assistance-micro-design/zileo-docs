@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""Document router for multi-format support."""
+"""Routeur de documents pour le support multi-format."""
 
 from __future__ import annotations
 
@@ -18,15 +18,19 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentExtractor(Protocol):
-    """Protocol for document extractors."""
+    """Protocol pour les extracteurs de documents."""
 
     async def extract(self, file_path: Path) -> Any:
-        """Extract content from a document."""
+        """Extrait le contenu d'un document."""
         ...
 
 
 class DocumentRouter:
-    """Route les documents vers l'extracteur approprié."""
+    """Route les documents vers l'extracteur approprie.
+
+    Attributes:
+        SUPPORTED_EXTENSIONS: Mapping extension -> type de document.
+    """
 
     SUPPORTED_EXTENSIONS: ClassVar[dict[str, DocumentType]] = {
         ".pdf": DocumentType.PDF,
@@ -36,7 +40,7 @@ class DocumentRouter:
     }
 
     def __init__(self) -> None:
-        """Initialize the router."""
+        """Initialise le routeur."""
         self._extractors: dict[DocumentType, DocumentExtractor] = {}
         self._initialized = False
 

@@ -107,8 +107,8 @@ class MistralOCRProcessor:
         for page_num, result in zip(page_numbers, results_list, strict=True):
             if isinstance(result, BaseException):
                 results[page_num] = self._create_error_result(page_num, str(result))
-            else:
-                results[page_num] = result
+                continue
+            results[page_num] = result
 
         return results
 

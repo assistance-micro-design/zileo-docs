@@ -40,16 +40,10 @@ class TestFindDocumentByFilename:
         mock_count = MagicMock()
         mock_count.count = 42
 
-        store_with_mock_client.client.scroll = MagicMock(
-            return_value=([mock_point], None)
-        )
-        store_with_mock_client.client.count = MagicMock(
-            return_value=mock_count
-        )
+        store_with_mock_client.client.scroll = MagicMock(return_value=([mock_point], None))
+        store_with_mock_client.client.count = MagicMock(return_value=mock_count)
 
-        result = await store_with_mock_client.find_document_by_filename(
-            "rapport.pdf"
-        )
+        result = await store_with_mock_client.find_document_by_filename("rapport.pdf")
 
         assert result is not None
         assert result["document_id"] == "doc-123"
@@ -58,17 +52,11 @@ class TestFindDocumentByFilename:
         assert result["ingested_at"] == "2026-01-15T10:30:00+00:00"
 
     @pytest.mark.asyncio
-    async def test_not_found_returns_none(
-        self, store_with_mock_client: QdrantVectorStore
-    ) -> None:
+    async def test_not_found_returns_none(self, store_with_mock_client: QdrantVectorStore) -> None:
         """Retourne None si le document n'existe pas."""
-        store_with_mock_client.client.scroll = MagicMock(
-            return_value=([], None)
-        )
+        store_with_mock_client.client.scroll = MagicMock(return_value=([], None))
 
-        result = await store_with_mock_client.find_document_by_filename(
-            "inconnu.pdf"
-        )
+        result = await store_with_mock_client.find_document_by_filename("inconnu.pdf")
 
         assert result is None
 
@@ -80,13 +68,9 @@ class TestFindDocumentByFilename:
         mock_point = MagicMock()
         mock_point.payload = None
 
-        store_with_mock_client.client.scroll = MagicMock(
-            return_value=([mock_point], None)
-        )
+        store_with_mock_client.client.scroll = MagicMock(return_value=([mock_point], None))
 
-        result = await store_with_mock_client.find_document_by_filename(
-            "vide.pdf"
-        )
+        result = await store_with_mock_client.find_document_by_filename("vide.pdf")
 
         assert result is None
 
@@ -95,17 +79,15 @@ class TestFindDocumentByFilename:
         self, store_with_mock_client: QdrantVectorStore
     ) -> None:
         """Verifie que le filtre utilise doc_filename avec MatchValue."""
-        store_with_mock_client.client.scroll = MagicMock(
-            return_value=([], None)
-        )
+        store_with_mock_client.client.scroll = MagicMock(return_value=([], None))
 
         await store_with_mock_client.find_document_by_filename("test.xlsx")
 
         # Verifier que scroll a ete appele avec le bon filtre
         call_kwargs = store_with_mock_client.client.scroll.call_args
-        scroll_filter = call_kwargs.kwargs.get(
+        scroll_filter = call_kwargs.kwargs.get("scroll_filter") or call_kwargs[1].get(
             "scroll_filter"
-        ) or call_kwargs[1].get("scroll_filter")
+        )
 
         assert scroll_filter is not None
         assert len(scroll_filter.must) == 1
@@ -126,20 +108,14 @@ class TestFindDocumentByFilename:
         mock_count = MagicMock()
         mock_count.count = 10
 
-        store_with_mock_client.client.scroll = MagicMock(
-            return_value=([mock_point], None)
-        )
-        store_with_mock_client.client.count = MagicMock(
-            return_value=mock_count
-        )
+        store_with_mock_client.client.scroll = MagicMock(return_value=([mock_point], None))
+        store_with_mock_client.client.count = MagicMock(return_value=mock_count)
 
         await store_with_mock_client.find_document_by_filename("doc.pdf")
 
         # Verifier que count a ete appele avec le bon document_id
         call_kwargs = store_with_mock_client.client.count.call_args
-        count_filter = call_kwargs.kwargs.get(
-            "count_filter"
-        ) or call_kwargs[1].get("count_filter")
+        count_filter = call_kwargs.kwargs.get("count_filter") or call_kwargs[1].get("count_filter")
 
         assert count_filter is not None
         condition = count_filter.must[0]

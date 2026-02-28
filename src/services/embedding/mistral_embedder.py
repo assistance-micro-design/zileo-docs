@@ -213,10 +213,12 @@ class MistralEmbedder:
         texts: list[str] = []
 
         for chunk in chunks:
-            if use_enriched and chunk.content_with_context:
-                texts.append(chunk.content_with_context)
-            else:
-                texts.append(chunk.content)
+            text = (
+                chunk.content_with_context
+                if use_enriched and chunk.content_with_context
+                else chunk.content
+            )
+            texts.append(text)
 
         return texts
 
@@ -250,14 +252,14 @@ class MistralEmbedder:
                 current_batch and current_tokens + text_tokens > self.MAX_TOKENS_PER_REQUEST
             )
 
-            if should_start_new_batch:
-                if current_batch:
-                    batches.append(current_batch)
-                current_batch = [text]
-                current_tokens = text_tokens
-            else:
+            if not should_start_new_batch:
                 current_batch.append(text)
                 current_tokens += text_tokens
+                continue
+            if current_batch:
+                batches.append(current_batch)
+            current_batch = [text]
+            current_tokens = text_tokens
 
         # Ne pas oublier le dernier batch
         if current_batch:

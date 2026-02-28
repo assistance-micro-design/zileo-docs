@@ -29,7 +29,11 @@ logger = logging.getLogger(__name__)
 
 
 class WordExtractor:
-    """Extracteur de contenu pour fichiers Word (.docx)."""
+    """Extracteur de contenu pour fichiers Word (.docx).
+
+    Attributes:
+        extract_images: Si True, extrait les images en base64.
+    """
 
     def __init__(self, extract_images: bool = True) -> None:
         """Initialise l'extracteur.
@@ -179,11 +183,12 @@ class WordExtractor:
         for row in section:
             cells: list[WordTableCell] = []
             for cell in row:
-                # cell est une liste de paragraphes
-                if isinstance(cell, list):
-                    text = "\n".join(str(p) for p in cell if p)
-                else:
-                    text = str(cell) if cell else ""
+                # cell est une liste de paragraphes (docx2python) ou une valeur scalaire
+                text = (
+                    "\n".join(str(p) for p in cell if p)
+                    if isinstance(cell, list)
+                    else (str(cell) if cell else "")
+                )
                 cells.append(WordTableCell(text=text.strip()))
 
             if cells:
@@ -279,25 +284,24 @@ class WordExtractor:
 
         # docx2python v3+ uses core_properties instead of properties
         props = getattr(doc, "core_properties", None) or getattr(doc, "properties", None)
-        if props:
-            if isinstance(props, dict):
-                metadata = {
-                    "title": props.get("title"),
-                    "author": props.get("creator"),
-                    "subject": props.get("subject"),
-                    "keywords": props.get("keywords"),
-                    "created": props.get("created"),
-                    "modified": props.get("modified"),
-                }
-            else:
-                metadata = {
-                    "title": getattr(props, "title", None),
-                    "author": getattr(props, "creator", None),
-                    "subject": getattr(props, "subject", None),
-                    "keywords": getattr(props, "keywords", None),
-                    "created": str(getattr(props, "created", "")) or None,
-                    "modified": str(getattr(props, "modified", "")) or None,
-                }
+        if props and isinstance(props, dict):
+            metadata = {
+                "title": props.get("title"),
+                "author": props.get("creator"),
+                "subject": props.get("subject"),
+                "keywords": props.get("keywords"),
+                "created": props.get("created"),
+                "modified": props.get("modified"),
+            }
+        elif props:
+            metadata = {
+                "title": getattr(props, "title", None),
+                "author": getattr(props, "creator", None),
+                "subject": getattr(props, "subject", None),
+                "keywords": getattr(props, "keywords", None),
+                "created": str(getattr(props, "created", "")) or None,
+                "modified": str(getattr(props, "modified", "")) or None,
+            }
             # Nettoyer les None
             metadata = {k: v for k, v in metadata.items() if v}
 

@@ -132,6 +132,7 @@ class ReadDocumentContentTool(BaseMCPTool):
         total_pages = first_chunk.get("doc_total_pages", 0)
 
         # Filtrer par pages si demande
+        chunks_filtered = chunks_sorted
         if params.page_start is not None or params.page_end is not None:
             start = (params.page_start or 1) - 1  # Convertir en 0-indexed
             end = params.page_end or total_pages
@@ -141,8 +142,6 @@ class ReadDocumentContentTool(BaseMCPTool):
                 for c in chunks_sorted
                 if any(start <= p <= end - 1 for p in c.get("page_numbers", []))
             ]
-        else:
-            chunks_filtered = chunks_sorted
 
         # Collecter les pages retournees
         pages_set: set[int] = set()

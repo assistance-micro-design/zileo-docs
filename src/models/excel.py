@@ -155,10 +155,7 @@ class ExcelSheet(BaseModel):
             # Extraire les valeurs de la ligne
             values = []
             for cell in row:
-                if cell.value is not None:
-                    values.append(str(cell.value).replace("|", "\\|"))
-                else:
-                    values.append("")
+                values.append(str(cell.value).replace("|", "\\|") if cell.value is not None else "")
 
             # Ignorer les lignes entièrement vides
             if not any(v.strip() for v in values):

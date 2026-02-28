@@ -155,6 +155,7 @@ class TestIndexDocumentExcel:
         mock_store = MagicMock()
         mock_store.store_unified_chunks = AsyncMock(return_value={"stored_chunks": 2})
         mock_store.initialize = AsyncMock()
+        mock_store.find_document_by_filename = AsyncMock(return_value=None)
         index_tool._vector_store = mock_store
 
         # Mock file existence
@@ -194,6 +195,7 @@ class TestIndexDocumentExcel:
         mock_store = MagicMock()
         mock_store.store_unified_chunks = AsyncMock(return_value={"stored_chunks": 2})
         mock_store.initialize = AsyncMock()
+        mock_store.find_document_by_filename = AsyncMock(return_value=None)
         index_tool._vector_store = mock_store
 
         with patch("pathlib.Path.exists", return_value=True):
@@ -273,10 +275,12 @@ class TestGetExcelFormulasTool:
         mock_store.get_document_chunks = AsyncMock(return_value=mock_chunks)
         formulas_tool._vector_store = mock_store
 
-        result = await formulas_tool.execute({
-            "document_id": "excel-doc-123",
-            "sheet": "Calculs",
-        })
+        result = await formulas_tool.execute(
+            {
+                "document_id": "excel-doc-123",
+                "sheet": "Calculs",
+            }
+        )
 
         assert result["total_formulas"] == 1
         assert result["formulas"][0]["sheet"] == "Calculs"
@@ -403,10 +407,12 @@ class TestSearchDocumentsExcel:
         mock_store.search = AsyncMock(return_value=mock_results)
         search_tool._vector_store = mock_store
 
-        result = await search_tool.execute({
-            "query": "sales data",
-            "filters": {"document_type": "excel"},
-        })
+        result = await search_tool.execute(
+            {
+                "query": "sales data",
+                "filters": {"document_type": "excel"},
+            }
+        )
 
         assert result["total_results"] == 1
         assert result["results"][0]["document_type"] == "excel"
@@ -436,10 +442,12 @@ class TestSearchDocumentsExcel:
         mock_store.search = AsyncMock(return_value=mock_results)
         search_tool._vector_store = mock_store
 
-        result = await search_tool.execute({
-            "query": "sum formula",
-            "filters": {"has_formula": True},
-        })
+        result = await search_tool.execute(
+            {
+                "query": "sum formula",
+                "filters": {"has_formula": True},
+            }
+        )
 
         assert result["total_results"] == 1
         assert result["results"][0]["has_formula"] is True

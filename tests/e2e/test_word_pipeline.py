@@ -158,6 +158,7 @@ class TestIndexDocumentWord:
         mock_store = MagicMock()
         mock_store.store_unified_chunks = AsyncMock(return_value={"stored_chunks": 1})
         mock_store.initialize = AsyncMock()
+        mock_store.find_document_by_filename = AsyncMock(return_value=None)
         index_tool._vector_store = mock_store
 
         with patch("pathlib.Path.exists", return_value=True):
@@ -197,6 +198,7 @@ class TestIndexDocumentWord:
         mock_store = MagicMock()
         mock_store.store_unified_chunks = AsyncMock(return_value={"stored_chunks": 1})
         mock_store.initialize = AsyncMock()
+        mock_store.find_document_by_filename = AsyncMock(return_value=None)
         index_tool._vector_store = mock_store
 
         with patch("pathlib.Path.exists", return_value=True):
@@ -286,10 +288,12 @@ class TestSearchDocumentsWord:
         mock_store.search = AsyncMock(return_value=mock_results)
         search_tool._vector_store = mock_store
 
-        result = await search_tool.execute({
-            "query": "rapport annuel résultats",
-            "filters": {"document_type": "word"},
-        })
+        result = await search_tool.execute(
+            {
+                "query": "rapport annuel résultats",
+                "filters": {"document_type": "word"},
+            }
+        )
 
         assert result["total_results"] == 1
         assert result["results"][0]["document_type"] == "word"
@@ -320,10 +324,12 @@ class TestSearchDocumentsWord:
         mock_store.search = AsyncMock(return_value=mock_results)
         search_tool._vector_store = mock_store
 
-        result = await search_tool.execute({
-            "query": "tableau ventes",
-            "filters": {"document_type": "word", "has_table": True},
-        })
+        result = await search_tool.execute(
+            {
+                "query": "tableau ventes",
+                "filters": {"document_type": "word", "has_table": True},
+            }
+        )
 
         assert result["total_results"] == 1
 
@@ -442,9 +448,11 @@ class TestCrossFormatScenarios:
         mock_store.search = AsyncMock(return_value=mock_results)
         search_tool._vector_store = mock_store
 
-        result = await search_tool.execute({
-            "query": "budget",
-        })
+        result = await search_tool.execute(
+            {
+                "query": "budget",
+            }
+        )
 
         assert result["total_results"] == 3
 

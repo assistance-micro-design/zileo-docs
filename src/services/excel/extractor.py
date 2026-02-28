@@ -34,7 +34,11 @@ logger = logging.getLogger(__name__)
 
 
 class ExcelExtractor:
-    """Extracteur de données pour fichiers Excel."""
+    """Extracteur de donnees pour fichiers Excel.
+
+    Attributes:
+        data_only: Si True, charge les resultats des formules au lieu des formules brutes.
+    """
 
     def __init__(self, data_only: bool = False) -> None:
         """Initialise l'extracteur.
@@ -105,9 +109,7 @@ class ExcelExtractor:
                 "title": wb_formulas.properties.title,
                 "author": wb_formulas.properties.creator,
                 "created": (
-                    str(wb_formulas.properties.created)
-                    if wb_formulas.properties.created
-                    else None
+                    str(wb_formulas.properties.created) if wb_formulas.properties.created else None
                 ),
                 "modified": (
                     str(wb_formulas.properties.modified)
@@ -193,7 +195,6 @@ class ExcelExtractor:
             merged_cells=merged,
         )
 
-
     def _detect_cell_type(
         self,
         value: CellValue,
@@ -268,21 +269,21 @@ class ExcelExtractor:
             # Extraire les données du tableau
             table_range = ws_values[table.ref]
 
-            # Handle both single cell and range
-            if hasattr(table_range, "__iter__"):
-                for i, row in enumerate(table_range):
-                    if hasattr(row, "__iter__"):
-                        row_values: list[CellValue] = [cell.value for cell in row]
-                    else:
-                        row_values = [row.value]
-
-                    if i == 0 and table.headerRowCount:
-                        headers = [str(v) if v else "" for v in row_values]
-                    else:
-                        data.append(row_values)
-            else:
-                # Single cell reference
+            # Handle single cell reference
+            if not hasattr(table_range, "__iter__"):
                 data.append([table_range.value])
+
+            # Handle range: iterate rows
+            rows = table_range if hasattr(table_range, "__iter__") else ()
+            for i, row in enumerate(rows):
+                row_values: list[CellValue] = (
+                    [cell.value for cell in row] if hasattr(row, "__iter__") else [row.value]
+                )
+
+                if i == 0 and table.headerRowCount:
+                    headers = [str(v) if v else "" for v in row_values]
+                    continue
+                data.append(row_values)
 
             tables.append(
                 ExcelTable(
@@ -302,7 +303,6 @@ class ExcelExtractor:
         matches = re.findall(pattern, formula.upper())
 
         return list(set(matches))
-
 
     def _detect_xls_cell_type(
         self,
