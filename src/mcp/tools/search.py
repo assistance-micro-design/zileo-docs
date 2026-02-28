@@ -8,7 +8,7 @@ import logging
 from typing import Any, ClassVar
 
 from src.core.exceptions import EmptyQueryError
-from src.mcp.tools.base import BaseMCPTool
+from src.mcp.tools.base import VectorStoreMCPTool
 from src.models.api import SearchDocumentsParams
 from src.services.embedding.mistral_embedder import MistralEmbedder
 from src.services.vector.qdrant_store import QdrantVectorStore
@@ -17,7 +17,7 @@ from src.services.vector.qdrant_store import QdrantVectorStore
 logger = logging.getLogger(__name__)
 
 
-class SearchDocumentsTool(BaseMCPTool):
+class SearchDocumentsTool(VectorStoreMCPTool):
     """Tool MCP pour la recherche semantique dans les documents indexes.
 
     Ce tool permet de rechercher des informations dans les documents
@@ -119,13 +119,8 @@ class SearchDocumentsTool(BaseMCPTool):
             vector_store: Instance partagee du vector store (injection).
             embedder: Instance partagee de l'embedder (injection).
         """
-        super().__init__()
+        super().__init__(vector_store=vector_store)
         self._embedder = embedder or MistralEmbedder()
-        self._vector_store = vector_store or QdrantVectorStore()
-
-    async def _do_initialize(self) -> None:
-        """Initialise le vector store."""
-        await self._vector_store.initialize()
 
     async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute la recherche semantique.

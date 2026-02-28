@@ -18,9 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentExtractor(Protocol):
-    """Protocol pour les extracteurs de documents."""
+    """Protocol pour les extracteurs de documents.
 
-    async def extract(self, file_path: Path) -> Any:
+    Le type de retour est Any car les extracteurs retournent
+    des types natifs (ExcelDocument, WordDocument) qui sont
+    convertis en UnifiedDocument par DocumentRouter.
+    """
+
+    async def extract(self, file_path: str | Path) -> Any:
         """Extrait le contenu d'un document."""
         ...
 
@@ -30,6 +35,8 @@ class DocumentRouter:
 
     Attributes:
         SUPPORTED_EXTENSIONS: Mapping extension -> type de document.
+        _extractors: Mapping type de document -> extracteur instancie.
+        _initialized: Indique si les extracteurs ont ete initialises.
     """
 
     SUPPORTED_EXTENSIONS: ClassVar[dict[str, DocumentType]] = {

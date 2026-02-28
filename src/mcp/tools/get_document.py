@@ -8,15 +8,14 @@ import logging
 from typing import Any, ClassVar
 
 from src.core.exceptions import DocumentNotFoundError
-from src.mcp.tools.base import BaseMCPTool
+from src.mcp.tools.base import VectorStoreMCPTool
 from src.models.api import GetDocumentParams
-from src.services.vector.qdrant_store import QdrantVectorStore
 
 
 logger = logging.getLogger(__name__)
 
 
-class GetDocumentTool(BaseMCPTool):
+class GetDocumentTool(VectorStoreMCPTool):
     """Tool MCP pour obtenir les informations d'un document indexe.
 
     Ce tool permet de recuperer les metadonnees et les chunks
@@ -51,19 +50,6 @@ class GetDocumentTool(BaseMCPTool):
         },
         "required": ["document_id"],
     }
-
-    def __init__(self, vector_store: QdrantVectorStore | None = None) -> None:
-        """Initialise le tool.
-
-        Args:
-            vector_store: Instance partagee du vector store (injection).
-        """
-        super().__init__()
-        self._vector_store = vector_store or QdrantVectorStore()
-
-    async def _do_initialize(self) -> None:
-        """Initialise le vector store."""
-        await self._vector_store.initialize()
 
     async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Recupere les informations d'un document.

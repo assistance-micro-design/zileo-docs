@@ -8,10 +8,10 @@ import asyncio
 import logging
 
 from fastapi import APIRouter
+from qdrant_client import QdrantClient
 
 from src.core.config import settings
 from src.models.api import HealthResponse
-from src.services.vector.qdrant_store import QdrantVectorStore
 
 
 logger = logging.getLogger(__name__)
@@ -104,9 +104,12 @@ async def _check_qdrant() -> str:
         "healthy" si connecte, "unhealthy" sinon.
     """
     try:
-        store = QdrantVectorStore()
-        # Utiliser get_collections pour verifier la connexion
-        await asyncio.to_thread(store.client.get_collections)
+        client = QdrantClient(
+            host=settings.QDRANT_HOST,
+            port=settings.QDRANT_PORT,
+            api_key=settings.QDRANT_API_KEY,
+        )
+        await asyncio.to_thread(client.get_collections)
         return "healthy"
     except Exception as e:
         logger.warning("Qdrant health check failed: %s", e)

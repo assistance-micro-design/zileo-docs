@@ -9,7 +9,11 @@ de tous les tools MCP du serveur Zileo PDF.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
+
+
+if TYPE_CHECKING:
+    from src.services.vector.qdrant_store import QdrantVectorStore
 
 
 class BaseMCPTool(ABC):
@@ -96,3 +100,35 @@ class BaseMCPTool(ABC):
         """
         await self._ensure_initialized()
         return await self._do_execute(arguments)
+
+
+class VectorStoreMCPTool(BaseMCPTool):
+    """Sous-classe de BaseMCPTool avec injection de QdrantVectorStore.
+
+    Factorise le pattern commun de DI du vector store
+    utilise par la majorite des tools MCP.
+
+    Les sous-classes n'ont plus besoin de definir __init__
+    ni _do_initialize si elles n'ont que le vector store
+    comme dependance.
+
+    Attributes:
+        _vector_store: Instance du store vectoriel Qdrant.
+    """
+
+    def __init__(self, vector_store: QdrantVectorStore | None = None) -> None:
+        """Initialise le tool avec injection du vector store.
+
+        Args:
+            vector_store: Instance partagee du vector store (injection).
+        """
+        super().__init__()
+        from src.services.vector.qdrant_store import (  # noqa: PLC0415
+            QdrantVectorStore as _QdrantVectorStore,
+        )
+
+        self._vector_store = vector_store or _QdrantVectorStore()
+
+    async def _do_initialize(self) -> None:
+        """Initialise le vector store."""
+        await self._vector_store.initialize()

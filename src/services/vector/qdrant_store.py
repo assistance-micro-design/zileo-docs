@@ -78,10 +78,6 @@ def _sanitize_text(text: str | None) -> str:
     return text.strip()
 
 
-COLLECTION_NAME = "pdf_documents"
-VECTOR_SIZE = 1024  # Mistral embed dimension
-
-
 class QdrantVectorStore:
     """Stockage vectoriel avec Qdrant.
 
@@ -102,8 +98,8 @@ class QdrantVectorStore:
         >>> results = await store.search(query_embedding, top_k=5)
     """
 
-    COLLECTION_NAME = COLLECTION_NAME
-    VECTOR_SIZE = VECTOR_SIZE
+    COLLECTION_NAME = "pdf_documents"
+    VECTOR_SIZE = 1024  # Mistral embed dimension
 
     def __init__(
         self,

@@ -9,15 +9,14 @@ import re
 from typing import Any, ClassVar
 
 from src.core.exceptions import DocumentNotFoundError
-from src.mcp.tools.base import BaseMCPTool
+from src.mcp.tools.base import VectorStoreMCPTool
 from src.models.api import GetExcelFormulasParams
-from src.services.vector.qdrant_store import QdrantVectorStore
 
 
 logger = logging.getLogger(__name__)
 
 
-class GetExcelFormulasTool(BaseMCPTool):
+class GetExcelFormulasTool(VectorStoreMCPTool):
     """Récupère les formules d'un document Excel indexé.
 
     Permet d'obtenir la liste des formules Excel d'un document
@@ -62,19 +61,6 @@ class GetExcelFormulasTool(BaseMCPTool):
         },
         "required": ["document_id"],
     }
-
-    def __init__(self, vector_store: QdrantVectorStore | None = None) -> None:
-        """Initialise le tool avec injection de dépendances.
-
-        Args:
-            vector_store: Store vectoriel Qdrant (injecté ou créé).
-        """
-        super().__init__()
-        self._vector_store = vector_store or QdrantVectorStore()
-
-    async def _do_initialize(self) -> None:
-        """Initialise le vector store."""
-        await self._vector_store.initialize()
 
     async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Récupère les formules du document Excel.

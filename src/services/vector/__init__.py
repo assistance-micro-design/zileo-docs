@@ -8,15 +8,9 @@ de documents PDF.
 
 from __future__ import annotations
 
-from src.services.vector.qdrant_store import (
-    COLLECTION_NAME,
-    VECTOR_SIZE,
-    QdrantVectorStore,
-)
+from src.services.vector.qdrant_store import QdrantVectorStore
 
 
 __all__ = [
-    "COLLECTION_NAME",
-    "VECTOR_SIZE",
     "QdrantVectorStore",
 ]
