@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar
 
+from src.core.config import settings
 from src.core.exceptions import PDFNotFoundError
 from src.mcp.tools.base import BaseMCPTool
 from src.models.api import UnifiedIndexDocumentParams
@@ -45,11 +46,9 @@ class IndexDocumentTool(BaseMCPTool):
 
     name: ClassVar[str] = "index_document"
     description: ClassVar[str] = (
-        "Extrait et indexe un document (PDF/Excel/Word) pour la recherche semantique. "
-        "Etape obligatoire avant search_documents. "
-        "IMPORTANT: Si le document est deja indexe, retourne l'ID existant sans re-indexer. "
-        "Pour re-indexer, supprimer d'abord avec delete_document. "
-        "Retourne: document_id, type, metadonnees, nombre de passages indexes."
+        "Indexe un document (PDF/Excel/Word) pour la recherche semantique. "
+        "Si deja indexe, retourne l'ID existant. "
+        "Retourne: document_id, type, chunks indexes."
     )
 
     input_schema: ClassVar[dict[str, Any]] = {
@@ -119,6 +118,15 @@ class IndexDocumentTool(BaseMCPTool):
         """
         params = UnifiedIndexDocumentParams(**arguments)
         file_path = Path(params.file_path)
+
+        # Validation anti-traversal
+        documents_path = Path(settings.DOCUMENTS_PATH).resolve()
+        resolved = file_path.resolve()
+        if not resolved.is_relative_to(documents_path):
+            return {
+                "error": "File path must be within documents directory",
+                "file_path": str(file_path),
+            }
 
         if not file_path.exists():
             raise PDFNotFoundError(str(file_path))

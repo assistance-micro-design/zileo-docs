@@ -9,7 +9,9 @@ import tempfile
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from src.api.dependencies import OrchestratorDep, VectorStoreDep
 from src.core.config import settings
@@ -25,6 +27,7 @@ from src.models.api import DeleteResult, ProcessingStatus
 
 logger = logging.getLogger(__name__)
 
+limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
@@ -33,7 +36,9 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
     summary="Extraire et indexer un PDF",
     description="Extrait le contenu d'un PDF et l'indexe dans la base vectorielle.",
 )
+@limiter.limit(settings.RATE_LIMIT_INDEX)  # type: ignore[untyped-decorator]
 async def index_pdf(
+    request: Request,
     orchestrator: OrchestratorDep,
     file: Annotated[UploadFile, File(description="Fichier PDF a traiter")],
     force_ocr: bool = False,

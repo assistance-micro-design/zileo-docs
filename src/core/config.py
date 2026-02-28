@@ -90,6 +90,12 @@ class Settings(BaseSettings):
         description="Chemin vers le dossier contenant les PDFs disponibles",
     )
 
+    # === Rate Limiting ===
+    RATE_LIMIT_DEFAULT: str = "60/minute"
+    RATE_LIMIT_INDEX: str = "10/minute"
+    RATE_LIMIT_MCP: str = "30/minute"
+    RATE_LIMIT_SEARCH: str = "30/minute"
+
     # === Logging ===
     LOG_LEVEL: str = Field(
         default="INFO",

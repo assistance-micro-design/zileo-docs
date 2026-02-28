@@ -22,7 +22,6 @@ from src.mcp.tools.get_document import GetDocumentTool
 from src.mcp.tools.get_excel_formulas import GetExcelFormulasTool
 from src.mcp.tools.index_document import IndexDocumentTool
 from src.mcp.tools.list_available_documents import ListAvailableDocumentsTool
-from src.mcp.tools.list_available_pdfs import ListAvailablePdfsTool
 from src.mcp.tools.list_indexed_documents import ListIndexedDocumentsTool
 from src.mcp.tools.read_document_content import ReadDocumentContentTool
 from src.mcp.tools.search import SearchDocumentsTool
@@ -60,7 +59,6 @@ class MCPServer:
     - get_document: Obtenir les informations d'un document indexe
     - delete_document: Supprimer un document de l'index vectoriel
     - list_indexed_documents: Lister tous les documents indexes
-    - list_available_pdfs: Lister les fichiers PDF disponibles (deprecated)
     - list_available_documents: Lister tous les documents disponibles (PDF/Excel/Word)
     - get_excel_formulas: Récupérer les formules d'un document Excel indexé
     - read_document_content: Lire le contenu Markdown complet d'un document
@@ -108,7 +106,6 @@ class MCPServer:
         self._list_indexed_documents = ListIndexedDocumentsTool(
             vector_store=self._shared_vector_store,
         )
-        self._list_available_pdfs = ListAvailablePdfsTool()
         self._list_available_documents = ListAvailableDocumentsTool()
         self._get_excel_formulas = GetExcelFormulasTool(
             vector_store=self._shared_vector_store,
@@ -124,7 +121,6 @@ class MCPServer:
             "get_document": self._get_document,
             "delete_document": self._delete_document,
             "list_indexed_documents": self._list_indexed_documents,
-            "list_available_pdfs": self._list_available_pdfs,
             "list_available_documents": self._list_available_documents,
             "get_excel_formulas": self._get_excel_formulas,
             "read_document_content": self._read_document_content,

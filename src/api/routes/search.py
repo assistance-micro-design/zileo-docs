@@ -8,14 +8,18 @@ import logging
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from src.api.dependencies import EmbedderDep, VectorStoreDep
+from src.core.config import settings
 from src.models.search import SearchFilters, SearchQuery, SearchResponse, SearchResultItem
 
 
 logger = logging.getLogger(__name__)
 
+limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/search", tags=["Search"])
 
 
@@ -25,7 +29,9 @@ router = APIRouter(prefix="/search", tags=["Search"])
     summary="Recherche semantique",
     description="Recherche semantique dans les documents indexes.",
 )
+@limiter.limit(settings.RATE_LIMIT_SEARCH)  # type: ignore[untyped-decorator]
 async def search_documents(
+    request: Request,
     query: SearchQuery,
     embedder: EmbedderDep,
     vector_store: VectorStoreDep,
@@ -98,7 +104,9 @@ async def search_documents(
     summary="Recherche semantique (GET)",
     description="Recherche semantique avec parametres en query string.",
 )
+@limiter.limit(settings.RATE_LIMIT_SEARCH)  # type: ignore[untyped-decorator]
 async def search_documents_get(
+    request: Request,
     embedder: EmbedderDep,
     vector_store: VectorStoreDep,
     q: str = Query(..., min_length=1, description="Texte de recherche"),
@@ -141,7 +149,7 @@ async def search_documents_get(
         filters=filters if any([document_id, content_type, has_table, has_image]) else None,
     )
 
-    return await search_documents(query, embedder, vector_store)
+    return await search_documents(request, query, embedder, vector_store)  # type: ignore[no-any-return]
 
 
 def _build_filters(filters: SearchFilters) -> dict[str, Any]:

@@ -38,10 +38,9 @@ class SearchDocumentsTool(VectorStoreMCPTool):
 
     name: ClassVar[str] = "search_documents"
     description: ClassVar[str] = (
-        "Recherche dans les documents indexes (PDF/Excel/Word) par similarite semantique. "
-        "Requiert: documents indexes via index_document. "
-        "Retourne: passages pertinents avec score, page et type de document. "
-        "Supporte filtres: document_type, has_formula, sheet_name."
+        "Recherche semantique dans les documents indexes (PDF/Excel/Word). "
+        "Retourne: passages pertinents avec score et metadonnees. "
+        "Filtres: document_type, has_formula, sheet_name."
     )
 
     input_schema: ClassVar[dict[str, Any]] = {

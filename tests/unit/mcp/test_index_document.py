@@ -90,9 +90,9 @@ class TestIndexDocumentToolDescription:
         """La description previent le LLM du comportement doublon."""
         assert "deja indexe" in IndexDocumentTool.description
 
-    def test_description_mentions_delete_first(self) -> None:
-        """La description mentionne delete_document pour re-indexer."""
-        assert "delete_document" in IndexDocumentTool.description
+    def test_description_length_under_limit(self) -> None:
+        """La description ne depasse pas 200 caracteres."""
+        assert len(IndexDocumentTool.description) <= 200
 
 
 class TestDuplicateIndexationGuard:

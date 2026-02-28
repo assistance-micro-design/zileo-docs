@@ -31,7 +31,7 @@ class TestWordExtractor:
     @pytest.fixture
     def sample_docx(self, tmp_path: Path) -> Path:
         """Crée un fichier Word de test."""
-        from docx import Document  # noqa: PLC0415
+        from docx import Document
 
         doc = Document()
 

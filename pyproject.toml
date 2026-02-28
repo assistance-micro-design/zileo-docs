@@ -38,6 +38,9 @@ dependencies = [
     # Vector Store
     "qdrant-client>=1.9.0",
 
+    # Rate limiting
+    "slowapi>=0.1.9",
+
     # Utils
     "tiktoken>=0.7.0",
     "tenacity>=8.2.0",
@@ -119,7 +122,8 @@ force-single-line = false
 lines-after-imports = 2
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["ARG001", "PLR2004"]
+"tests/**/*.py" = ["ARG001", "PLR2004", "PLC0415", "TC002"]
+"src/api/routes/*.py" = ["ARG001"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -160,6 +164,8 @@ module = [
     "qdrant_client.*",
     "tiktoken",
     "tiktoken.*",
+    "slowapi",
+    "slowapi.*",
     "structlog",
     "structlog.*",
     "mcp",

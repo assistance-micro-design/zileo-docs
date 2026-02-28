@@ -17,6 +17,9 @@ from typing import TYPE_CHECKING, Any
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from src.api.routes import documents, health, search
 from src.core.config import settings
@@ -72,6 +75,9 @@ def create_app() -> FastAPI:
     # Configurer le logging
     setup_logging()
 
+    # Rate limiting
+    limiter = Limiter(key_func=get_remote_address)
+
     app = FastAPI(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
@@ -83,6 +89,10 @@ def create_app() -> FastAPI:
         docs_url="/docs" if settings.DEBUG else None,
         redoc_url="/redoc" if settings.DEBUG else None,
     )
+
+    # Rate limiting
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     # CORS middleware
     app.add_middleware(
@@ -117,6 +127,7 @@ def create_app() -> FastAPI:
 
     # Route MCP JSON-RPC
     @app.post("/mcp")
+    @limiter.limit(settings.RATE_LIMIT_MCP)  # type: ignore[untyped-decorator]
     async def mcp_endpoint(request: Request) -> dict[str, Any]:
         """Endpoint MCP JSON-RPC 2.0.
 

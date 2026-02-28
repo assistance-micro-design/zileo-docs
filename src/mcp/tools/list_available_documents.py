@@ -109,6 +109,17 @@ class ListAvailableDocumentsTool(BaseMCPTool):
         if params.subdirectory:
             scan_path = scan_path / params.subdirectory
 
+        # Validation anti-traversal
+        resolved = scan_path.resolve()
+        if not resolved.is_relative_to(self._documents_path.resolve()):
+            return {
+                "base_path": str(scan_path),
+                "total_files": 0,
+                "by_type": {},
+                "files": [],
+                "error": "Subdirectory must stay within documents directory",
+            }
+
         if not scan_path.exists():
             logger.warning("Documents path does not exist: %s", scan_path)
             return {
