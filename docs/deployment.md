@@ -3,19 +3,17 @@
 ## Prerequis
 
 - Docker et Docker Compose
-- Cle API Mistral
+- Une cle API Mistral
 
-## Deploiement Docker
+## Docker Compose
 
 ### 1. Configuration
-
-Copier le fichier d'exemple et configurer :
 
 ```bash
 cp .env.example .env
 ```
 
-Editer `.env` avec votre cle API Mistral.
+Editer `.env` : renseigner `MISTRAL_API_KEY` et `DOCUMENTS_PATH`.
 
 ### 2. Lancement
 
@@ -23,9 +21,11 @@ Editer `.env` avec votre cle API Mistral.
 docker-compose up -d
 ```
 
-Cela demarre :
-- L'application sur le port 8000
-- Qdrant sur les ports 6333 (HTTP) et 6334 (gRPC)
+Deux services demarrent :
+- **app** (`mcp-zileo-rag`) : Application FastAPI sur le port 8000
+- **qdrant** (`mcp-zileo-rag-qdrant`) : Base vectorielle sur les ports 6333 (HTTP) et 6334 (gRPC)
+
+Les services communiquent via un reseau Docker interne (`mcp-network`). L'application attend que Qdrant soit healthy avant de demarrer (`depends_on: condition: service_healthy`).
 
 ### 3. Verification
 
@@ -33,39 +33,22 @@ Cela demarre :
 curl http://localhost:8000/health/ready
 ```
 
----
+Reponse attendue : `{"status": "ready"}`.
 
-## Services Docker
-
-### Application (mcp-zileo-rag)
-
-- **Port** : 8000
-- **Image** : Build local via Dockerfile
-- **Dependances** : qdrant
-
-### Qdrant
-
-- **Port HTTP** : 6333
-- **Port gRPC** : 6334
-- **Image** : `qdrant/qdrant:latest`
-- **Volume** : `qdrant_storage` pour persistance
-
----
-
-## Commandes Utiles
+### Commandes utiles
 
 | Action | Commande |
 |--------|----------|
 | Demarrer | `docker-compose up -d` |
 | Arreter | `docker-compose down` |
-| Logs app | `docker-compose logs -f app` |
-| Logs qdrant | `docker-compose logs -f qdrant` |
-| Rebuild | `docker-compose build --no-cache` |
-| Supprimer volumes | `docker-compose down -v` |
+| Logs application | `docker-compose logs -f app` |
+| Logs Qdrant | `docker-compose logs -f qdrant` |
+| Rebuild (apres modification du code) | `docker-compose build --no-cache` |
+| Supprimer volumes (perte de donnees) | `docker-compose down -v` |
 
 ---
 
-## Developpement Local
+## Developpement local
 
 ### Installation
 
@@ -85,47 +68,37 @@ docker-compose up -d qdrant
 uvicorn src.main:app --reload --port 8000
 ```
 
+En local, `QDRANT_HOST` doit rester `localhost` (pas `qdrant`).
+
 ---
 
-## Validation
-
-Avant deploiement, executer la validation complete :
+## Validation avant deploiement
 
 ```bash
-ruff check src/ tests/ --fix
-ruff format src/ tests/
-mypy src/ --strict
+ruff check src/ tests/
+ruff format --check src/ tests/
+mypy src/
 pytest tests/ -v
 ```
 
 ---
 
-## Monitoring
+## Health checks
 
-### Health Checks
+| Endpoint | Usage | Verifie |
+|----------|-------|---------|
+| `/health/live` | Liveness probe | L'application repond |
+| `/health/ready` | Readiness probe | La connexion Qdrant fonctionne |
+| `/health` | Status complet | Qdrant + configuration Mistral |
 
-| Endpoint | Description |
-|----------|-------------|
-| `/health/live` | Application vivante |
-| `/health/ready` | Dependances prates |
-| `/health` | Status complet |
-
-### Metriques Qdrant
-
-Accessible via l'API Qdrant sur le port 6333 :
-- Collection info
-- Points count
-- Index status
+L'image Docker inclut un healthcheck qui appelle `/health` toutes les 30 secondes.
 
 ---
 
-## Production
+## Notes
 
-Pour un deploiement production :
-
-1. Desactiver le mode DEBUG
-2. Configurer LOG_FORMAT=json pour parsing des logs
-3. Ajuster OCR_MAX_CONCURRENT selon les limites API
-4. Configurer un reverse proxy (nginx, traefik)
-5. Activer TLS/HTTPS
-6. Configurer les backups Qdrant
+- L'application tourne avec l'utilisateur `appuser` (non-root) dans le container
+- Le dossier de documents est monte en lecture seule (`:ro`)
+- Qdrant utilise un volume Docker nomme (`qdrant_storage`) pour la persistance
+- Les logs sont en JSON par defaut (`LOG_FORMAT=json`)
+- `DEBUG=true` active Swagger UI sur `/docs` et le CORS avec `allow_origins=["*"]` — ne pas utiliser en production

@@ -1,177 +1,102 @@
-# Architecture MCP Zileo RAG
+# Architecture
 
-## Vue d'Ensemble
+## Vue d'ensemble
 
-MCP Zileo RAG est un serveur pour l'extraction et la vectorisation de documents. Il supporte les formats **PDF**, **Excel** (.xlsx, .xls) et **Word** (.docx). Il expose ses fonctionnalites via une API REST FastAPI et un serveur MCP (Model Context Protocol) en JSON-RPC 2.0.
+MCP Zileo RAG est un serveur FastAPI qui expose des outils via JSON-RPC 2.0 (protocole MCP). Il extrait le contenu de documents PDF, Excel et Word, le decoupe en chunks, genere des embeddings via Mistral, et stocke le tout dans Qdrant pour la recherche semantique.
 
-Pour les details specifiques au traitement Excel et Word, voir [Multi-Format](multi-format.md).
+Le serveur MCP est une implementation custom de JSON-RPC 2.0. Il n'utilise pas le SDK MCP officiel pour le serveur — le package `mcp` est installe comme dependance mais le routing JSON-RPC est fait manuellement dans `MCPServer`.
 
-## Composants Principaux
+## Composants
 
-### Couche API
+### Points d'entree
 
-- **REST API** (`/api/v1/*`) : Endpoints pour l'indexation et la recherche de documents
-- **MCP Server** (`/mcp`) : Serveur JSON-RPC 2.0 pour integration avec les LLMs
-- **Health Checks** (`/health/*`) : Endpoints de monitoring
+- `POST /mcp` — Endpoint JSON-RPC 2.0 principal (rate limited a 30/minute)
+- `GET /api/v1/*` — API REST pour l'indexation, la recherche et la gestion de documents
+- `GET /health/*` — Health checks (liveness, readiness)
+- `GET /` — Info service
 
-### Couche Services
-
-Le traitement des documents suit un pipeline unifie :
-
-```
-+----------+   +----------+   +----------+
-|   PDF    |   |  Excel   |   |   Word   |
-|  .pdf    |   |.xlsx/.xls|   |  .docx   |
-+----+-----+   +----+-----+   +----+-----+
-     |              |              |
-     v              v              v
-+--------------------------------------------+
-|        DocumentRouter (detection type)     |
-+--------------------------------------------+
-     |              |              |
-     v              v              v
-+----------+   +----------+   +----------+
-|PDF Extrac|   |ExcelExtr.|   |WordExtr. |
-+----------+   +----------+   +----------+
-     |              |              |
-     v              v              v
-+--------------------------------------------+
-|        UnifiedDocument (format commun)     |
-+--------------------------------------------+
-               |
-               v
-+----------+   +----------+   +----------+
-| Chunker  |-->| Embedder |-->|  Qdrant  |
-+----------+   +----------+   +----------+
-```
-
-#### Pipeline PDF (5 phases)
-
-| Phase | Composant | Description |
-|-------|-----------|-------------|
-| 1 | Analyzer | Analyse du document et classification des pages |
-| 2 | Native Extractor | Extraction du texte natif (PyMuPDF4LLM) |
-| 3 | OCR Processor | OCR Mistral pour pages complexes |
-| 4 | Chunker + Embedder | Decoupage semantique et generation d'embeddings |
-| 5 | Vector Store | Stockage dans Qdrant avec metadata riche |
-
-#### Pipeline Excel
-
-| Phase | Composant | Description |
-|-------|-----------|-------------|
-| 1 | ExcelExtractor | Extraction donnees, formules, tableaux (openpyxl/xlrd) |
-| 2 | UnifiedDocument | Conversion vers format commun |
-| 3 | Chunker + Embedder | Decoupage et embeddings |
-| 4 | Vector Store | Stockage avec metadonnees formules |
-
-#### Pipeline Word
-
-| Phase | Composant | Description |
-|-------|-----------|-------------|
-| 1 | WordExtractor | Extraction texte, tableaux, images (docx2python) |
-| 2 | UnifiedDocument | Conversion vers format commun |
-| 3 | Chunker + Embedder | Decoupage et embeddings |
-| 4 | Vector Store | Stockage avec metadonnees structure |
-
-### Orchestrateur
-
-Le `PDFPipelineOrchestrator` coordonne l'execution du pipeline :
-
-1. Analyse le document pour classifier chaque page
-2. Extrait le texte natif des pages simples
-3. Applique l'OCR aux pages complexes (tableaux, images, scans)
-4. Fusionne et decoupe le contenu en chunks semantiques
-5. Genere les embeddings et stocke dans Qdrant
-
-## Services Externes
-
-| Service | Utilisation |
-|---------|-------------|
-| **Mistral OCR** | Extraction de contenu des pages PDF complexes |
-| **Mistral Embed** | Generation d'embeddings (1024 dimensions) |
-| **Qdrant** | Base de donnees vectorielle |
-| **openpyxl** | Extraction Excel .xlsx |
-| **xlrd** | Extraction Excel .xls legacy |
-| **docx2python** | Extraction Word .docx |
-
-## Classification des Pages
-
-L'analyseur classifie chaque page selon son contenu :
-
-| Type | Methode d'extraction |
-|------|---------------------|
-| TEXT_ONLY | PyMuPDF4LLM (gratuit, rapide) |
-| HAS_TABLES | Mistral OCR |
-| HAS_IMAGES | Mistral OCR |
-| HAS_CHARTS | Mistral OCR |
-| SCANNED | Mistral OCR |
-| MIXED | Mistral OCR |
-
-## Chunking Semantique
-
-Le chunker preserve l'integrite du contenu :
-
-- **Tableaux** : Gardes intacts, jamais coupes
-- **Blocs de code** : Preserves en entier
-- **Equations** : Non fragmentees
-- **Sections** : Hierarchie preservee dans les metadonnees
-- **Overlap** : 50 tokens entre chunks pour continuite
-
-## Metadata des Chunks
-
-Chaque chunk stocke des metadonnees riches pour le filtrage :
-
-- Identifiants (chunk_id, document_id)
-- Localisation (pages, position dans le document)
-- Structure (titre de section, hierarchie)
-- Type de contenu (texte, tableau, equation)
-- Statistiques (tokens, caracteres, mots)
-- Contexte environnant
-
-## Structure du Projet
+### Pipeline de traitement
 
 ```
-src/
-+-- api/           # Endpoints REST
-+-- mcp/           # Serveur MCP et tools
-|   +-- server.py          # MCPServer principal
-|   +-- tools/             # Tools MCP
-|       +-- base.py        # BaseMCPTool (classe abstraite)
-|       +-- index_document.py
-|       +-- search.py
-|       +-- get_document.py
-|       +-- delete_document.py
-|       +-- list_indexed_documents.py
-|       +-- list_available_documents.py  # Multi-format
-|       +-- get_excel_formulas.py        # Excel specifique
-|       +-- read_document_content.py
-+-- services/      # Logique metier (pipeline)
-|   +-- document/  # Router multi-format
-|   +-- excel/     # Extraction Excel
-|   +-- word/      # Extraction Word
-|   +-- pdf/       # Extraction PDF
-+-- models/        # Schemas Pydantic
-|   +-- types.py   # TypeAlias partages
-|   +-- unified.py # Format unifie
-|   +-- excel.py   # Modeles Excel
-|   +-- word.py    # Modeles Word
-+-- core/          # Configuration et exceptions
-
-tests/
-+-- unit/          # Tests unitaires
-+-- integration/   # Tests avec services externes
-+-- e2e/           # Tests bout-en-bout
+Document (PDF/Excel/Word)
+        |
+        v
++-----------------------+
+| Detection du format   |  DocumentRouter.detect_type()
++-----------------------+
+   |          |         |
+   v          v         v
++------+  +-------+  +------+
+| PDF  |  | Excel |  | Word |
++------+  +-------+  +------+
+   |          |         |
+   v          v         v
++-----------------------+
+| Chunks + Embeddings   |  Mistral embed (1024 dim)
++-----------------------+
+        |
+        v
++-----------------------+
+| Qdrant                |  Collection "pdf_documents"
++-----------------------+
 ```
 
-## Architecture des Tools MCP
+La collection Qdrant s'appelle `pdf_documents` meme pour les documents Excel et Word — c'est un vestige de la version initiale qui ne supportait que le PDF.
+
+### Pipeline PDF (5 phases)
+
+| Phase | Composant | Role |
+|-------|-----------|------|
+| 1 | `DocumentAnalyzer` | Ouvre le PDF, classifie chaque page (texte pur, tableaux, images, scan) |
+| 2 | `NativeContentExtractor` | Extrait le texte des pages simples via PyMuPDF4LLM (gratuit) |
+| 3 | `MistralOCRProcessor` | Envoie les pages complexes a l'API OCR Mistral (payant) |
+| 4 | `SmartChunker` + `MistralEmbedder` | Decoupe le contenu et genere les embeddings |
+| 5 | `QdrantVectorStore` | Stocke les chunks avec metadata dans Qdrant |
+
+Le pipeline PDF est coordonne par `PDFPipelineOrchestrator`.
+
+### Pipeline Excel / Word
+
+Pour Excel et Word, le pipeline est plus simple :
+1. `ExcelExtractor` ou `WordExtractor` extrait le contenu
+2. Conversion en `UnifiedDocument` (format commun)
+3. `IndexDocumentTool` cree les chunks directement (pas via `SmartChunker`)
+4. Embedding et stockage dans Qdrant
+
+Le chunking Excel/Word est fait dans `IndexDocumentTool` avec une logique specifique : chunk principal de 8000 caracteres, chunks de debordement de 4000 caracteres, chunk de formules separe (max 50 formules).
+
+### Classification des pages PDF
+
+L'analyseur classifie chaque page selon des heuristiques :
+
+| Type | Critere | Extraction |
+|------|---------|------------|
+| TEXT_ONLY | Texte natif suffisant, pas d'images significatives | PyMuPDF4LLM |
+| HAS_TABLES | Tables detectees | Mistral OCR |
+| HAS_IMAGES | Images couvrant >20% de la page | Mistral OCR |
+| HAS_CHARTS | >50 dessins vectoriels et peu de texte | Mistral OCR |
+| SCANNED | Pas de texte natif, image >80% de la page | Mistral OCR |
+| MIXED | Tables et images presentes | Mistral OCR |
+
+Seuils configures en constantes dans `DocumentAnalyzer` : `MIN_TEXT_FOR_NATIVE=50`, `SIGNIFICANT_IMAGE_RATIO=0.05`, `CHART_DRAWING_THRESHOLD=50`.
+
+### Chunking
+
+Le `SmartChunker` decoupe le contenu en chunks de `CHUNK_SIZE` tokens (defaut 512) avec un overlap de `CHUNK_OVERLAP` tokens (defaut 50).
+
+Comportement :
+- Les tableaux, blocs de code et equations LaTeX sont identifies comme "regions protegees" et ne sont jamais coupes
+- Les headers Markdown declenchent des limites de chunks
+- Chaque chunk recoit un `content_with_context` qui prepend la hierarchie de sections pour ameliorer la qualite des embeddings
+- Le comptage de tokens utilise tiktoken (`cl100k_base`)
+
+Le chunking est base sur la structure Markdown (headers). Il n'y a pas d'analyse semantique du contenu.
+
+## Architecture des outils MCP
 
 ### BaseMCPTool
 
-Tous les tools MCP heritent de `BaseMCPTool`, une classe abstraite qui fournit :
-
-- **Structure commune** : `name`, `description`, `input_schema`
-- **Initialisation lazy** : Pattern idempotent avec `_initialized`
-- **Template method** : `execute()` appelle `_ensure_initialized()` puis `_do_execute()`
+Tous les outils heritent de `BaseMCPTool` :
 
 ```python
 class BaseMCPTool(ABC):
@@ -179,78 +104,108 @@ class BaseMCPTool(ABC):
     description: ClassVar[str]
     input_schema: ClassVar[dict[str, Any]]
 
-    async def execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
+    async def execute(self, arguments) -> dict[str, Any]:
         await self._ensure_initialized()
         return await self._do_execute(arguments)
-
-    @abstractmethod
-    async def _do_initialize(self) -> None: ...
-
-    @abstractmethod
-    async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]: ...
 ```
 
-### Injection de Dependances
+`VectorStoreMCPTool` est une sous-classe qui injecte automatiquement un `QdrantVectorStore`.
 
-Les tools partagent leurs dependances (vector store, embedder) via injection :
+### Injection de dependances
 
-```python
-class MCPServer:
-    def __init__(self) -> None:
-        self._shared_vector_store = QdrantVectorStore()
-        self._shared_embedder = MistralEmbedder()
+`MCPServer` cree une instance partagee de `QdrantVectorStore` et `MistralEmbedder`, et les injecte dans les outils qui en ont besoin.
 
-        # Injection dans les tools
-        self._search_tool = SearchDocumentsTool(
-            vector_store=self._shared_vector_store,
-            embedder=self._shared_embedder,
-        )
+**Exception** : `IndexDocumentTool` ne suit pas ce pattern. Il cree ses propres instances dans son `__init__`. C'est une inconsistance connue.
+
+### Liste des outils
+
+| Outil | Classe parente | Dependances injectees |
+|-------|----------------|----------------------|
+| `index_document` | `BaseMCPTool` | Aucune (cree ses propres instances) |
+| `search_documents` | `VectorStoreMCPTool` | VectorStore, Embedder |
+| `get_document` | `VectorStoreMCPTool` | VectorStore |
+| `delete_document` | `VectorStoreMCPTool` | VectorStore |
+| `list_indexed_documents` | `VectorStoreMCPTool` | VectorStore |
+| `list_available_documents` | `BaseMCPTool` | Aucune (acces filesystem) |
+| `get_excel_formulas` | `VectorStoreMCPTool` | VectorStore |
+| `read_document_content` | `VectorStoreMCPTool` | VectorStore |
+
+### Securite
+
+- **Path traversal** : `IndexDocumentTool` et `ListAvailableDocumentsTool` verifient que les chemins restent dans `DOCUMENTS_PATH` via `Path.is_relative_to()`
+- **Rate limiting** : slowapi applique des limites sur `/mcp` (30/min), l'indexation (10/min), et la recherche (30/min)
+- **Validation** : Les parametres MCP sont valides via des modeles Pydantic dedies
+
+## Services externes
+
+| Service | Usage | Cout |
+|---------|-------|------|
+| Mistral OCR (`mistral-ocr-latest`) | OCR des pages PDF complexes | ~$2/1000 pages |
+| Mistral Embed (`mistral-embed`) | Embeddings 1024 dimensions | ~$0.10/million tokens |
+| Qdrant | Stockage vectoriel, recherche par similarite | Auto-heberge (gratuit) |
+
+## Gestion des erreurs
+
+Les erreurs heritent de `MCPZileoPDFError` et fournissent un format `to_llm_format()` pour les reponses MCP. Ce format inclut un code d'erreur, un message, une suggestion d'action corrective, et un indicateur de retry.
+
+Hierarchie :
+```
+MCPZileoPDFError
+  +-- PDFError (PDFNotFoundError, PDFCorruptedError, PDFTooLargeError, PDFTooManyPagesError)
+  +-- OCRError (OCRAPIError, OCRRateLimitError)
+  +-- EmbeddingError (EmbeddingAPIError)
+  +-- VectorStoreError (VectorStoreConnectionError, CollectionNotFoundError, DocumentNotFoundError)
+  +-- ValidationError (EmptyQueryError, NoResultsError)
 ```
 
-**Avantages** :
-- Une seule connexion Qdrant partagee
-- Testabilite amelioree (injection de mocks)
-- Reduction des ressources
+## Structure du projet
 
-### Initialisation Parallele
-
-Le `MCPServer` initialise tous les tools en parallele :
-
-```python
-async def initialize(self) -> None:
-    await asyncio.gather(
-        *(tool.initialize() for tool in self.tools.values())
-    )
 ```
-
-### Liste des Tools
-
-| Tool | Fichier | Dependances |
-|------|---------|-------------|
-| `index_document` | `index_document.py` | DocumentRouter, VectorStore |
-| `search_documents` | `search.py` | VectorStore, Embedder |
-| `get_document` | `get_document.py` | VectorStore |
-| `delete_document` | `delete_document.py` | VectorStore |
-| `list_indexed_documents` | `list_indexed_documents.py` | VectorStore |
-| `list_available_documents` | `list_available_documents.py` | FileSystem |
-| `get_excel_formulas` | `get_excel_formulas.py` | VectorStore |
-| `read_document_content` | `read_document_content.py` | VectorStore |
-
-## Type Safety
-
-Le projet utilise un typage statique strict avec mypy. Les types personnalises sont definis dans des modules `types.py` dedies (ex: `src/mcp/types.py`).
-
-Pour plus de details, voir [Type Safety](type-safety.md).
-
-## Code Style
-
-Le projet suit des conventions strictes pour maintenir la lisibilite : elimination des blocs `else` au profit de guard clauses, early returns, et dict dispatch.
-
-Pour plus de details, voir [Code Style](code-style.md).
-
-### Validation
-
-```bash
-mypy src/
-# Success: no issues found in N source files
+src/
++-- main.py                     # FastAPI app, endpoint /mcp, lifecycle
++-- core/
+|   +-- config.py               # Settings (pydantic-settings)
+|   +-- exceptions.py           # Hierarchie d'erreurs
+|   +-- logging.py              # Configuration structlog
++-- api/
+|   +-- dependencies.py         # DI FastAPI (get_orchestrator, etc.)
+|   +-- routes/
+|       +-- health.py           # /health, /health/live, /health/ready
+|       +-- documents.py        # /api/v1/documents/*
+|       +-- search.py           # /api/v1/search
++-- mcp/
+|   +-- server.py               # MCPServer (routeur JSON-RPC)
+|   +-- types.py                # RequestId TypeAlias
+|   +-- tools/
+|       +-- base.py             # BaseMCPTool, VectorStoreMCPTool
+|       +-- index_document.py
+|       +-- search.py
+|       +-- get_document.py
+|       +-- delete_document.py
+|       +-- list_indexed_documents.py
+|       +-- list_available_documents.py
+|       +-- get_excel_formulas.py
+|       +-- read_document_content.py
++-- services/
+|   +-- pipeline/orchestrator.py  # PDFPipelineOrchestrator
+|   +-- pdf/
+|   |   +-- analyzer.py          # Classification des pages
+|   |   +-- native_extractor.py   # Extraction PyMuPDF4LLM
+|   |   +-- ocr_processor.py     # OCR via API Mistral
+|   +-- chunking/chunker.py      # SmartChunker
+|   +-- embedding/mistral_embedder.py
+|   +-- vector/qdrant_store.py   # QdrantVectorStore
+|   +-- document/router.py       # DocumentRouter (multi-format)
+|   +-- excel/extractor.py       # ExcelExtractor
+|   +-- word/extractor.py        # WordExtractor
++-- models/
+    +-- document.py    # DocumentMetadata, PageAnalysis, PageType
+    +-- extraction.py  # ExtractedContent, OCRResult, TableData, etc.
+    +-- chunk.py       # ChunkMetadata, DocumentChunk
+    +-- unified.py     # UnifiedDocument, UnifiedMetadata, DocumentType
+    +-- excel.py       # ExcelDocument, ExcelSheet, ExcelCell, ExcelFormula
+    +-- word.py        # WordDocument, WordParagraph, WordTable, ContentBlock
+    +-- search.py      # SearchQuery, SearchFilters, SearchResponse
+    +-- api.py         # Pydantic models pour parametres MCP et reponses REST
+    +-- types.py       # TypeAlias partages (CellValue, FormulaResult)
 ```

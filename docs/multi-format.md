@@ -1,468 +1,115 @@
-# Traitement Multi-Format : Excel et Word
+# Support multi-format : Excel et Word
 
-Ce document decrit l'extension du serveur MCP Zileo RAG pour traiter les documents Excel (.xlsx, .xls) et Word (.docx), en plus des PDF.
+Le support Excel et Word a ete ajoute apres le PDF. Le PDF reste le format le plus teste et le plus complet.
 
-## Vue d'Ensemble
+## Formats supportes
 
-### Formats Supportes
+| Format | Extension | Bibliotheque | Ce qui est extrait |
+|--------|-----------|--------------|-------------------|
+| PDF | `.pdf` | PyMuPDF4LLM + Mistral OCR | Texte, tableaux, images, equations |
+| Excel | `.xlsx` | openpyxl | Donnees, formules, resultats calcules, cellules fusionnees |
+| Excel legacy | `.xls` | xlrd | Donnees uniquement |
+| Word | `.docx` | docx2python | Texte, tableaux, images (base64) |
 
-| Format | Extension | Bibliotheque | Fonctionnalites |
-|--------|-----------|--------------|-----------------|
-| PDF | .pdf | PyMuPDF + Mistral OCR | Texte, tableaux, images, OCR |
-| Excel moderne | .xlsx | openpyxl | Donnees, formules, styles |
-| Excel legacy | .xls | xlrd | Donnees uniquement |
-| Word moderne | .docx | docx2python | Texte, tableaux, images |
+## Comment ca fonctionne
 
-### Donnees Extraites
+### Routage
 
-**Excel** :
+`DocumentRouter` detecte le format a partir de l'extension du fichier et delegue a l'extracteur correspondant :
+
+```python
+SUPPORTED_EXTENSIONS = {".pdf": PDF, ".xlsx": EXCEL, ".xls": EXCEL, ".docx": WORD}
+```
+
+Les formats `.doc` (Word 97-2003) et `.xlsb` ne sont pas supportes.
+
+### Extraction Excel
+
+L'extracteur charge le fichier `.xlsx` deux fois via openpyxl :
+1. `data_only=False` pour recuperer les formules brutes (`=SUM(A1:A10)`)
+2. `data_only=True` pour recuperer les valeurs calculees
+
+Pour les fichiers `.xls`, seul xlrd est utilise. Les formules ne sont pas recuperables dans ce format.
+
+Donnees extraites :
 - Valeurs des cellules (texte, nombres, dates, booleens)
-- Formules brutes (`=SUM(A1:A10)`)
-- Resultats calcules des formules
+- Formules brutes et resultats calcules
 - Cellules fusionnees
-- Noms de feuilles et plages nommees
+- Noms de feuilles
+- Tables officielles Excel (creees via Insert > Table)
 
-**Word** :
-- Paragraphes avec styles (titres, corps)
-- Tableaux avec structure
-- Images integrees (base64)
-- Metadonnees du document
+### Extraction Word
 
----
+L'extracteur utilise `docx2python` pour extraire :
+- Paragraphes avec detection du niveau de heading (par regex sur le texte, pas par style Word)
+- Tableaux avec structure lignes/colonnes
+- Images integrees (converties en base64)
+- Metadonnees du document (auteur, titre, etc.)
 
-## Architecture
+### Chunking Excel/Word
 
-```
-                          PIPELINE UNIFIE
-+-----------------------------------------------------------------------------+
-|                                                                             |
-|  +----------+   +----------+   +----------+                                 |
-|  |   PDF    |   |  Excel   |   |   Word   |                                 |
-|  |  .pdf    |   |.xlsx/.xls|   |  .docx   |                                 |
-|  +----+-----+   +----+-----+   +----+-----+                                 |
-|       |              |              |                                       |
-|       v              v              v                                       |
-|  +--------------------------------------------------------------+          |
-|  |              DocumentRouter (detection type)                 |          |
-|  +--------------------------------------------------------------+          |
-|       |              |              |                                       |
-|       v              v              v                                       |
-|  +----------+   +----------+   +----------+                                 |
-|  |PDFExtract|   |ExcelExtr.|   |WordExtr. |                                 |
-|  |(existant)|   |(nouveau) |   |(nouveau) |                                 |
-|  +----+-----+   +----+-----+   +----+-----+                                 |
-|       |              |              |                                       |
-|       v              v              v                                       |
-|  +--------------------------------------------------------------+          |
-|  |              UnifiedContent (format commun)                  |          |
-|  +--------------------------------------------------------------+          |
-|       |                                                                     |
-|       v                                                                     |
-|  +----------+   +----------+   +----------+                                 |
-|  | Chunker  |-->| Embedder |-->|  Qdrant  |                                 |
-|  |(existant)|   |(existant)|   |(existant)|                                 |
-|  +----------+   +----------+   +----------+                                 |
-|                                                                             |
-+-----------------------------------------------------------------------------+
-```
+Le chunking pour Excel et Word n'utilise pas `SmartChunker`. Il est fait directement dans `IndexDocumentTool` avec une logique specifique :
 
-### Structure des Fichiers
+- **Chunk principal** : contenu Markdown du document, tronque a 8000 caracteres
+- **Chunks de debordement** : si le contenu depasse 8000 caracteres, decoupage en blocs de 4000 caracteres avec 200 caracteres d'overlap
+- **Chunk de formules** : chunk separe contenant les 50 premieres formules du document (Excel uniquement)
 
-```
-src/
-+-- services/
-|   +-- document/                    # Abstraction multi-format
-|   |   +-- __init__.py
-|   |   +-- router.py               # Detection et routing par type
-|   |   +-- base_extractor.py       # Interface commune
-|   +-- excel/                       # Extraction Excel
-|   |   +-- __init__.py
-|   |   +-- extractor.py            # Extraction donnees + formules
-|   |   +-- formula_parser.py       # Parsing des formules Excel
-|   +-- word/                        # Extraction Word
-|   |   +-- __init__.py
-|   |   +-- extractor.py            # Extraction texte/tables/images
-|   +-- pdf/                         # Existant (adapte)
-|
-+-- models/
-|   +-- types.py                     # TypeAlias partages
-|   +-- excel.py                     # Modeles Excel
-|   +-- word.py                      # Modeles Word
-|   +-- unified.py                   # Format unifie
-|
-+-- mcp/tools/
-    +-- index_document.py           # Indexation unifiee
-    +-- get_excel_formulas.py       # Formules Excel
-    +-- list_available_documents.py # Liste multi-format
-```
+Ce chunking est plus simple que celui du PDF. Il ne detecte pas les regions protegees (tableaux, code) et ne preserve pas la hierarchie de sections.
 
----
-
-## Modeles de Donnees
-
-### Types Partages
-
-```python
-# src/models/types.py
-from datetime import datetime
-from typing import TypeAlias
-
-# Valeur possible d'une cellule (Excel/Word table)
-CellValue: TypeAlias = str | int | float | bool | datetime | None
-
-# Resultat calcule d'une formule Excel
-FormulaResult: TypeAlias = str | int | float | bool | None
-
-# Identifiants
-DocumentId: TypeAlias = str
-ChunkId: TypeAlias = str
-```
-
-### DocumentType
-
-```python
-class DocumentType(str, Enum):
-    PDF = "pdf"
-    EXCEL = "excel"
-    WORD = "word"
-```
+## Modeles de donnees
 
 ### UnifiedDocument
 
-Format commun pour tous les types de documents :
+Tous les formats sont convertis en `UnifiedDocument`, qui contient :
+- `metadata` : `UnifiedMetadata` avec type de document, compteurs, drapeaux
+- `content_markdown` : Le contenu en Markdown (pour l'embedding)
+- `structured_data` : Tables, formules et images en format structure
 
-```python
-class UnifiedDocument(BaseModel):
-    metadata: UnifiedMetadata
-    content_markdown: str  # Contenu pour embedding
-    structured_data: StructuredData  # Tables, formules, images
-```
+### Modeles Excel
 
-### Metadonnees Unifiees
+- `ExcelCell` : Cellule avec position, valeur, formule, type (`CellType`)
+- `ExcelFormula` : Formule avec reference de cellule, feuille, formule brute, resultat, dependances
+- `ExcelSheet` : Feuille avec grille de cellules, tables, formules, cellules fusionnees
+- `ExcelDocument` : Document complet avec liste de feuilles
 
-```python
-class UnifiedMetadata(BaseModel):
-    document_id: str
-    filename: str
-    file_path: str
-    document_type: DocumentType
-    original_format: str  # .pdf, .xlsx, .docx
+### Modeles Word
 
-    # Contenu
-    page_count: int | None  # Pages (PDF) ou feuilles (Excel)
-    word_count: int
+- `WordParagraph` : Paragraphe avec texte, niveau de heading, style
+- `WordTable` : Tableau avec grille de `WordTableCell`
+- `WordImage` : Image avec nom, type MIME, taille, contenu base64
+- `ContentBlock` : Bloc ordonne (paragraphe, heading, tableau ou image)
+- `WordDocument` : Document complet avec liste de blocs de contenu
 
-    # Drapeaux
-    has_tables: bool
-    has_images: bool
-    has_formulas: bool  # Excel uniquement
-    has_ocr_content: bool  # PDF uniquement
-
-    # Specifique Excel
-    sheet_names: list[str]
-```
-
----
-
-## Extraction Excel
-
-### Modeles
-
-**ExcelCell** : Cellule avec valeur et formule optionnelle
-```python
-class ExcelCell(BaseModel):
-    row: int
-    column: int
-    column_letter: str  # A, B, C...
-    value: CellValue
-    formula: str | None
-    cell_type: CellType  # text, number, date, boolean, formula, empty
-```
-
-**ExcelFormula** : Formule avec contexte
-```python
-class ExcelFormula(BaseModel):
-    cell: str           # Reference (ex: C10)
-    sheet: str          # Nom de la feuille
-    formula: str        # Formule brute (ex: =SUM(A1:A10))
-    result: FormulaResult
-    dependencies: list[str]  # Cellules referencees
-```
-
-**ExcelSheet** : Feuille avec donnees structurees
-```python
-class ExcelSheet(BaseModel):
-    name: str
-    index: int
-    cells: list[list[ExcelCell]]
-    tables: list[ExcelTable]
-    formulas: list[ExcelFormula]
-    merged_cells: list[str]
-```
-
-### Extracteur
-
-L'extracteur charge le fichier deux fois :
-1. `data_only=False` : Pour les formules brutes
-2. `data_only=True` : Pour les valeurs calculees
-
-```python
-class ExcelExtractor:
-    async def extract(self, file_path: Path) -> ExcelDocument:
-        if file_path.suffix == ".xlsx":
-            return await self._extract_xlsx(file_path)
-        elif file_path.suffix == ".xls":
-            return await self._extract_xls(file_path)
-```
-
-### Limitations
-
-| Limitation | Impact | Workaround |
-|------------|--------|------------|
-| .xls sans formules | Les formules ne sont pas recuperables | Documenter, afficher resultats |
-| Graphiques | Non extraits | Future evolution |
-| Macros VBA | Ignorees | Securite, non pertinent |
-| Fichiers proteges | Erreur a l'ouverture | Demander mot de passe |
-
----
-
-## Extraction Word
-
-### Modeles
-
-**WordParagraph** : Paragraphe avec style
-```python
-class WordParagraph(BaseModel):
-    text: str
-    style: str | None
-    level: HeadingLevel  # BODY, HEADING_1..6
-    is_bold: bool
-    is_italic: bool
-```
-
-**WordTable** : Tableau avec cellules
-```python
-class WordTable(BaseModel):
-    rows: list[list[WordTableCell]]
-    headers: list[str] | None
-```
-
-**ContentBlock** : Bloc ordonne
-```python
-class ContentBlock(BaseModel):
-    content_type: ContentType  # paragraph, heading, table, image
-    order: int  # Position dans le document
-    paragraph: WordParagraph | None
-    table: WordTable | None
-    image: WordImage | None
-```
-
-### Extracteur
-
-```python
-class WordExtractor:
-    def __init__(self, extract_images: bool = True) -> None:
-        self.extract_images = extract_images
-
-    async def extract(self, file_path: Path) -> WordDocument:
-        # Utilise docx2python pour extraction complete
-```
-
-### Limitations
-
-| Limitation | Impact | Workaround |
-|------------|--------|------------|
-| Format .doc non supporte | Fichiers Word 97-2003 ignores | Convertir en .docx |
-| Styles complexes | Styles personnalises non detectes | Heuristiques sur le texte |
-| Commentaires/Revisions | Non extraits | Future evolution |
-
----
-
-## Outils MCP
+## Outils MCP specifiques
 
 ### index_document
 
-Indexe un document (PDF, Excel, Word) pour la recherche semantique.
-
-**Parametres** :
-| Parametre | Type | Description |
-|-----------|------|-------------|
-| `file_path` | string (requis) | Chemin absolu vers le document |
-| `force_ocr` | boolean | PDF uniquement : forcer OCR |
-| `sheets` | array | Excel uniquement : feuilles a indexer |
-| `table_format` | string | Format des tableaux (markdown/html/json) |
-
-**Retour** :
-```json
-{
-  "document_id": "uuid",
-  "document_type": "excel",
-  "filename": "rapport.xlsx",
-  "chunks_stored": 42,
-  "has_tables": true,
-  "has_formulas": true,
-  "sheet_names": ["Donnees", "Calculs"]
-}
-```
-
-### search_documents
-
-Recherche semantique avec filtres multi-format.
-
-**Nouveaux parametres** :
-| Parametre | Type | Description |
-|-----------|------|-------------|
-| `score_threshold` | number | Seuil de similarite (0.0-1.0, defaut: 0.7) |
-| `filters.document_type` | string | Filtrer par type : pdf, excel, word |
-| `filters.has_formula` | boolean | Excel : chunks avec formules |
-| `filters.sheet_name` | string | Excel : filtrer par feuille |
-| `filters.text_search` | string | Recherche full-text exacte |
-
-**Recommandations score_threshold** :
-- Recherche de concepts : `0.7` (defaut)
-- Recherche de noms propres : `0.5`
-- Recherche tres large : `0.3`
-
-**Exemple : rechercher une personne dans un Excel** :
-```json
-{
-  "query": "informations du coproprietaire",
-  "filters": {
-    "text_search": "GRANDFOND",
-    "document_type": "excel"
-  },
-  "score_threshold": 0.3
-}
-```
+Accepte tous les formats. Detecte le type par extension. Parametres specifiques :
+- `sheets` : Excel uniquement, permet de limiter l'indexation a certaines feuilles
+- `force_ocr` : PDF uniquement
 
 ### get_excel_formulas
 
-Recupere les formules d'un document Excel indexe.
-
-**Parametres** :
-| Parametre | Type | Description |
-|-----------|------|-------------|
-| `document_id` | string (requis) | ID du document Excel |
-| `sheet` | string | Filtrer par nom de feuille |
-| `cell_range` | string | Filtrer par plage (ex: A1:D10) |
-
-**Retour** :
-```json
-{
-  "document_id": "doc-abc123",
-  "total_formulas": 15,
-  "formulas": [
-    {
-      "sheet": "Calculs",
-      "cell": "C10",
-      "formula": "=SUM(C2:C9)",
-      "result": 1500.0
-    }
-  ]
-}
-```
+Recupere les formules stockees dans les chunks d'un document Excel. Permet de filtrer par feuille et par plage de cellules.
 
 ### list_available_documents
 
-Liste les fichiers disponibles pour indexation.
+Liste les fichiers dans le dossier monte. Peut filtrer par type : `pdf`, `excel`, `word`, `all`.
 
-**Parametres** :
-| Parametre | Type | Description |
-|-----------|------|-------------|
-| `type_filter` | string | pdf, excel, word, all (defaut: all) |
-| `subdirectory` | string | Sous-dossier a explorer |
-| `recursive` | boolean | Explorer recursivement (defaut: true) |
+## Limitations connues
 
-**Retour** :
-```json
-{
-  "total_files": 25,
-  "by_type": {"pdf": 10, "excel": 8, "word": 7},
-  "files": [
-    {
-      "filename": "rapport.xlsx",
-      "path": "/data/docs/rapport.xlsx",
-      "type": "excel",
-      "size_mb": 1.5,
-      "extension": ".xlsx"
-    }
-  ]
-}
-```
+### Excel
+- `.xls` : Pas d'extraction de formules (limitation de xlrd)
+- Graphiques : Non extraits
+- Macros VBA : Ignorees
+- Fichiers proteges par mot de passe : Erreur a l'ouverture
+- Fichiers sans "Tables officielles" Excel : Les donnees brutes sont extraites via `_cells_to_markdown()` (correctif ajoute)
 
----
+### Word
+- `.doc` (Word 97-2003) : Non supporte, convertir en `.docx`
+- Styles personnalises : La detection des headings se fait par regex sur le texte, pas par les styles Word
+- Commentaires et revisions : Non extraits
+- Mise en page complexe (colonnes, sections) : Non prise en compte
 
-## Stockage Qdrant
-
-### Metadonnees Etendues
-
-Chaque chunk stocke des metadonnees specifiques au type :
-
-```python
-{
-    "document_id": "uuid",
-    "document_type": "excel|word|pdf",
-    "filename": "rapport.xlsx",
-
-    # Specifique Excel
-    "sheet_name": "Feuille1",
-    "has_formula": True,
-    "formulas": [
-        {"cell": "C10", "formula": "=SUM(C2:C9)", "result": 1500.0}
-    ],
-
-    # Specifique Word
-    "has_image": True,
-    "heading_level": 2,
-
-    # Commun
-    "has_table": True,
-    "table_data": [...],
-    "page_number": 1,  # ou sheet_index pour Excel
-}
-```
-
----
-
-## Bugs Connus et Solutions
-
-### Cellules non indexees sans Table officielle
-
-**Symptome** : La recherche de noms propres dans un fichier Excel retourne 0 resultat.
-
-**Cause** : La methode `get_text_content()` ne rendait que les "Tables officielles" Excel (creees via Insert > Table). Les fichiers Excel avec donnees brutes ne generaient aucun contenu pour l'embedding.
-
-**Solution** : Ajout de `_cells_to_markdown()` dans `ExcelSheet` qui convertit les cellules brutes en tableau Markdown.
-
-### Recherche semantique de noms propres
-
-**Symptome** : La recherche de noms comme "GRANDFOND Helene" retourne 0 resultat meme avec un seuil bas.
-
-**Solutions** :
-1. Baisser `score_threshold` a 0.3-0.5
-2. Utiliser le filtre `text_search` pour une recherche exacte
-3. Combiner les deux approches
-
----
-
-## Dependances
-
-```toml
-# pyproject.toml
-[project.dependencies]
-openpyxl = "^3.1.0"      # Excel .xlsx
-xlrd = "^2.0.0"          # Excel .xls legacy
-docx2python = "^2.0.0"   # Word .docx
-python-docx = "^1.1.0"   # Creation fichiers test
-Pillow = "^10.0.0"       # Traitement images
-```
-
----
-
-## Criteres de Succes
-
-1. **Extraction complete** : Toutes les donnees sont extraites sans perte
-2. **Formules preservees** : Les formules Excel sont stockees avec leur resultat
-3. **Recherche unifiee** : Un seul `search_documents` pour tous les types
-4. **Performance** : < 5s pour un document de 50 pages/feuilles
-5. **Tests** : Couverture > 80%
+### Recherche
+- La recherche semantique de noms propres dans des fichiers Excel donne de mauvais resultats avec le seuil par defaut (0.7). Utiliser `score_threshold: 0.3` et combiner avec le filtre `text_search` pour une recherche exacte.
