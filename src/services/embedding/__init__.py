@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""Service d'embedding pour documents PDF."""
+"""Service d'embedding pour documents."""
 
 from __future__ import annotations
 

@@ -21,7 +21,7 @@ class SearchDocumentsTool(VectorStoreMCPTool):
     """Tool MCP pour la recherche semantique dans les documents indexes.
 
     Ce tool permet de rechercher des informations dans les documents
-    PDF prealablement indexes en utilisant la similarite semantique.
+    prealablement indexes en utilisant la similarite semantique.
 
     Attributes:
         name: Nom du tool MCP.

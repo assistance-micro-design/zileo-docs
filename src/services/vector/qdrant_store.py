@@ -12,6 +12,7 @@ import asyncio
 import hashlib
 import logging
 import re
+from collections.abc import Callable
 from typing import Any
 
 from qdrant_client import QdrantClient, models
@@ -98,7 +99,7 @@ class QdrantVectorStore:
         >>> results = await store.search(query_embedding, top_k=5)
     """
 
-    COLLECTION_NAME = "pdf_documents"
+    COLLECTION_NAME = "documents"
     VECTOR_SIZE = 1024  # Mistral embed dimension
 
     def __init__(
@@ -310,7 +311,7 @@ class QdrantVectorStore:
         self,
         chunks: list[DocumentChunk],
         document_id: str,
-        payload_builder: Any,
+        payload_builder: Callable[[DocumentChunk], dict[str, Any]],
     ) -> dict[str, Any]:
         """Pipeline commun de stockage : build points + upsert + stats."""
         points, skipped = self._build_points(chunks, payload_builder)
@@ -333,7 +334,7 @@ class QdrantVectorStore:
     def _build_points(
         self,
         chunks: list[DocumentChunk],
-        payload_builder: Any,
+        payload_builder: Callable[[DocumentChunk], dict[str, Any]],
     ) -> tuple[list[PointStruct], int]:
         """Construit les PointStruct a partir des chunks."""
         points: list[PointStruct] = []
@@ -404,7 +405,7 @@ class QdrantVectorStore:
             "has_table": meta.has_table,
             "has_image": meta.has_image,
             "has_equation": meta.has_equation,
-            # --- Type de document (NOUVEAU) ---
+            # --- Type de document ---
             "document_type": unified_meta.document_type.value,
             "has_formula": unified_meta.has_formulas,
             "sheet_names": unified_meta.sheet_names,

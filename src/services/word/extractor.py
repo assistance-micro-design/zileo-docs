@@ -272,15 +272,16 @@ class WordExtractor:
         if not data:
             return None
 
-        # Détecter le type MIME
-        content_type = "image/png"  # Défaut
-        name_lower = name.lower()
-        if name_lower.endswith((".jpg", ".jpeg")):
-            content_type = "image/jpeg"
-        elif name_lower.endswith(".gif"):
-            content_type = "image/gif"
-        elif name_lower.endswith(".bmp"):
-            content_type = "image/bmp"
+        # Détecter le type MIME via dict dispatch
+        mime_by_ext = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".bmp": "image/bmp",
+            ".png": "image/png",
+        }
+        ext = Path(name).suffix.lower()
+        content_type = mime_by_ext.get(ext, "image/png")
 
         # Encoder en base64
         data_b64 = base64.b64encode(data).decode("utf-8")

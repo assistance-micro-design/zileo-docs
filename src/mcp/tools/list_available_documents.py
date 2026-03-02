@@ -90,44 +90,22 @@ class ListAvailableDocumentsTool(BaseMCPTool):
                 - recursive: Scanner recursivement
 
         Returns:
-            Dictionnaire avec:
-                - base_path: Chemin du dossier scanné
-                - total_files: Nombre de fichiers trouvés
-                - by_type: Statistiques par type
-                - files: Liste des fichiers avec:
-                    - filename: Nom du fichier
-                    - path: Chemin absolu (pour index_document)
-                    - relative_path: Chemin relatif
-                    - type: Type de document
-                    - size_mb: Taille en MB
-                    - extension: Extension du fichier
+            Dictionnaire avec base_path, total_files, by_type, files.
         """
         params = ListAvailableDocumentsParams(**arguments)
 
-        # Determiner le chemin a scanner
         scan_path = self._documents_path
         if params.subdirectory:
             scan_path = scan_path / params.subdirectory
 
-        # Validation anti-traversal
-        resolved = scan_path.resolve()
-        if not resolved.is_relative_to(self._documents_path.resolve()):
+        error = self._validate_scan_path(scan_path)
+        if error:
             return {
                 "base_path": str(scan_path),
                 "total_files": 0,
                 "by_type": {},
                 "files": [],
-                "error": "Subdirectory must stay within documents directory",
-            }
-
-        if not scan_path.exists():
-            logger.warning("Documents path does not exist: %s", scan_path)
-            return {
-                "base_path": str(scan_path),
-                "total_files": 0,
-                "by_type": {},
-                "files": [],
-                "error": f"Dossier inexistant: {scan_path}",
+                "error": error,
             }
 
         logger.info(
@@ -137,7 +115,42 @@ class ListAvailableDocumentsTool(BaseMCPTool):
             params.type_filter,
         )
 
-        # Scanner les fichiers
+        files = self._scan_files(scan_path, params)
+        files.sort(key=lambda f: (f["type"], f["filename"].lower()))
+
+        stats: dict[str, int] = {}
+        for f in files:
+            stats[f["type"]] = stats.get(f["type"], 0) + 1
+
+        logger.info(
+            "Found %d documents: %s", len(files), ", ".join(f"{k}={v}" for k, v in stats.items())
+        )
+
+        return {
+            "base_path": str(scan_path),
+            "total_files": len(files),
+            "by_type": stats,
+            "files": files,
+        }
+
+    def _validate_scan_path(self, scan_path: Path) -> str | None:
+        """Valide le chemin de scan (anti-traversal + existence)."""
+        resolved = scan_path.resolve()
+        if not resolved.is_relative_to(self._documents_path.resolve()):
+            return "Subdirectory must stay within documents directory"
+
+        if not scan_path.exists():
+            logger.warning("Documents path does not exist: %s", scan_path)
+            return f"Dossier inexistant: {scan_path}"
+
+        return None
+
+    def _scan_files(
+        self,
+        scan_path: Path,
+        params: ListAvailableDocumentsParams,
+    ) -> list[dict[str, Any]]:
+        """Scanne les fichiers dans le dossier."""
         files: list[dict[str, Any]] = []
         pattern = "**/*" if params.recursive else "*"
 
@@ -150,8 +163,6 @@ class ListAvailableDocumentsTool(BaseMCPTool):
                 continue
 
             doc_type = self.SUPPORTED_EXTENSIONS[ext]
-
-            # Appliquer filtre type
             if params.type_filter not in ("all", doc_type):
                 continue
 
@@ -168,24 +179,4 @@ class ListAvailableDocumentsTool(BaseMCPTool):
                 }
             )
 
-        # Trier par type puis nom
-        files.sort(key=lambda f: (f["type"], f["filename"].lower()))
-
-        # Statistiques par type
-        stats: dict[str, int] = {}
-        for f in files:
-            t = f["type"]
-            stats[t] = stats.get(t, 0) + 1
-
-        logger.info(
-            "Found %d documents: %s",
-            len(files),
-            ", ".join(f"{k}={v}" for k, v in stats.items()),
-        )
-
-        return {
-            "base_path": str(scan_path),
-            "total_files": len(files),
-            "by_type": stats,
-            "files": files,
-        }
+        return files

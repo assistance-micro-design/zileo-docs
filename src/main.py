@@ -23,7 +23,7 @@ from slowapi.util import get_remote_address
 
 from src.api.routes import documents, health, search
 from src.core.config import settings
-from src.core.exceptions import MCPZileoPDFError
+from src.core.exceptions import MCPZileoError
 from src.core.logging import setup_logging
 from src.mcp.server import mcp_server
 
@@ -72,10 +72,8 @@ def create_app() -> FastAPI:
     Returns:
         Instance FastAPI configuree.
     """
-    # Configurer le logging
     setup_logging()
 
-    # Rate limiting
     limiter = Limiter(key_func=get_remote_address)
 
     app = FastAPI(
@@ -90,11 +88,17 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.DEBUG else None,
     )
 
-    # Rate limiting
+    _configure_middleware(app, limiter)
+    _register_routes(app, limiter)
+
+    return app
+
+
+def _configure_middleware(app: FastAPI, limiter: Limiter) -> None:
+    """Configure les middlewares (rate limiting, CORS)."""
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-    # CORS middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"] if settings.DEBUG else [],
@@ -103,40 +107,20 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Inclure les routes
+
+def _register_routes(app: FastAPI, limiter: Limiter) -> None:
+    """Enregistre les routes API, MCP et les handlers d'erreur."""
     app.include_router(health.router)
     app.include_router(documents.router, prefix="/api/v1")
     app.include_router(search.router, prefix="/api/v1")
 
-    # Handler d'exceptions global
-    @app.exception_handler(MCPZileoPDFError)
-    async def mcp_exception_handler(_request: Request, exc: MCPZileoPDFError) -> JSONResponse:
-        """Gere les exceptions de l'application.
+    @app.exception_handler(MCPZileoError)
+    async def mcp_exception_handler(_request: Request, exc: MCPZileoError) -> JSONResponse:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=exc.to_dict())
 
-        Args:
-            request: Requete HTTP.
-            exc: Exception levee.
-
-        Returns:
-            Reponse JSON avec les details de l'erreur.
-        """
-        return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content=exc.to_dict(),
-        )
-
-    # Route MCP JSON-RPC
     @app.post("/mcp")
     @limiter.limit(settings.RATE_LIMIT_MCP)  # type: ignore[untyped-decorator]
     async def mcp_endpoint(request: Request) -> dict[str, Any]:
-        """Endpoint MCP JSON-RPC 2.0.
-
-        Args:
-            request: Requete HTTP contenant la requete JSON-RPC.
-
-        Returns:
-            Reponse JSON-RPC 2.0.
-        """
         try:
             body = await request.json()
             return await mcp_server.handle_request(body)
@@ -145,20 +129,11 @@ def create_app() -> FastAPI:
             return {
                 "jsonrpc": "2.0",
                 "id": None,
-                "error": {
-                    "code": -32700,
-                    "message": "Parse error",
-                },
+                "error": {"code": -32700, "message": "Parse error"},
             }
 
-    # Route racine
     @app.get("/")
     async def root() -> dict[str, str]:
-        """Route racine avec informations de base.
-
-        Returns:
-            Informations sur le service.
-        """
         return {
             "name": settings.APP_NAME,
             "version": settings.APP_VERSION,
@@ -166,8 +141,6 @@ def create_app() -> FastAPI:
             "health": "/health",
             "mcp": "/mcp",
         }
-
-    return app
 
 
 # Instance de l'application

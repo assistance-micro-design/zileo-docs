@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     # === Qdrant ===
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
-    QDRANT_COLLECTION: str = "pdf_documents"
+    QDRANT_COLLECTION: str = "documents"
     QDRANT_API_KEY: str | None = None
 
     # === Processing ===
@@ -71,17 +71,17 @@ class Settings(BaseSettings):
     )
 
     # === Limits ===
-    MAX_PDF_SIZE_MB: int = Field(
+    MAX_FILE_SIZE_MB: int = Field(
         default=50,
         ge=1,
         le=500,
-        description="Taille max d'un PDF en MB",
+        description="Taille max d'un fichier en MB",
     )
-    MAX_PDF_PAGES: int = Field(
+    MAX_PAGES: int = Field(
         default=1000,
         ge=1,
         le=10000,
-        description="Nombre max de pages par PDF",
+        description="Nombre max de pages par document",
     )
 
     # === Paths ===

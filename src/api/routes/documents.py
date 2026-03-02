@@ -75,10 +75,10 @@ async def index_pdf(
     content = await file.read()
     size_mb = len(content) / (1024 * 1024)
 
-    if size_mb > settings.MAX_PDF_SIZE_MB:
+    if size_mb > settings.MAX_FILE_SIZE_MB:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Fichier trop volumineux: {size_mb:.1f}MB (max: {settings.MAX_PDF_SIZE_MB}MB)",
+            detail=f"Fichier trop volumineux: {size_mb:.1f}MB (max: {settings.MAX_FILE_SIZE_MB}MB)",
         )
 
     # Sauvegarder temporairement

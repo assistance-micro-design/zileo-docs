@@ -38,15 +38,15 @@ class ChunkMetadata:
     has_image: bool = False
     has_equation: bool = False
 
-    # === Type de document (NOUVEAU - multi-format) ===
+    # Type de document
     document_type: str = "pdf"  # pdf, excel, word
 
-    # === Spécifique Excel (NOUVEAU) ===
+    # Spécifique Excel
     sheet_name: str | None = None
     has_formula: bool = False
     formulas: list[dict[str, object]] | None = None
 
-    # === Spécifique Word (NOUVEAU) ===
+    # Spécifique Word
     heading_level: int | None = None
 
     # === Statistiques ===

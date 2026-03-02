@@ -20,7 +20,7 @@ services:
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
-      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pdf_documents}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-documents}
     volumes:
       - ./data:/app/data
       - ${DOCUMENTS_PATH:-./data/documents}:/app/documents:ro

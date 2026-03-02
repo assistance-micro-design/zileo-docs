@@ -77,7 +77,7 @@ class IndexDocumentRequest(BaseModel):
     """
 
     document_id: str
-    collection_name: str = "pdf_documents"
+    collection_name: str = "documents"
 
 
 class DeleteDocumentRequest(BaseModel):
@@ -272,7 +272,7 @@ class IndexDocumentParams(BaseModel):
 
     document_id: Annotated[str, Field(description="ID du document a indexer")]
     collection_name: str = Field(
-        default="pdf_documents",
+        default="documents",
         description="Nom de la collection Qdrant",
     )
 

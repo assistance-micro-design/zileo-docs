@@ -242,53 +242,59 @@ class MistralOCRProcessor:
         Returns:
             Liste des TableData extraits.
         """
-        tables: list[TableData] = []
-
         if table_format == "markdown":
-            pattern = r"(\|.+\|\n\|[-:| ]+\|\n(?:\|.+\|\n?)+)"
+            return self._extract_markdown_tables(markdown)
+        if table_format == "html":
+            return self._extract_html_tables(markdown)
+        return []
 
-            for i, match in enumerate(re.finditer(pattern, markdown)):
-                table_md = match.group(1)
-                rows = table_md.strip().split("\n")
+    def _extract_markdown_tables(self, markdown: str) -> list[TableData]:
+        """Extrait les tableaux au format Markdown."""
+        tables: list[TableData] = []
+        pattern = r"(\|.+\|\n\|[-:| ]+\|\n(?:\|.+\|\n?)+)"
 
-                # Parse headers
-                header_row = rows[0]
-                headers = [h.strip() for h in header_row.split("|")[1:-1]]
+        for i, match in enumerate(re.finditer(pattern, markdown)):
+            table_md = match.group(1)
+            rows = table_md.strip().split("\n")
+            headers = [h.strip() for h in rows[0].split("|")[1:-1]]
 
-                # Parse data
-                data_rows: list[list[str]] = []
-                for row in rows[2:]:  # Skip header + separator
-                    cells = [c.strip() for c in row.split("|")[1:-1]]
-                    data_rows.append(cells)
+            data_rows = [
+                [c.strip() for c in row.split("|")[1:-1]]
+                for row in rows[2:]  # Skip header + separator
+            ]
 
-                tables.append(
-                    TableData(
-                        id=f"table_{i}",
-                        markdown=table_md,
-                        html=self._md_table_to_html(table_md),
-                        headers=headers,
-                        rows=len(data_rows),
-                        cols=len(headers),
-                        data=data_rows,
-                    )
+            tables.append(
+                TableData(
+                    id=f"table_{i}",
+                    markdown=table_md,
+                    html=self._md_table_to_html(table_md),
+                    headers=headers,
+                    rows=len(data_rows),
+                    cols=len(headers),
+                    data=data_rows,
                 )
+            )
 
-        elif table_format == "html":
-            pattern = r"<table[^>]*>.*?</table>"
+        return tables
 
-            for i, match in enumerate(re.finditer(pattern, markdown, re.DOTALL)):
-                html = match.group()
-                tables.append(
-                    TableData(
-                        id=f"table_{i}",
-                        markdown="",
-                        html=html,
-                        headers=[],
-                        rows=html.count("<tr"),
-                        cols=0,
-                        data=[],
-                    )
+    def _extract_html_tables(self, markdown: str) -> list[TableData]:
+        """Extrait les tableaux au format HTML."""
+        tables: list[TableData] = []
+        pattern = r"<table[^>]*>.*?</table>"
+
+        for i, match in enumerate(re.finditer(pattern, markdown, re.DOTALL)):
+            html = match.group()
+            tables.append(
+                TableData(
+                    id=f"table_{i}",
+                    markdown="",
+                    html=html,
+                    headers=[],
+                    rows=html.count("<tr"),
+                    cols=0,
+                    data=[],
                 )
+            )
 
         return tables
 

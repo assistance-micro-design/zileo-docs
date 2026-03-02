@@ -15,7 +15,7 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 
 from src.core.config import settings
-from src.core.exceptions import MCPZileoPDFError
+from src.core.exceptions import MCPZileoError
 from src.mcp.tools.base import BaseMCPTool
 from src.mcp.tools.delete_document import DeleteDocumentTool
 from src.mcp.tools.get_document import GetDocumentTool
@@ -42,7 +42,7 @@ def _format_tool_error(error: Exception) -> str:
     Returns:
         Texte d'erreur formate pour le LLM.
     """
-    if isinstance(error, MCPZileoPDFError):
+    if isinstance(error, MCPZileoError):
         return error.to_llm_format()
     logger.error("Unexpected tool error: %s", error)
     return (
@@ -88,7 +88,7 @@ class MCPServer:
         self.version = settings.APP_VERSION
         self._initialized = False
 
-        # Dependances partagees (Refactoring #3: DI)
+        # Dependances partagees
         self._shared_vector_store = QdrantVectorStore()
         self._shared_embedder = MistralEmbedder()
 
@@ -127,7 +127,7 @@ class MCPServer:
             "read_document_content": self._read_document_content,
         }
 
-        # Refactoring #5: Routing optimise (defini une seule fois)
+        # Routing vers handlers
         self._method_handlers: dict[
             str, Callable[[RequestId, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]]
         ] = {
@@ -146,7 +146,6 @@ class MCPServer:
     async def initialize(self) -> None:
         """Initialise tous les tools en parallele.
 
-        Refactoring #2: Utilise asyncio.gather pour l'initialisation parallele.
         Doit etre appele avant de traiter des requetes pour
         s'assurer que les connexions aux services externes sont etablies.
         """
@@ -194,8 +193,6 @@ class MCPServer:
         request: dict[str, Any],
     ) -> dict[str, Any]:
         """Route la requete vers le handler approprie.
-
-        Refactoring #5: Utilise le dictionnaire de handlers predefini.
 
         Args:
             request_id: ID de la requete.
@@ -343,8 +340,7 @@ class MCPServer:
                 },
             }
 
-        except (MCPZileoPDFError, Exception) as e:
-            # Refactoring #6: Formatage d'erreur extrait
+        except (MCPZileoError, Exception) as e:
             return self._tool_error_response(request_id, e)
 
     def _tool_error_response(
@@ -354,8 +350,6 @@ class MCPServer:
     ) -> dict[str, Any]:
         """Construit une reponse d'erreur pour un tool MCP.
 
-        Refactoring #6: Methode extraite pour le formatage d'erreurs.
-
         Args:
             request_id: ID de la requete.
             error: Exception levee.
@@ -364,7 +358,7 @@ class MCPServer:
             Reponse JSON-RPC avec isError=True.
         """
         # Logging: ternaire pour selectionner la fonction de log
-        log_func = logger.warning if isinstance(error, MCPZileoPDFError) else logger.exception
+        log_func = logger.warning if isinstance(error, MCPZileoError) else logger.exception
         log_func("Tool error: %s", error)
 
         # Formatage: helper pour separer les responsabilites

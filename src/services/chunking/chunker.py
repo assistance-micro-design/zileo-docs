@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""Chunking semantique intelligent pour documents PDF.
+"""Chunking semantique intelligent pour documents.
 
 Ce module fournit un chunker intelligent qui:
 - Preserve les tableaux et blocs de code intacts
@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 
 
 class SmartChunker:
-    """Chunking semantique intelligent pour documents PDF.
+    """Chunking semantique intelligent pour documents.
 
-    Cette classe decoupe le contenu extrait d'un document PDF en chunks
+    Cette classe decoupe le contenu extrait d'un document en chunks
     optimises pour la recherche semantique et l'embedding.
 
     Attributes:

@@ -60,10 +60,7 @@ class DocumentRouter:
         from src.services.excel.extractor import ExcelExtractor  # noqa: PLC0415
         from src.services.word.extractor import WordExtractor  # noqa: PLC0415
 
-        # Sprint 2: ExcelExtractor
         self._extractors[DocumentType.EXCEL] = ExcelExtractor()
-
-        # Sprint 3: WordExtractor
         self._extractors[DocumentType.WORD] = WordExtractor()
 
         self._initialized = True

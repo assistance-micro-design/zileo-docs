@@ -3,7 +3,7 @@
 """Services de stockage vectoriel.
 
 Ce module expose les services de stockage vectoriel pour les embeddings
-de documents PDF.
+de documents.
 """
 
 from __future__ import annotations

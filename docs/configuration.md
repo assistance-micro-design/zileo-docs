@@ -26,7 +26,7 @@ Toute la configuration se fait via variables d'environnement. Copier `.env.examp
 |----------|--------|-------------|
 | `QDRANT_HOST` | `localhost` | Hote Qdrant (`qdrant` en mode Docker) |
 | `QDRANT_PORT` | `6333` | Port HTTP Qdrant |
-| `QDRANT_COLLECTION` | `pdf_documents` | Nom de la collection (utilise pour tous les formats, pas seulement PDF) |
+| `QDRANT_COLLECTION` | `documents` | Nom de la collection Qdrant |
 | `QDRANT_API_KEY` | - | Optionnel. Pour Qdrant Cloud uniquement. |
 
 ### Traitement
@@ -43,8 +43,8 @@ Toute la configuration se fait via variables d'environnement. Copier `.env.examp
 
 | Variable | Defaut | Description |
 |----------|--------|-------------|
-| `MAX_PDF_SIZE_MB` | `50` | Taille maximum d'un PDF en Mo |
-| `MAX_PDF_PAGES` | `1000` | Nombre maximum de pages par PDF |
+| `MAX_FILE_SIZE_MB` | `50` | Taille maximum d'un fichier en Mo |
+| `MAX_PAGES` | `1000` | Nombre maximum de pages par document |
 
 ### Chemins
 
@@ -90,7 +90,7 @@ MISTRAL_EMBED_MODEL=mistral-embed
 # Qdrant
 QDRANT_HOST=qdrant
 QDRANT_PORT=6333
-QDRANT_COLLECTION=pdf_documents
+QDRANT_COLLECTION=documents
 
 # Traitement
 CHUNK_SIZE=512
@@ -100,8 +100,8 @@ OCR_MAX_CONCURRENT=5
 OCR_TABLE_FORMAT=markdown
 
 # Limites
-MAX_PDF_SIZE_MB=50
-MAX_PDF_PAGES=1000
+MAX_FILE_SIZE_MB=50
+MAX_PAGES=1000
 
 # Chemins
 DOCUMENTS_PATH=/home/user/Documents

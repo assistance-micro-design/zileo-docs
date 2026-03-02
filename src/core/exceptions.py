@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 
-class MCPZileoPDFError(Exception):
+class MCPZileoError(Exception):
     """Classe de base pour toutes les exceptions de l'application.
 
     Inclut un champ `suggestion` pour guider les LLM sur comment corriger l'erreur.
@@ -70,7 +70,7 @@ class MCPZileoPDFError(Exception):
 # === PDF Processing Errors ===
 
 
-class PDFError(MCPZileoPDFError):
+class PDFError(MCPZileoError):
     """Erreur liee au traitement PDF."""
 
     def __init__(
@@ -152,7 +152,7 @@ class PDFTooManyPagesError(PDFError):
 # === OCR Errors ===
 
 
-class OCRError(MCPZileoPDFError):
+class OCRError(MCPZileoError):
     """Erreur liee au service OCR."""
 
     def __init__(
@@ -197,7 +197,7 @@ class OCRRateLimitError(OCRError):
 # === Embedding Errors ===
 
 
-class EmbeddingError(MCPZileoPDFError):
+class EmbeddingError(MCPZileoError):
     """Erreur liee au service d'embeddings."""
 
     def __init__(
@@ -228,7 +228,7 @@ class EmbeddingAPIError(EmbeddingError):
 # === Vector Store Errors ===
 
 
-class VectorStoreError(MCPZileoPDFError):
+class VectorStoreError(MCPZileoError):
     """Erreur liee au vector store."""
 
     def __init__(
@@ -284,7 +284,7 @@ class DocumentNotFoundError(VectorStoreError):
 # === Validation Errors ===
 
 
-class ValidationError(MCPZileoPDFError):
+class ValidationError(MCPZileoError):
     """Erreur de validation des donnees."""
 
     def __init__(
@@ -318,7 +318,7 @@ class EmptyQueryError(ValidationError):
         )
 
 
-class NoResultsError(MCPZileoPDFError):
+class NoResultsError(MCPZileoError):
     """Aucun resultat trouve pour la recherche."""
 
     def __init__(self, query: str) -> None:

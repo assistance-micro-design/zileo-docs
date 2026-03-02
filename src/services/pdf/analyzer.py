@@ -87,11 +87,11 @@ class DocumentAnalyzer:
             self._doc = fitz.open(self.pdf_path)
 
             # Valider nombre de pages
-            if len(self._doc) > settings.MAX_PDF_PAGES:
+            if len(self._doc) > settings.MAX_PAGES:
                 raise PDFTooManyPagesError(
                     str(self.pdf_path),
                     len(self._doc),
-                    settings.MAX_PDF_PAGES,
+                    settings.MAX_PAGES,
                 )
 
             metadata = self._extract_metadata()
@@ -140,11 +140,11 @@ class DocumentAnalyzer:
             raise SourceFileNotFoundError(str(self.pdf_path))
 
         size_mb = self.pdf_path.stat().st_size / (1024 * 1024)
-        if size_mb > settings.MAX_PDF_SIZE_MB:
+        if size_mb > settings.MAX_FILE_SIZE_MB:
             raise PDFTooLargeError(
                 str(self.pdf_path),
                 size_mb,
-                settings.MAX_PDF_SIZE_MB,
+                settings.MAX_FILE_SIZE_MB,
             )
 
     def _extract_metadata(self) -> DocumentMetadata:

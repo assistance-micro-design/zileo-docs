@@ -37,11 +37,11 @@ Document (PDF/Excel/Word)
         |
         v
 +-----------------------+
-| Qdrant                |  Collection "pdf_documents"
+| Qdrant                |  Collection "documents"
 +-----------------------+
 ```
 
-La collection Qdrant s'appelle `pdf_documents` meme pour les documents Excel et Word — c'est un vestige de la version initiale qui ne supportait que le PDF.
+La collection Qdrant s'appelle `documents` et stocke les embeddings de tous les formats (PDF, Excel, Word).
 
 ### Pipeline PDF (5 phases)
 
@@ -146,11 +146,11 @@ class BaseMCPTool(ABC):
 
 ## Gestion des erreurs
 
-Les erreurs heritent de `MCPZileoPDFError` et fournissent un format `to_llm_format()` pour les reponses MCP. Ce format inclut un code d'erreur, un message, une suggestion d'action corrective, et un indicateur de retry.
+Les erreurs heritent de `MCPZileoError` et fournissent un format `to_llm_format()` pour les reponses MCP. Ce format inclut un code d'erreur, un message, une suggestion d'action corrective, et un indicateur de retry.
 
 Hierarchie :
 ```
-MCPZileoPDFError
+MCPZileoError
   +-- PDFError (SourceFileNotFoundError, PDFCorruptedError, PDFTooLargeError, PDFTooManyPagesError)
   +-- OCRError (OCRAPIError, OCRRateLimitError)
   +-- EmbeddingError (EmbeddingAPIError)

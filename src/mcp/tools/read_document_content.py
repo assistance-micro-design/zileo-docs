@@ -80,17 +80,11 @@ class ReadDocumentContentTool(VectorStoreMCPTool):
                 - include_chunks_detail: Inclure details (optionnel)
 
         Returns:
-            Dictionnaire avec:
-                - document_id, filename
-                - total_pages, total_chunks, total_tokens
-                - pages_returned, chunks_returned, tokens_returned
-                - content: Markdown complet
-                - chunks_detail: Metadonnees par chunk (si demande)
+            Dictionnaire avec document_id, content, stats, chunks_detail.
 
         Raises:
             DocumentNotFoundError: Si le document n'existe pas.
         """
-        # Valider les parametres
         params = ReadDocumentContentParams(**arguments)
 
         logger.info(
@@ -100,52 +94,53 @@ class ReadDocumentContentTool(VectorStoreMCPTool):
             params.page_end or "fin",
         )
 
-        # Recuperer tous les chunks du document
         chunks = await self._vector_store.get_document_chunks(params.document_id)
-
         if not chunks:
             raise DocumentNotFoundError(params.document_id)
 
-        # Trier par chunk_index
         chunks_sorted = sorted(chunks, key=lambda c: c.get("chunk_index", 0))
-
-        # Calculer stats du document complet
-        total_tokens = sum(c.get("token_count", 0) for c in chunks_sorted)
-        total_chars = sum(c.get("char_count", 0) for c in chunks_sorted)
-
-        # Extraire metadonnees du premier chunk
         first_chunk = chunks_sorted[0]
         total_pages = first_chunk.get("doc_total_pages", 0)
 
-        # Filtrer par pages si demande
-        chunks_filtered = chunks_sorted
-        if params.page_start is not None or params.page_end is not None:
-            start = (params.page_start or 1) - 1  # Convertir en 0-indexed
-            end = params.page_end or total_pages
+        chunks_filtered = self._filter_by_pages(chunks_sorted, params, total_pages)
 
-            chunks_filtered = [
-                c
-                for c in chunks_sorted
-                if any(start <= p <= end - 1 for p in c.get("page_numbers", []))
-            ]
+        result = self._build_response(params, chunks_sorted, chunks_filtered, first_chunk)
 
-        # Collecter les pages retournees
+        if params.include_chunks_detail:
+            result["chunks_detail"] = self._build_chunks_detail(chunks_filtered)
+
+        return result
+
+    @staticmethod
+    def _filter_by_pages(
+        chunks: list[dict[str, Any]],
+        params: ReadDocumentContentParams,
+        total_pages: int,
+    ) -> list[dict[str, Any]]:
+        """Filtre les chunks par plage de pages."""
+        if params.page_start is None and params.page_end is None:
+            return chunks
+
+        start = (params.page_start or 1) - 1  # Convertir en 0-indexed
+        end = params.page_end or total_pages
+        return [c for c in chunks if any(start <= p <= end - 1 for p in c.get("page_numbers", []))]
+
+    @staticmethod
+    def _build_response(
+        params: ReadDocumentContentParams,
+        chunks_sorted: list[dict[str, Any]],
+        chunks_filtered: list[dict[str, Any]],
+        first_chunk: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Construit la reponse avec stats et contenu."""
+        total_tokens = sum(c.get("token_count", 0) for c in chunks_sorted)
+        tokens_returned = sum(c.get("token_count", 0) for c in chunks_filtered)
+
         pages_set: set[int] = set()
         for c in chunks_filtered:
             pages_set.update(c.get("page_numbers", []))
-        pages_returned = sorted(p + 1 for p in pages_set)  # Convertir en 1-indexed
 
-        # Concatener le contenu
-        content_parts: list[str] = []
-        for chunk in chunks_filtered:
-            chunk_content = chunk.get("content", "")
-            if chunk_content:
-                content_parts.append(chunk_content)
-
-        content = "\n\n".join(content_parts)
-
-        # Calculer stats de la selection
-        tokens_returned = sum(c.get("token_count", 0) for c in chunks_filtered)
+        content = "\n\n".join(c.get("content", "") for c in chunks_filtered if c.get("content"))
 
         logger.info(
             "Document %s: %d chunks/%d, %d tokens/%d",
@@ -156,37 +151,31 @@ class ReadDocumentContentTool(VectorStoreMCPTool):
             total_tokens,
         )
 
-        # Construire la reponse
-        result: dict[str, Any] = {
-            # Identifiants
+        return {
             "document_id": params.document_id,
             "filename": first_chunk.get("doc_filename"),
-            # Stats document complet
-            "total_pages": total_pages,
+            "total_pages": first_chunk.get("doc_total_pages", 0),
             "total_chunks": len(chunks_sorted),
             "total_tokens": total_tokens,
-            "total_chars": total_chars,
-            # Stats selection
-            "pages_returned": pages_returned,
+            "total_chars": sum(c.get("char_count", 0) for c in chunks_sorted),
+            "pages_returned": sorted(p + 1 for p in pages_set),
             "chunks_returned": len(chunks_filtered),
             "tokens_returned": tokens_returned,
-            # Contenu
             "content": content,
         }
 
-        # Ajouter details des chunks si demande
-        if params.include_chunks_detail:
-            result["chunks_detail"] = [
-                {
-                    "chunk_index": c.get("chunk_index"),
-                    "page_numbers": [p + 1 for p in c.get("page_numbers", [])],
-                    "section_title": c.get("section_title"),
-                    "content_type": c.get("content_type"),
-                    "token_count": c.get("token_count", 0),
-                    "has_table": c.get("has_table", False),
-                    "has_image": c.get("has_image", False),
-                }
-                for c in chunks_filtered
-            ]
-
-        return result
+    @staticmethod
+    def _build_chunks_detail(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Construit les details par chunk."""
+        return [
+            {
+                "chunk_index": c.get("chunk_index"),
+                "page_numbers": [p + 1 for p in c.get("page_numbers", [])],
+                "section_title": c.get("section_title"),
+                "content_type": c.get("content_type"),
+                "token_count": c.get("token_count", 0),
+                "has_table": c.get("has_table", False),
+                "has_image": c.get("has_image", False),
+            }
+            for c in chunks
+        ]

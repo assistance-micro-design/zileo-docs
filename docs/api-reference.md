@@ -256,4 +256,4 @@ PARAMETER: file_path
 RETRY: Corriger et reessayer
 ```
 
-Ce format est genere par la hierarchie d'exceptions `MCPZileoPDFError` dans `src/core/exceptions.py`. Chaque exception porte un code, un message, une suggestion, et un indicateur de retry.
+Ce format est genere par la hierarchie d'exceptions `MCPZileoError` dans `src/core/exceptions.py`. Chaque exception porte un code, un message, une suggestion, et un indicateur de retry.

@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import cast
 
 import structlog
 
@@ -70,15 +69,3 @@ def setup_logging() -> None:
     # Reduire verbosity des libs tierces
     for logger_name in ["httpx", "httpcore", "urllib3", "asyncio"]:
         logging.getLogger(logger_name).setLevel(logging.WARNING)
-
-
-def get_logger(name: str) -> structlog.stdlib.BoundLogger:
-    """Retourne un logger configure pour le module donne.
-
-    Args:
-        name: Nom du module (utiliser __name__).
-
-    Returns:
-        Logger structlog configure.
-    """
-    return cast("structlog.stdlib.BoundLogger", structlog.get_logger(name))

@@ -168,7 +168,7 @@ class TestDocumentsAPI:
         """Test la recuperation des statistiques."""
         with patch("src.api.dependencies.get_vector_store") as mock_get_store:
             mock_store = AsyncMock()
-            mock_store.COLLECTION_NAME = "pdf_documents"
+            mock_store.COLLECTION_NAME = "documents"
             mock_store.get_stats = AsyncMock(
                 return_value={
                     "points_count": 100,
@@ -279,7 +279,7 @@ class TestMCPServer:
         """Test l'initialisation du serveur MCP."""
         assert mcp_server_instance.name is not None
         assert mcp_server_instance.version is not None
-        assert len(mcp_server_instance.tools) == 9
+        assert len(mcp_server_instance.tools) == 8
 
     def test_mcp_tools_registered(self, mcp_server_instance: MCPServer) -> None:
         """Test que tous les tools sont enregistres."""
@@ -289,7 +289,6 @@ class TestMCPServer:
             "get_document",
             "delete_document",
             "list_indexed_documents",
-            "list_available_pdfs",
             "list_available_documents",
             "get_excel_formulas",
             "read_document_content",
@@ -347,7 +346,7 @@ class TestMCPServer:
         )
         assert "result" in response
         assert "tools" in response["result"]
-        assert len(response["result"]["tools"]) == 9
+        assert len(response["result"]["tools"]) == 8
 
     @pytest.mark.asyncio
     async def test_mcp_initialize(self, mcp_server_instance: MCPServer) -> None:
