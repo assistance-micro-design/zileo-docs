@@ -129,6 +129,8 @@ class BaseMCPTool(ABC):
 | `list_available_documents` | `BaseMCPTool` | Aucune (acces filesystem) |
 | `get_excel_formulas` | `VectorStoreMCPTool` | VectorStore |
 | `read_document_content` | `VectorStoreMCPTool` | VectorStore |
+| `create_excel_document` | `BaseMCPTool` | Aucune (ExcelGenerator interne) |
+| `edit_excel_document` | `BaseMCPTool` | Aucune (ExcelEditor interne) |
 
 ### Securite
 
@@ -155,8 +157,12 @@ MCPZileoError
   +-- OCRError (OCRAPIError, OCRRateLimitError)
   +-- EmbeddingError (EmbeddingAPIError)
   +-- VectorStoreError (VectorStoreConnectionError, CollectionNotFoundError, DocumentNotFoundError)
-  +-- ValidationError (EmptyQueryError, NoResultsError)
+  +-- ExcelGenerationError (ExcelOutputTooLargeError, ExcelChartError, ExcelFileNotFoundError, ExcelSheetNotFoundError)
+  +-- ValidationError (EmptyQueryError)
+  +-- NoResultsError
 ```
+
+Les erreurs Pydantic (`ValidationError`) sont egalement interceptees dans `MCPServer._format_validation_error()` avec des hints contextuels pour guider le LLM.
 
 ## Structure du projet
 
@@ -186,6 +192,8 @@ src/
 |       +-- list_available_documents.py
 |       +-- get_excel_formulas.py
 |       +-- read_document_content.py
+|       +-- create_excel.py      # Cree un fichier Excel
+|       +-- edit_excel.py        # Edite un fichier Excel existant
 +-- services/
 |   +-- pipeline/orchestrator.py  # PDFPipelineOrchestrator
 |   +-- pdf/
@@ -196,16 +204,20 @@ src/
 |   +-- embedding/mistral_embedder.py
 |   +-- vector/qdrant_store.py   # QdrantVectorStore
 |   +-- document/router.py       # DocumentRouter (multi-format)
-|   +-- excel/extractor.py       # ExcelExtractor
+|   +-- excel/extractor.py       # ExcelExtractor (lecture/indexation)
+|   +-- excel/generator.py      # ExcelGenerator (creation .xlsx)
+|   +-- excel/editor.py         # ExcelEditor (edition .xlsx existant)
 |   +-- word/extractor.py        # WordExtractor
 +-- models/
     +-- document.py    # DocumentMetadata, PageAnalysis, PageType
     +-- extraction.py  # ExtractedContent, OCRResult, TableData, etc.
     +-- chunk.py       # ChunkMetadata, DocumentChunk
     +-- unified.py     # UnifiedDocument, UnifiedMetadata, DocumentType
-    +-- excel.py       # ExcelDocument, ExcelSheet, ExcelCell, ExcelFormula
-    +-- word.py        # WordDocument, WordParagraph, WordTable, ContentBlock
-    +-- search.py      # SearchQuery, SearchFilters, SearchResponse
-    +-- api.py         # Pydantic models pour parametres MCP et reponses REST
-    +-- types.py       # TypeAlias partages (CellValue, FormulaResult)
+    +-- excel.py            # ExcelDocument, ExcelSheet, ExcelCell, ExcelFormula
+    +-- excel_generation.py # SheetDef, ChartDef, CellStyleDef, DataValidationDef
+    +-- excel_edit.py       # EditOp (discriminated union de 13 operations)
+    +-- word.py             # WordDocument, WordParagraph, WordTable, ContentBlock
+    +-- search.py           # SearchQuery, SearchFilters, SearchResponse
+    +-- api.py              # Pydantic models pour parametres MCP et reponses REST
+    +-- types.py            # TypeAlias partages (CellValue, FormulaResult)
 ```

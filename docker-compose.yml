@@ -24,6 +24,7 @@ services:
     volumes:
       - ./data:/app/data
       - ${DOCUMENTS_PATH:-./data/documents}:/app/documents:ro
+      - ${OUTPUT_PATH:-./output}:/app/output
     depends_on:
       qdrant:
         condition: service_healthy

@@ -45,12 +45,14 @@ Toute la configuration se fait via variables d'environnement. Copier `.env.examp
 |----------|--------|-------------|
 | `MAX_FILE_SIZE_MB` | `50` | Taille maximum d'un fichier en Mo |
 | `MAX_PAGES` | `1000` | Nombre maximum de pages par document |
+| `MAX_OUTPUT_FILE_SIZE_MB` | `10` | Taille maximum d'un fichier genere (Excel) en Mo |
 
 ### Chemins
 
 | Variable | Defaut | Description |
 |----------|--------|-------------|
 | `DOCUMENTS_PATH` | `/app/documents` | Dossier contenant les documents (PDF, Excel, Word) accessibles pour indexation |
+| `OUTPUT_PATH` | `/app/output` | Dossier de sortie des fichiers generes (Excel cree/edite via MCP) |
 
 ### Rate limiting
 
@@ -70,6 +72,7 @@ Format : `"X/minute"` ou `"X/hour"`. Implemente via slowapi.
 ```
 MISTRAL_API_KEY=sk-...
 DOCUMENTS_PATH=/home/user/Documents
+OUTPUT_PATH=/home/user/Documents/output
 ```
 
 En mode Docker, `QDRANT_HOST` est automatiquement `qdrant` via le reseau Docker interne.
@@ -102,9 +105,11 @@ OCR_TABLE_FORMAT=markdown
 # Limites
 MAX_FILE_SIZE_MB=50
 MAX_PAGES=1000
+MAX_OUTPUT_FILE_SIZE_MB=10
 
 # Chemins
 DOCUMENTS_PATH=/home/user/Documents
+OUTPUT_PATH=/home/user/Documents/output
 
 # Rate limiting
 RATE_LIMIT_DEFAULT=60/minute
@@ -125,6 +130,7 @@ En mode Docker, les variables sont passees via le fichier `.env` (lu automatique
 |--------|-----------|-------------|
 | `./data` | `/app/data` | Donnees persistantes de l'application |
 | `$DOCUMENTS_PATH` | `/app/documents` | Documents accessibles (monte en lecture seule) |
+| `$OUTPUT_PATH` | `/app/output` | Fichiers generes par les tools Excel (lecture-ecriture) |
 | `qdrant_storage` | `/qdrant/storage` | Donnees Qdrant (volume Docker nomme) |
 
 ### Variables forcees en Docker

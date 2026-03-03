@@ -99,6 +99,7 @@ L'image Docker inclut un healthcheck qui appelle `/health` toutes les 30 seconde
 
 - L'application tourne avec l'utilisateur `appuser` (non-root) dans le container
 - Le dossier de documents est monte en lecture seule (`:ro`)
+- Le dossier de sortie (`OUTPUT_PATH`) est monte en lecture-ecriture pour les fichiers Excel generes
 - Qdrant utilise un volume Docker nomme (`qdrant_storage`) pour la persistance
 - Les logs sont en JSON par defaut (`LOG_FORMAT=json`)
 - `DEBUG=true` active Swagger UI sur `/docs` et le CORS avec `allow_origins=["*"]` — ne pas utiliser en production

@@ -281,6 +281,83 @@ class DocumentNotFoundError(VectorStoreError):
         )
 
 
+# === Excel Generation Errors ===
+
+
+class ExcelGenerationError(MCPZileoError):
+    """Erreur liee a la generation de fichiers Excel."""
+
+    def __init__(
+        self,
+        message: str,
+        code: str = "EXCEL_GENERATION_ERROR",
+        details: dict[str, Any] | None = None,
+        suggestion: str | None = None,
+        parameter: str | None = None,
+        retry: bool = False,
+    ) -> None:
+        super().__init__(message, code, details, suggestion, parameter, retry)
+
+
+class ExcelOutputTooLargeError(ExcelGenerationError):
+    """Fichier Excel genere depasse la taille maximale."""
+
+    def __init__(self, filename: str, size_mb: float, max_size_mb: int) -> None:
+        super().__init__(
+            message=f"Fichier Excel trop volumineux: {size_mb:.1f}MB (max: {max_size_mb}MB)",
+            code="EXCEL_OUTPUT_TOO_LARGE",
+            details={
+                "filename": filename,
+                "size_mb": size_mb,
+                "max_size_mb": max_size_mb,
+            },
+            suggestion=f"Reduire le nombre de lignes ou de feuilles. Max {max_size_mb}MB.",
+            parameter="sheets",
+            retry=True,
+        )
+
+
+class ExcelChartError(ExcelGenerationError):
+    """Erreur lors de la creation d'un graphique."""
+
+    def __init__(self, chart_title: str | None, reason: str) -> None:
+        super().__init__(
+            message=f"Erreur graphique '{chart_title or 'sans titre'}': {reason}",
+            code="EXCEL_CHART_ERROR",
+            details={"chart_title": chart_title, "reason": reason},
+            suggestion="Verifier data_range et categories_range du graphique.",
+            retry=True,
+        )
+
+
+class ExcelFileNotFoundError(ExcelGenerationError):
+    """Fichier Excel introuvable dans OUTPUT_PATH."""
+
+    def __init__(self, filename: str) -> None:
+        super().__init__(
+            message=f"Fichier Excel introuvable: {filename}",
+            code="EXCEL_FILE_NOT_FOUND",
+            details={"filename": filename},
+            suggestion="Verifier le nom. Creer d'abord avec create_excel_document.",
+            parameter="filename",
+            retry=True,
+        )
+
+
+class ExcelSheetNotFoundError(ExcelGenerationError):
+    """Feuille introuvable dans le classeur."""
+
+    def __init__(self, sheet_name: str, available: list[str]) -> None:
+        super().__init__(
+            message=f"Feuille introuvable: {sheet_name}",
+            code="EXCEL_SHEET_NOT_FOUND",
+            details={"sheet_name": sheet_name, "available_sheets": available},
+            suggestion=f"Feuilles disponibles: {', '.join(available)}",
+            parameter="sheet",
+            retry=True,
+        )
+
+
 # === Validation Errors ===
 
 

@@ -9,6 +9,9 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from pydantic import BaseModel, Field
 
+from src.models.excel_edit import EditOp
+from src.models.excel_generation import SheetDef
+
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -420,6 +423,139 @@ class GetExcelFormulasParams(BaseModel):
         default=None,
         description="Filtrer par plage de cellules. Ex: 'A1:D10'",
     )
+
+
+class CreateExcelParams(BaseModel):
+    """Parametres du tool MCP create_excel_document.
+
+    Attributes:
+        filename: Nom du fichier xlsx a creer.
+        sheets: Definitions des feuilles.
+        author: Auteur du classeur (metadonnee).
+    """
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "filename": "report.xlsx",
+                    "sheets": [
+                        {
+                            "name": "Data",
+                            "headers": ["Name", "Value"],
+                            "rows": [["Item A", 100], ["Item B", 200]],
+                            "charts": [
+                                {
+                                    "type": "bar",
+                                    "data_range": "B1:B3",
+                                    "categories_range": "A2:A3",
+                                    "title": "Values",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+
+    filename: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=255,
+            pattern=r"^[\w\-. ()]+\.xlsx$",
+            description="Nom du fichier. Doit se terminer par .xlsx",
+        ),
+    ]
+    sheets: Annotated[list[SheetDef], Field(min_length=1, max_length=50)]
+    author: str | None = None
+
+
+class CreateExcelResult(BaseModel):
+    """Resultat de la creation d'un document Excel.
+
+    Attributes:
+        file_path: Chemin absolu du fichier cree.
+        filename: Nom du fichier.
+        sheets_created: Nombre de feuilles creees.
+        total_rows: Nombre total de lignes de donnees.
+        total_charts: Nombre total de graphiques.
+        file_size_bytes: Taille du fichier en octets.
+        overwritten: True si un fichier existant a ete ecrase.
+    """
+
+    file_path: str
+    filename: str
+    sheets_created: int
+    total_rows: int
+    total_charts: int
+    file_size_bytes: int
+    overwritten: bool = False
+
+
+class EditExcelParams(BaseModel):
+    """Parametres du tool MCP edit_excel_document.
+
+    Attributes:
+        filename: Nom du fichier xlsx existant dans OUTPUT_PATH.
+        operations: Liste ordonnee d'operations a appliquer.
+    """
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "filename": "report.xlsx",
+                    "operations": [
+                        {
+                            "op": "update_cells",
+                            "sheet": "Sheet1",
+                            "cells": {"A1": 42, "B1": "hello"},
+                        },
+                        {
+                            "op": "add_chart",
+                            "sheet": "Sheet1",
+                            "chart": {"type": "bar", "data_range": "A1:B5", "title": "Sales"},
+                        },
+                        {"op": "delete_rows", "sheet": "Sheet1", "start_row": 10, "end_row": 12},
+                    ],
+                }
+            ]
+        }
+    }
+
+    filename: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=255,
+            pattern=r"^[\w\-. ()]+\.xlsx$",
+            description="Nom du fichier existant dans OUTPUT_PATH. Doit se terminer par .xlsx",
+        ),
+    ]
+    operations: Annotated[
+        list[EditOp],
+        Field(min_length=1, max_length=100, description="Operations a appliquer (en ordre)"),
+    ]
+
+
+class EditExcelResult(BaseModel):
+    """Resultat de l'edition d'un document Excel.
+
+    Attributes:
+        file_path: Chemin absolu du fichier edite.
+        filename: Nom du fichier.
+        operations_applied: Nombre d'operations appliquees avec succes.
+        operations_skipped: Nombre d'operations ignorees (degradation gracieuse).
+        file_size_bytes: Taille du fichier en octets apres edition.
+    """
+
+    file_path: str
+    filename: str
+    operations_applied: int
+    operations_skipped: int
+    file_size_bytes: int
 
 
 class ListAvailableDocumentsParams(BaseModel):

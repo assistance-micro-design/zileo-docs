@@ -14,10 +14,14 @@ import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from pydantic import ValidationError as PydanticValidationError
+
 from src.core.config import settings
 from src.core.exceptions import MCPZileoError
 from src.mcp.tools.base import BaseMCPTool
+from src.mcp.tools.create_excel import CreateExcelTool
 from src.mcp.tools.delete_document import DeleteDocumentTool
+from src.mcp.tools.edit_excel import EditExcelTool
 from src.mcp.tools.get_document import GetDocumentTool
 from src.mcp.tools.get_excel_formulas import GetExcelFormulasTool
 from src.mcp.tools.index_document import IndexDocumentTool
@@ -33,6 +37,23 @@ from src.services.vector.qdrant_store import QdrantVectorStore
 logger = logging.getLogger(__name__)
 
 
+_EDIT_OPS_HINT = (
+    "Available 'op' values: update_cells, insert_rows, delete_rows, apply_styles, "
+    "add_sheet, delete_sheet, rename_sheet, add_chart, remove_charts, "
+    "add_data_validation, merge_cells, unmerge_cells, set_sheet_properties.\n"
+    'Example add_chart: {"op": "add_chart", "sheet": "Sheet1", '
+    '"chart": {"type": "bar", "data_range": "A1:B5", "title": "My Chart"}}.\n'
+    'Example update_cells: {"op": "update_cells", "sheet": "Sheet1", '
+    '"cells": {"A1": 42, "B1": "hello"}}.'
+)
+
+_CREATE_CHARTS_HINT = (
+    "Each chart MUST have a 'type' field (bar|line|pie|scatter|area|column) "
+    "and a 'data_range' field.\n"
+    'Example: {"type": "bar", "data_range": "B1:B10", "title": "Sales"}.'
+)
+
+
 def _format_tool_error(error: Exception) -> str:
     """Formate une erreur pour reponse MCP.
 
@@ -44,11 +65,43 @@ def _format_tool_error(error: Exception) -> str:
     """
     if isinstance(error, MCPZileoError):
         return error.to_llm_format()
+
+    if isinstance(error, PydanticValidationError):
+        return _format_validation_error(error)
+
     logger.error("Unexpected tool error: %s", error)
     return (
         "ERROR [INTERNAL_ERROR]: Une erreur inattendue s'est produite.\n"
         "SUGGESTION: Reessayer ou contacter le support."
     )
+
+
+def _format_validation_error(error: PydanticValidationError) -> str:
+    """Formate une erreur Pydantic en message guidant pour le LLM.
+
+    Args:
+        error: Erreur de validation Pydantic.
+
+    Returns:
+        Message actionnable avec exemples de format correct.
+    """
+    error_str = str(error)
+    lines = [f"ERROR [VALIDATION_ERROR]: {error.error_count()} erreur(s) de validation."]
+
+    # Extraire les champs en erreur
+    for err in error.errors():
+        loc = " -> ".join(str(p) for p in err["loc"])
+        lines.append(f"  - {loc}: {err['msg']}")
+
+    lines.append("RETRY: Corriger et reessayer.")
+
+    # Hints contextuels selon le type d'erreur
+    if "union_tag_not_found" in error_str:
+        lines.append(f"HINT: Chaque operation doit avoir un champ 'op'.\n{_EDIT_OPS_HINT}")
+    elif "charts" in error_str and "type" in error_str:
+        lines.append(f"HINT: {_CREATE_CHARTS_HINT}")
+
+    return "\n".join(lines)
 
 
 class MCPServer:
@@ -93,6 +146,8 @@ class MCPServer:
         self._shared_embedder = MistralEmbedder()
 
         # Instancier les tools avec injection de dependances
+        self._create_excel = CreateExcelTool()
+        self._edit_excel = EditExcelTool()
         self._index_document = IndexDocumentTool()
         self._search_documents = SearchDocumentsTool(
             vector_store=self._shared_vector_store,
@@ -117,6 +172,8 @@ class MCPServer:
 
         # Registry des tools
         self.tools: dict[str, BaseMCPTool] = {
+            "create_excel_document": self._create_excel,
+            "edit_excel_document": self._edit_excel,
             "index_document": self._index_document,
             "search_documents": self._search_documents,
             "get_document": self._get_document,
@@ -357,8 +414,9 @@ class MCPServer:
         Returns:
             Reponse JSON-RPC avec isError=True.
         """
-        # Logging: ternaire pour selectionner la fonction de log
-        log_func = logger.warning if isinstance(error, MCPZileoError) else logger.exception
+        # Logging: MCPZileoError et ValidationError = warning, le reste = exception
+        is_expected = isinstance(error, (MCPZileoError, PydanticValidationError))
+        log_func = logger.warning if is_expected else logger.exception
         log_func("Tool error: %s", error)
 
         # Formatage: helper pour separer les responsabilites

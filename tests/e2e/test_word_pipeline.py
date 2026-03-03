@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.core.config import settings
 from src.mcp.tools.index_document import IndexDocumentTool
 from src.mcp.tools.list_available_documents import ListAvailableDocumentsTool
 from src.mcp.tools.search import SearchDocumentsTool
@@ -39,7 +40,7 @@ def mock_unified_word_doc() -> MagicMock:
     metadata = UnifiedMetadata(
         document_id="word-doc-456",
         filename="rapport.docx",
-        file_path="/data/rapport.docx",
+        file_path="/app/documents/rapport.docx",
         document_type=DocumentType.WORD,
         original_format=".docx",
         page_count=None,
@@ -161,8 +162,11 @@ class TestIndexDocumentWord:
         mock_store.find_document_by_filename = AsyncMock(return_value=None)
         index_tool._vector_store = mock_store
 
-        with patch("pathlib.Path.exists", return_value=True):
-            result = await index_tool.execute({"file_path": "/data/rapport.docx"})
+        with (
+            patch.object(settings, "DOCUMENTS_PATH", "/app/documents"),
+            patch("pathlib.Path.exists", return_value=True),
+        ):
+            result = await index_tool.execute({"file_path": "/app/documents/rapport.docx"})
 
         assert result["document_type"] == "word"
         assert result["has_tables"] is True
@@ -201,8 +205,11 @@ class TestIndexDocumentWord:
         mock_store.find_document_by_filename = AsyncMock(return_value=None)
         index_tool._vector_store = mock_store
 
-        with patch("pathlib.Path.exists", return_value=True):
-            await index_tool.execute({"file_path": "/data/rapport.docx"})
+        with (
+            patch.object(settings, "DOCUMENTS_PATH", "/app/documents"),
+            patch("pathlib.Path.exists", return_value=True),
+        ):
+            await index_tool.execute({"file_path": "/app/documents/rapport.docx"})
 
         # Verifier que les chunks contiennent le contenu Word
         assert len(captured_chunks) >= 1

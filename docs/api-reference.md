@@ -99,7 +99,7 @@ Rate limit : 30 requetes/minute.
 | Methode | Description |
 |---------|-------------|
 | `initialize` | Initialiser la session MCP, retourne les capabilities du serveur |
-| `tools/list` | Lister les 8 outils disponibles avec leurs schemas |
+| `tools/list` | Lister les 10 outils disponibles avec leurs schemas |
 | `tools/call` | Executer un outil par nom |
 
 ### Outils MCP
@@ -221,6 +221,130 @@ Recupere les formules d'un document Excel indexe. Les formules sont stockees dan
 
 Retour : `total_formulas`, `formulas` (liste avec `sheet`, `cell`, `formula`, `result`).
 
+#### create_excel_document
+
+Cree un fichier Excel (.xlsx) avec donnees, styles, graphiques et validations de donnees. Le fichier est cree dans `OUTPUT_PATH`.
+
+**Parametres** :
+
+| Parametre | Type | Requis | Description |
+|-----------|------|--------|-------------|
+| `filename` | string | Oui | Nom du fichier (doit se terminer par `.xlsx`) |
+| `sheets` | array[SheetDef] | Oui | Definitions des feuilles (1 a 50) |
+| `author` | string | Non | Auteur du classeur (metadonnee) |
+
+**Structure d'une feuille (SheetDef)** :
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `name` | string | Nom de la feuille (1-31 caracteres) |
+| `headers` | array[string] | En-tetes de colonnes |
+| `rows` | array[array] | Lignes de donnees (max 10 000) |
+| `styles` | array[CellStyleDef] | Styles (police, couleur, bordure) |
+| `charts` | array[ChartDef] | Graphiques (type requis: bar\|line\|pie\|scatter\|area\|column) |
+| `data_validations` | array | Regles de validation |
+| `merged_cells` | array | Cellules a fusionner |
+| `column_widths` | object | Largeurs de colonnes (`{"A": 20}`) |
+| `auto_filter` | boolean | Activer l'auto-filtre |
+| `freeze_panes` | string | Figer les volets (`"A2"`) |
+
+**Exemple** :
+
+```json
+{
+  "filename": "report.xlsx",
+  "sheets": [
+    {
+      "name": "Data",
+      "headers": ["Name", "Value"],
+      "rows": [["Item A", 100], ["Item B", 200]],
+      "charts": [
+        {
+          "type": "bar",
+          "data_range": "B1:B3",
+          "categories_range": "A2:A3",
+          "title": "Values"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Retour** :
+
+```json
+{
+  "file_path": "/app/output/report.xlsx",
+  "filename": "report.xlsx",
+  "sheets_created": 1,
+  "total_rows": 2,
+  "total_charts": 1,
+  "file_size_bytes": 8542,
+  "overwritten": false
+}
+```
+
+#### edit_excel_document
+
+Edite un fichier Excel (.xlsx) existant dans `OUTPUT_PATH`. Le fichier doit avoir ete cree par `create_excel_document`. Chaque operation doit avoir un champ `op` qui determine le type d'operation.
+
+**Parametres** :
+
+| Parametre | Type | Requis | Description |
+|-----------|------|--------|-------------|
+| `filename` | string | Oui | Nom du fichier existant dans OUTPUT_PATH |
+| `operations` | array[EditOp] | Oui | Operations a appliquer en ordre (1 a 100) |
+
+**Operations disponibles (champ `op`)** :
+
+| Op | Description | Champs principaux |
+|----|-------------|-------------------|
+| `update_cells` | Modifier des cellules | `sheet`, `cells` (`{"A1": 42, "B1": "hello"}`) |
+| `insert_rows` | Inserer des lignes | `sheet`, `row_index`, `rows` |
+| `delete_rows` | Supprimer des lignes | `sheet`, `start_row`, `end_row` |
+| `apply_styles` | Appliquer des styles | `sheet`, `styles` (liste de CellStyleDef) |
+| `add_sheet` | Ajouter une feuille | `name`, `headers`, `rows` |
+| `delete_sheet` | Supprimer une feuille | `sheet` |
+| `rename_sheet` | Renommer une feuille | `sheet`, `new_name` |
+| `add_chart` | Ajouter un graphique | `sheet`, `chart` (ChartDef) |
+| `remove_charts` | Supprimer tous les graphiques | `sheet` |
+| `add_data_validation` | Ajouter une validation | `sheet`, `validation` |
+| `merge_cells` | Fusionner des cellules | `sheet`, `range` |
+| `unmerge_cells` | Defusionner des cellules | `sheet`, `range` |
+| `set_sheet_properties` | Proprietes de feuille | `sheet`, `tab_color`, `auto_filter`, `freeze_panes` |
+
+**Exemple** :
+
+```json
+{
+  "filename": "report.xlsx",
+  "operations": [
+    {"op": "update_cells", "sheet": "Sheet1", "cells": {"A1": 42, "B1": "hello"}},
+    {
+      "op": "add_chart",
+      "sheet": "Sheet1",
+      "chart": {"type": "bar", "data_range": "A1:B5", "title": "Sales"}
+    },
+    {"op": "delete_rows", "sheet": "Sheet1", "start_row": 10, "end_row": 12}
+  ]
+}
+```
+
+**Retour** :
+
+```json
+{
+  "file_path": "/app/output/report.xlsx",
+  "filename": "report.xlsx",
+  "operations_applied": 3,
+  "operations_skipped": 0,
+  "file_size_bytes": 9120
+}
+```
+
+**Note** : Les erreurs de graphique (ChartDef invalide) sont gerees en degradation gracieuse : l'operation est comptee comme `skipped` et les autres operations continuent.
+
 ---
 
 ## Codes d'erreur
@@ -257,3 +381,21 @@ RETRY: Corriger et reessayer
 ```
 
 Ce format est genere par la hierarchie d'exceptions `MCPZileoError` dans `src/core/exceptions.py`. Chaque exception porte un code, un message, une suggestion, et un indicateur de retry.
+
+### Format d'erreur de validation
+
+Les erreurs de validation Pydantic (`ValidationError`) sont interceptees et formatees avec des hints contextuels pour guider le LLM :
+
+```
+ERROR [VALIDATION_ERROR]: 2 erreur(s) de validation.
+  - operations -> 0: Unable to extract tag using discriminator 'op'
+  - operations -> 1: Unable to extract tag using discriminator 'op'
+RETRY: Corriger et reessayer.
+HINT: Chaque operation doit avoir un champ 'op'.
+Available 'op' values: update_cells, insert_rows, delete_rows, apply_styles, ...
+Example update_cells: {"op": "update_cells", "sheet": "Sheet1", "cells": {"A1": 42}}.
+```
+
+Les hints sont contextuels :
+- **Discriminated union** (`edit_excel_document`) : Liste les valeurs `op` valides avec exemples
+- **Charts** (`create_excel_document`) : Rappelle que `type` et `data_range` sont requis

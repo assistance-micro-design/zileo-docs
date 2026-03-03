@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.core.config import settings
 from src.mcp.tools.get_excel_formulas import GetExcelFormulasTool
 from src.mcp.tools.index_document import IndexDocumentTool
 from src.mcp.tools.list_available_documents import ListAvailableDocumentsTool
@@ -41,7 +42,7 @@ def mock_unified_excel_doc() -> MagicMock:
     metadata = UnifiedMetadata(
         document_id="excel-doc-123",
         filename="test.xlsx",
-        file_path="/data/test.xlsx",
+        file_path="/app/documents/test.xlsx",
         document_type=DocumentType.EXCEL,
         original_format=".xlsx",
         page_count=2,
@@ -158,9 +159,12 @@ class TestIndexDocumentExcel:
         mock_store.find_document_by_filename = AsyncMock(return_value=None)
         index_tool._vector_store = mock_store
 
-        # Mock file existence
-        with patch("pathlib.Path.exists", return_value=True):
-            result = await index_tool.execute({"file_path": "/data/test.xlsx"})
+        # Mock file existence + DOCUMENTS_PATH
+        with (
+            patch.object(settings, "DOCUMENTS_PATH", "/app/documents"),
+            patch("pathlib.Path.exists", return_value=True),
+        ):
+            result = await index_tool.execute({"file_path": "/app/documents/test.xlsx"})
 
         assert result["document_type"] == "excel"
         assert result["has_formulas"] is True
@@ -198,8 +202,11 @@ class TestIndexDocumentExcel:
         mock_store.find_document_by_filename = AsyncMock(return_value=None)
         index_tool._vector_store = mock_store
 
-        with patch("pathlib.Path.exists", return_value=True):
-            await index_tool.execute({"file_path": "/data/test.xlsx"})
+        with (
+            patch.object(settings, "DOCUMENTS_PATH", "/app/documents"),
+            patch("pathlib.Path.exists", return_value=True),
+        ):
+            await index_tool.execute({"file_path": "/app/documents/test.xlsx"})
 
         # Verifier qu'au moins un chunk contient les formules
         assert len(captured_chunks) >= 1

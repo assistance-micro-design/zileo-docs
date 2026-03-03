@@ -48,6 +48,9 @@ logs/
 # Docker
 .docker/
 
+# Session state (context broker)
+.claude/session-state.json
+
 # Docs internes (specs, reviews)
 docs/specs/
 docs/reviews/

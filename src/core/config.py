@@ -89,6 +89,17 @@ class Settings(BaseSettings):
         default="/app/documents",
         description="Chemin vers le dossier contenant les documents disponibles (PDF, Excel, Word)",
     )
+    # === Output ===
+    OUTPUT_PATH: str = Field(
+        default="/app/output",
+        description="Chemin vers le dossier de sortie des fichiers generes",
+    )
+    MAX_OUTPUT_FILE_SIZE_MB: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Taille max d'un fichier genere en MB",
+    )
 
     # === Rate Limiting ===
     RATE_LIMIT_DEFAULT: str = "60/minute"
