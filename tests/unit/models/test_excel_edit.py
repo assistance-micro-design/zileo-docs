@@ -286,3 +286,39 @@ class TestEditExcelParams:
         )
         assert result.operations_applied == 3
         assert result.operations_skipped == 1
+
+
+class TestColumnLimits:
+    """Tests limites de colonnes sur les operations d'edition."""
+
+    def test_insert_rows_max_500_columns(self) -> None:
+        """InsertRowsOp accepte 500 colonnes par ligne."""
+        op = InsertRowsOp(sheet="S1", rows=[list(range(500))])
+        assert len(op.rows[0]) == 500
+
+    def test_insert_rows_over_500_columns_rejected(self) -> None:
+        """InsertRowsOp rejette > 500 colonnes par ligne."""
+        with pytest.raises(ValidationError):
+            InsertRowsOp(sheet="S1", rows=[list(range(501))])
+
+    def test_add_sheet_rows_max_500_columns(self) -> None:
+        """AddSheetOp accepte 500 colonnes par ligne."""
+        op = AddSheetOp(name="S1", rows=[list(range(500))])
+        assert len(op.rows[0]) == 500
+
+    def test_add_sheet_rows_over_500_columns_rejected(self) -> None:
+        """AddSheetOp rejette > 500 colonnes par ligne."""
+        with pytest.raises(ValidationError):
+            AddSheetOp(name="S1", rows=[list(range(501))])
+
+    def test_add_sheet_headers_max_500(self) -> None:
+        """AddSheetOp accepte 500 headers."""
+        headers = [f"H{i}" for i in range(500)]
+        op = AddSheetOp(name="S1", headers=headers)
+        assert len(op.headers) == 500  # type: ignore[arg-type]
+
+    def test_add_sheet_headers_over_500_rejected(self) -> None:
+        """AddSheetOp rejette > 500 headers."""
+        headers = [f"H{i}" for i in range(501)]
+        with pytest.raises(ValidationError):
+            AddSheetOp(name="S1", headers=headers)

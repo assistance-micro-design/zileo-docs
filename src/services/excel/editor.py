@@ -166,11 +166,15 @@ class ExcelEditor:
         """Modifier des valeurs de cellules."""
         ws = self._get_sheet(wb, op.sheet)
         for cell_ref, value in op.cells.items():
+            self._generator.check_cell_value_safety(value)
             ws[cell_ref] = value
 
     def _op_insert_rows(self, wb: Workbook, op: InsertRowsOp) -> None:
         """Inserer des lignes (append ou insert)."""
         ws = self._get_sheet(wb, op.sheet)
+        for row_data in op.rows:
+            for value in row_data:
+                self._generator.check_cell_value_safety(value)
         if op.at_row is not None:
             ws.insert_rows(op.at_row, amount=len(op.rows))
             for row_offset, row_data in enumerate(op.rows):
@@ -193,6 +197,12 @@ class ExcelEditor:
 
     def _op_add_sheet(self, wb: Workbook, op: AddSheetOp) -> None:
         """Ajouter une feuille avec donnees optionnelles."""
+        if op.headers:
+            for header in op.headers:
+                self._generator.check_cell_value_safety(header)
+        for row_data in op.rows:
+            for value in row_data:
+                self._generator.check_cell_value_safety(value)
         ws = wb.create_sheet(title=op.name)
         current_row = 1
         if op.headers:

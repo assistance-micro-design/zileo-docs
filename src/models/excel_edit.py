@@ -36,7 +36,7 @@ class InsertRowsOp(BaseModel):
 
     op: Literal["insert_rows"] = "insert_rows"
     sheet: str
-    rows: Annotated[list[list[CellValue]], Field(min_length=1)]
+    rows: Annotated[list[Annotated[list[CellValue], Field(max_length=500)]], Field(min_length=1)]
     at_row: Annotated[
         int | None,
         Field(
@@ -80,8 +80,11 @@ class AddSheetOp(BaseModel):
     name: Annotated[
         str, Field(min_length=1, max_length=31, description="Nom de la feuille (1-31 caracteres).")
     ]
-    headers: list[str] | None = None
-    rows: list[list[CellValue]] = []
+    headers: Annotated[
+        list[str] | None,
+        Field(default=None, max_length=500, description="En-tetes (max 500)"),
+    ]
+    rows: list[Annotated[list[CellValue], Field(max_length=500)]] = []
 
 
 class DeleteSheetOp(BaseModel):

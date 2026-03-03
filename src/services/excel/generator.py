@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -16,7 +17,12 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
 from src.core.config import settings
-from src.core.exceptions import ExcelChartError, ExcelGenerationError, ExcelOutputTooLargeError
+from src.core.exceptions import (
+    ExcelChartError,
+    ExcelFormulaInjectionError,
+    ExcelGenerationError,
+    ExcelOutputTooLargeError,
+)
 from src.models.api import CreateExcelParams, CreateExcelResult
 from src.models.excel_generation import (
     CellStyleDef,
@@ -31,6 +37,19 @@ if TYPE_CHECKING:
     from openpyxl.worksheet.worksheet import Worksheet
 
 logger = logging.getLogger(__name__)
+
+
+_DANGEROUS_FORMULA_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"^=\s*CMD\s*\(", re.IGNORECASE),
+    re.compile(r"^=\s*SYSTEM\s*\(", re.IGNORECASE),
+    re.compile(r"^=\s*EXEC\s*\(", re.IGNORECASE),
+    re.compile(r"^=\s*CALL\s*\(", re.IGNORECASE),
+    re.compile(r"^=\s*REGISTER\s*\(", re.IGNORECASE),
+    re.compile(r"^\+cmd\|", re.IGNORECASE),
+    re.compile(r"^-cmd\|", re.IGNORECASE),
+    re.compile(r"^@.*cmd\|", re.IGNORECASE),
+    re.compile(r"DDE\s*\(", re.IGNORECASE),
+]
 
 
 class ExcelGenerator:
@@ -160,6 +179,7 @@ class ExcelGenerator:
         # Headers
         if sheet_def.headers:
             for col_idx, header in enumerate(sheet_def.headers, start=1):
+                self.check_cell_value_safety(header)
                 cell = ws.cell(row=current_row, column=col_idx, value=header)
                 cell.font = Font(bold=True)
             current_row += 1
@@ -167,6 +187,7 @@ class ExcelGenerator:
         # Donnees
         for row_data in sheet_def.rows:
             for col_idx, value in enumerate(row_data, start=1):
+                self.check_cell_value_safety(value)
                 ws.cell(row=current_row, column=col_idx, value=value)
             current_row += 1
 
@@ -376,6 +397,22 @@ class ExcelGenerator:
             )
 
         return filename
+
+    @staticmethod
+    def check_cell_value_safety(value: object) -> None:
+        """Verifie qu'une valeur de cellule ne contient pas de formule dangereuse.
+
+        Args:
+            value: Valeur a verifier.
+
+        Raises:
+            ExcelFormulaInjectionError: Si la valeur matche un pattern dangereux.
+        """
+        if not isinstance(value, str):
+            return
+        for pattern in _DANGEROUS_FORMULA_PATTERNS:
+            if pattern.search(value):
+                raise ExcelFormulaInjectionError(value=value, pattern=pattern.pattern)
 
     def ensure_output_dir(self) -> None:
         """Cree le repertoire OUTPUT_PATH s'il n'existe pas."""

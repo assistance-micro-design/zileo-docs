@@ -469,7 +469,7 @@ class CreateExcelParams(BaseModel):
         ),
     ]
     sheets: Annotated[list[SheetDef], Field(min_length=1, max_length=50)]
-    author: str | None = None
+    author: Annotated[str | None, Field(default=None, max_length=255)] = None
 
 
 class CreateExcelResult(BaseModel):

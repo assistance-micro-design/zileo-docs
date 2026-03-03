@@ -9,7 +9,11 @@ from pathlib import Path
 import pytest
 from openpyxl import load_workbook
 
-from src.core.exceptions import ExcelChartError, ExcelOutputTooLargeError
+from src.core.exceptions import (
+    ExcelChartError,
+    ExcelFormulaInjectionError,
+    ExcelOutputTooLargeError,
+)
 from src.models.api import CreateExcelParams, CreateExcelResult
 from src.models.excel_generation import (
     CellStyleDef,
@@ -755,3 +759,180 @@ class TestExcelGeneratorMergedCells:
         assert ws is not None
         assert len(ws.merged_cells.ranges) == 1
         wb.close()
+
+
+class TestExcelGeneratorFormulaInjection:
+    """Tests securite: detection de formules dangereuses dans les cellules."""
+
+    @pytest.mark.asyncio
+    async def test_safe_formulas_accepted(self, generator: ExcelGenerator) -> None:
+        """Les formules Excel standard ne sont pas bloquees."""
+        params = CreateExcelParams(
+            filename="safe_formulas.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    headers=["Val", "Total"],
+                    rows=[
+                        [10, "=SUM(A1:A5)"],
+                        [20, "=AVERAGE(A1:A5)"],
+                        [30, "=IF(A1>0,A1,0)"],
+                        [40, "=VLOOKUP(A1,A1:B5,2,FALSE)"],
+                        [50, "=COUNT(A1:A5)"],
+                    ],
+                )
+            ],
+        )
+        result = await generator.generate(params)
+        assert result.total_rows == 5
+
+    @pytest.mark.asyncio
+    async def test_non_string_values_accepted(self, generator: ExcelGenerator) -> None:
+        """Les valeurs non-string (int, float, bool, None) passent sans verification."""
+        params = CreateExcelParams(
+            filename="non_string.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    rows=[[42, 3.14, True, None]],
+                )
+            ],
+        )
+        result = await generator.generate(params)
+        assert result.total_rows == 1
+
+    @pytest.mark.asyncio
+    async def test_dde_injection_blocked(self, generator: ExcelGenerator) -> None:
+        """Les payloads DDE sont bloques."""
+        params = CreateExcelParams(
+            filename="dde.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    rows=[["+cmd|'/C calc'"]],
+                )
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError, match="cmd"):
+            await generator.generate(params)
+
+    @pytest.mark.asyncio
+    async def test_cmd_formula_blocked(self, generator: ExcelGenerator) -> None:
+        """=CMD() est bloque."""
+        params = CreateExcelParams(
+            filename="cmd.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    rows=[['=CMD("calc")']],
+                )
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await generator.generate(params)
+
+    @pytest.mark.asyncio
+    async def test_system_formula_blocked(self, generator: ExcelGenerator) -> None:
+        """=SYSTEM() est bloque."""
+        params = CreateExcelParams(
+            filename="system.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    rows=[['=SYSTEM("whoami")']],
+                )
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await generator.generate(params)
+
+    @pytest.mark.asyncio
+    async def test_exec_formula_blocked(self, generator: ExcelGenerator) -> None:
+        """=EXEC() est bloque."""
+        params = CreateExcelParams(
+            filename="exec.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    rows=[['=EXEC("rm -rf /")']],
+                )
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await generator.generate(params)
+
+    @pytest.mark.asyncio
+    async def test_minus_cmd_pipe_blocked(self, generator: ExcelGenerator) -> None:
+        """-cmd|'/C calc' est bloque."""
+        params = CreateExcelParams(
+            filename="minus_cmd.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    rows=[["-cmd|'/C calc'"]],
+                )
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await generator.generate(params)
+
+    @pytest.mark.asyncio
+    async def test_at_sum_cmd_blocked(self, generator: ExcelGenerator) -> None:
+        """@SUM(cmd) pattern bloque."""
+        params = CreateExcelParams(
+            filename="at_cmd.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    rows=[["@SUM(1+1)*cmd|'/C calc'"]],
+                )
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await generator.generate(params)
+
+    @pytest.mark.asyncio
+    async def test_call_formula_blocked(self, generator: ExcelGenerator) -> None:
+        """=CALL() est bloque."""
+        params = CreateExcelParams(
+            filename="call.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    rows=[['=CALL("kernel32","WinExec","JCJ","calc.exe",5)']],
+                )
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await generator.generate(params)
+
+    @pytest.mark.asyncio
+    async def test_header_injection_blocked(self, generator: ExcelGenerator) -> None:
+        """Les headers sont aussi verifies."""
+        params = CreateExcelParams(
+            filename="header_inj.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    headers=["Name", '=CMD("calc")'],
+                    rows=[["a", "b"]],
+                )
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await generator.generate(params)
+
+    @pytest.mark.asyncio
+    async def test_case_insensitive_detection(self, generator: ExcelGenerator) -> None:
+        """La detection est insensible a la casse."""
+        params = CreateExcelParams(
+            filename="case.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    rows=[['=Cmd("calc")']],
+                )
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await generator.generate(params)

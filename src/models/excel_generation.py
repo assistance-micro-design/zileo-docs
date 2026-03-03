@@ -140,13 +140,16 @@ class SheetDef(BaseModel):
     """Definition d'une feuille Excel."""
 
     name: Annotated[str, Field(min_length=1, max_length=31, description="Nom de la feuille")]
-    headers: list[str] | None = None
+    headers: Annotated[
+        list[str] | None,
+        Field(default=None, max_length=500, description="En-tetes de colonnes (max 500)"),
+    ]
     rows: Annotated[
-        list[list[CellValue]],
+        list[Annotated[list[CellValue], Field(max_length=500)]],
         Field(
             default=[],
             max_length=10000,
-            description="Lignes de donnees (max 10 000 par feuille)",
+            description="Lignes de donnees (max 10 000 lignes, max 500 colonnes)",
         ),
     ]
     column_widths: Annotated[

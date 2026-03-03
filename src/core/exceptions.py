@@ -330,6 +330,21 @@ class ExcelChartError(ExcelGenerationError):
         )
 
 
+class ExcelFormulaInjectionError(ExcelGenerationError):
+    """Formule dangereuse detectee dans une valeur de cellule."""
+
+    def __init__(self, value: str, pattern: str) -> None:
+        preview = value[:50] + "..." if len(value) > 50 else value
+        super().__init__(
+            message=f"Formule dangereuse detectee: {preview}",
+            code="EXCEL_FORMULA_INJECTION",
+            details={"value": preview, "matched_pattern": pattern},
+            suggestion="Utiliser des formules Excel standard (SUM, AVERAGE, IF, etc.).",
+            parameter="cells",
+            retry=True,
+        )
+
+
 class ExcelFileNotFoundError(ExcelGenerationError):
     """Fichier Excel introuvable dans OUTPUT_PATH."""
 

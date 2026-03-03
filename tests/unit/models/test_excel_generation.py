@@ -236,6 +236,28 @@ class TestSheetDef:
         with pytest.raises(ValidationError, match="tab_color"):
             SheetDef(name="Test", tab_color="GGGGGG")
 
+    def test_row_max_500_columns(self) -> None:
+        """Une ligne avec 500 colonnes est acceptee."""
+        sheet = SheetDef(name="Wide", rows=[list(range(500))])
+        assert len(sheet.rows[0]) == 500
+
+    def test_row_over_500_columns_rejected(self) -> None:
+        """Une ligne avec > 500 colonnes est rejetee."""
+        with pytest.raises(ValidationError):
+            SheetDef(name="TooWide", rows=[list(range(501))])
+
+    def test_headers_max_500(self) -> None:
+        """500 headers sont acceptes."""
+        headers = [f"H{i}" for i in range(500)]
+        sheet = SheetDef(name="Wide", headers=headers)
+        assert len(sheet.headers) == 500  # type: ignore[arg-type]
+
+    def test_headers_over_500_rejected(self) -> None:
+        """Plus de 500 headers sont rejetes."""
+        headers = [f"H{i}" for i in range(501)]
+        with pytest.raises(ValidationError):
+            SheetDef(name="TooWide", headers=headers)
+
 
 class TestCreateExcelParams:
     """Tests pour CreateExcelParams."""
@@ -295,6 +317,25 @@ class TestCreateExcelParams:
             author="MCP Zileo RAG",
         )
         assert params.author == "MCP Zileo RAG"
+
+    def test_author_max_length_255(self) -> None:
+        """Author respecte max_length=255."""
+        # 255 caracteres: OK
+        params = CreateExcelParams(
+            filename="test.xlsx",
+            sheets=[SheetDef(name="F1")],
+            author="A" * 255,
+        )
+        assert len(params.author) == 255  # type: ignore[arg-type]
+
+    def test_author_too_long_rejected(self) -> None:
+        """Author > 255 caracteres rejete."""
+        with pytest.raises(ValidationError, match="author"):
+            CreateExcelParams(
+                filename="test.xlsx",
+                sheets=[SheetDef(name="F1")],
+                author="A" * 256,
+            )
 
 
 class TestCreateExcelResult:

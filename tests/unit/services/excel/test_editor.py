@@ -11,6 +11,7 @@ from openpyxl import load_workbook
 
 from src.core.exceptions import (
     ExcelFileNotFoundError,
+    ExcelFormulaInjectionError,
     ExcelOutputTooLargeError,
     ExcelSheetNotFoundError,
 )
@@ -599,3 +600,63 @@ class TestMultipleOperations:
         assert wb["Ventes"]["B2"].value == 99
         assert "Bilan" in wb.sheetnames
         wb.close()
+
+
+class TestEditorFormulaInjection:
+    """Tests securite: detection de formules dangereuses via editor."""
+
+    @pytest.mark.asyncio
+    async def test_update_cells_blocks_dde(self, editor: ExcelEditor, sample_file: str) -> None:
+        """update_cells bloque les payloads DDE."""
+        params = EditExcelParams(
+            filename=sample_file,
+            operations=[
+                UpdateCellsOp(sheet="Ventes", cells={"A1": "+cmd|'/C calc'"}),
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await editor.edit(params)
+
+    @pytest.mark.asyncio
+    async def test_update_cells_allows_safe_formulas(
+        self, editor: ExcelEditor, sample_file: str
+    ) -> None:
+        """update_cells autorise les formules Excel standard."""
+        params = EditExcelParams(
+            filename=sample_file,
+            operations=[
+                UpdateCellsOp(sheet="Ventes", cells={"D1": "=SUM(B2:B3)"}),
+            ],
+        )
+        result = await editor.edit(params)
+        assert result.operations_applied == 1
+
+    @pytest.mark.asyncio
+    async def test_insert_rows_blocks_injection(
+        self, editor: ExcelEditor, sample_file: str
+    ) -> None:
+        """insert_rows bloque les valeurs dangereuses."""
+        params = EditExcelParams(
+            filename=sample_file,
+            operations=[
+                InsertRowsOp(sheet="Ventes", rows=[['=CMD("calc")', 10, 5]]),
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await editor.edit(params)
+
+    @pytest.mark.asyncio
+    async def test_add_sheet_blocks_injection(self, editor: ExcelEditor, sample_file: str) -> None:
+        """add_sheet bloque les headers et valeurs dangereuses."""
+        params = EditExcelParams(
+            filename=sample_file,
+            operations=[
+                AddSheetOp(
+                    name="Evil",
+                    headers=['=SYSTEM("whoami")'],
+                    rows=[["safe"]],
+                ),
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await editor.edit(params)
