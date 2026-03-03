@@ -2,12 +2,29 @@
 
 from __future__ import annotations
 
+import struct
+import zlib
 from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
 
 import fitz  # PyMuPDF
 import pytest
+
+
+def create_minimal_png(path: Path) -> None:
+    """Cree une image PNG minimale (1x1 pixel) pour les tests."""
+    signature = b"\x89PNG\r\n\x1a\n"
+    ihdr_data = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    ihdr_crc = zlib.crc32(b"IHDR" + ihdr_data)
+    ihdr = struct.pack(">I", 13) + b"IHDR" + ihdr_data + struct.pack(">I", ihdr_crc)
+    raw = b"\x00\x00\x00\x00"
+    compressed = zlib.compress(raw)
+    idat_crc = zlib.crc32(b"IDAT" + compressed)
+    idat = struct.pack(">I", len(compressed)) + b"IDAT" + compressed + struct.pack(">I", idat_crc)
+    iend_crc = zlib.crc32(b"IEND")
+    iend = struct.pack(">I", 0) + b"IEND" + struct.pack(">I", iend_crc)
+    path.write_bytes(signature + ihdr + idat + iend)
 
 
 # =============================================================================

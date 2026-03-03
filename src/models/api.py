@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 from src.models.excel_edit import EditOp
 from src.models.excel_generation import SheetDef
+from src.models.presentation_edit import PresentationEditOp
+from src.models.presentation_generation import SlideDef
 
 
 if TYPE_CHECKING:
@@ -542,6 +544,150 @@ class EditExcelParams(BaseModel):
 
 class EditExcelResult(BaseModel):
     """Resultat de l'edition d'un document Excel.
+
+    Attributes:
+        file_path: Chemin absolu du fichier edite.
+        filename: Nom du fichier.
+        operations_applied: Nombre d'operations appliquees avec succes.
+        operations_skipped: Nombre d'operations ignorees (degradation gracieuse).
+        file_size_bytes: Taille du fichier en octets apres edition.
+    """
+
+    file_path: str
+    filename: str
+    operations_applied: int
+    operations_skipped: int
+    file_size_bytes: int
+
+
+class CreatePresentationParams(BaseModel):
+    """Parametres du tool MCP create_presentation.
+
+    Attributes:
+        filename: Nom du fichier pptx a creer.
+        slides: Definitions des slides.
+        author: Auteur de la presentation (metadonnee).
+        template: Nom du fichier template .pptx (optionnel).
+    """
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "filename": "presentation.pptx",
+                    "slides": [
+                        {
+                            "layout": "title_slide",
+                            "title": "Ma Presentation",
+                            "subtitle": "Par l'equipe",
+                        },
+                        {
+                            "layout": "content_bullets",
+                            "title": "Points cles",
+                            "bullets": [
+                                {"text": "Premier point"},
+                                {"text": "Deuxieme point"},
+                            ],
+                        },
+                    ],
+                }
+            ]
+        }
+    }
+
+    filename: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=255,
+            pattern=r"^[\w\-. ()]+\.pptx$",
+            description="Nom du fichier. Doit se terminer par .pptx",
+        ),
+    ]
+    slides: Annotated[list[SlideDef], Field(min_length=1, max_length=100)]
+    author: Annotated[str | None, Field(default=None, max_length=255)] = None
+    template: Annotated[
+        str | None,
+        Field(
+            default=None,
+            max_length=255,
+            description="Nom du fichier template .pptx dans le dossier templates",
+        ),
+    ] = None
+
+
+class CreatePresentationResult(BaseModel):
+    """Resultat de la creation d'une presentation PowerPoint.
+
+    Attributes:
+        file_path: Chemin absolu du fichier cree.
+        filename: Nom du fichier.
+        slides_created: Nombre de slides crees.
+        total_images: Nombre total d'images inserees.
+        total_charts: Nombre total de graphiques.
+        file_size_bytes: Taille du fichier en octets.
+        overwritten: True si un fichier existant a ete ecrase.
+    """
+
+    file_path: str
+    filename: str
+    slides_created: int
+    total_images: int
+    total_charts: int
+    file_size_bytes: int
+    overwritten: bool = False
+
+
+class EditPresentationParams(BaseModel):
+    """Parametres du tool MCP edit_presentation.
+
+    Attributes:
+        filename: Nom du fichier pptx existant dans OUTPUT_PATH.
+        operations: Liste ordonnee d'operations a appliquer.
+    """
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "filename": "presentation.pptx",
+                    "operations": [
+                        {
+                            "op": "update_title",
+                            "slide_index": 0,
+                            "title": "Nouveau titre",
+                        },
+                        {
+                            "op": "add_slide",
+                            "slide": {
+                                "layout": "content_bullets",
+                                "title": "Nouveau slide",
+                                "bullets": [{"text": "Point"}],
+                            },
+                        },
+                    ],
+                }
+            ]
+        }
+    }
+
+    filename: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=255,
+            pattern=r"^[\w\-. ()]+\.pptx$",
+            description="Nom du fichier existant dans OUTPUT_PATH. Doit se terminer par .pptx",
+        ),
+    ]
+    operations: Annotated[
+        list[PresentationEditOp],
+        Field(min_length=1, max_length=100, description="Operations a appliquer (en ordre)"),
+    ]
+
+
+class EditPresentationResult(BaseModel):
+    """Resultat de l'edition d'une presentation PowerPoint.
 
     Attributes:
         file_path: Chemin absolu du fichier edite.

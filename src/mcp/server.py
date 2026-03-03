@@ -20,8 +20,10 @@ from src.core.config import settings
 from src.core.exceptions import MCPZileoError
 from src.mcp.tools.base import BaseMCPTool
 from src.mcp.tools.create_excel import CreateExcelTool
+from src.mcp.tools.create_presentation import CreatePresentationTool
 from src.mcp.tools.delete_document import DeleteDocumentTool
 from src.mcp.tools.edit_excel import EditExcelTool
+from src.mcp.tools.edit_presentation import EditPresentationTool
 from src.mcp.tools.get_document import GetDocumentTool
 from src.mcp.tools.get_excel_formulas import GetExcelFormulasTool
 from src.mcp.tools.index_document import IndexDocumentTool
@@ -45,6 +47,14 @@ _EDIT_OPS_HINT = (
     '"chart": {"type": "bar", "data_range": "A1:B5", "title": "My Chart"}}.\n'
     'Example update_cells: {"op": "update_cells", "sheet": "Sheet1", '
     '"cells": {"A1": 42, "B1": "hello"}}.'
+)
+
+_EDIT_PRESENTATION_OPS_HINT = (
+    "Available 'op' values: update_title, update_subtitle, update_bullets, "
+    "add_slide, delete_slide, reorder_slide, replace_image, add_image, "
+    "update_notes, update_chart, set_background.\n"
+    'Example update_title: {"op": "update_title", "slide_index": 0, "title": "New Title"}.\n'
+    'Example add_slide: {"op": "add_slide", "slide": {"layout": "title_slide", "title": "New"}}.'
 )
 
 _CREATE_CHARTS_HINT = (
@@ -96,16 +106,33 @@ def _format_validation_error(error: PydanticValidationError) -> str:
     lines.append("RETRY: Corriger et reessayer.")
 
     # Hints contextuels selon le type d'erreur
-    if "union_tag_not_found" in error_str:
-        lines.append(f"HINT: Chaque operation doit avoir un champ 'op'.\n{_EDIT_OPS_HINT}")
-    elif "charts" in error_str and "type" in error_str:
-        lines.append(f"HINT: {_CREATE_CHARTS_HINT}")
+    hint = _resolve_validation_hint(error_str)
+    if hint:
+        lines.append(hint)
 
     return "\n".join(lines)
 
 
+def _resolve_validation_hint(error_str: str) -> str | None:
+    """Retourne un hint contextuel selon le type d'erreur de validation.
+
+    Args:
+        error_str: Representation string de l'erreur Pydantic.
+
+    Returns:
+        Hint actionnable ou None si aucun hint applicable.
+    """
+    if "union_tag_not_found" in error_str:
+        is_presentation = "pptx" in error_str or "slide" in error_str.lower()
+        ops_hint = _EDIT_PRESENTATION_OPS_HINT if is_presentation else _EDIT_OPS_HINT
+        return f"HINT: Chaque operation doit avoir un champ 'op'.\n{ops_hint}"
+    if "charts" in error_str and "type" in error_str:
+        return f"HINT: {_CREATE_CHARTS_HINT}"
+    return None
+
+
 class MCPServer:
-    """Serveur MCP pour le traitement de documents (PDF, Excel, Word).
+    """Serveur MCP pour le traitement de documents (PDF, Excel, PowerPoint, Word).
 
     Ce serveur expose des outils MCP via le protocole JSON-RPC 2.0:
     - index_document: Extraire et indexer un document dans la base vectorielle
@@ -116,6 +143,8 @@ class MCPServer:
     - list_available_documents: Lister tous les documents disponibles (PDF/Excel/Word)
     - get_excel_formulas: Récupérer les formules d'un document Excel indexé
     - read_document_content: Lire le contenu Markdown complet d'un document
+    - create_presentation: Creer une presentation PowerPoint (.pptx)
+    - edit_presentation: Editer une presentation PowerPoint existante
 
     Attributes:
         name: Nom du serveur MCP.
@@ -148,6 +177,8 @@ class MCPServer:
         # Instancier les tools avec injection de dependances
         self._create_excel = CreateExcelTool()
         self._edit_excel = EditExcelTool()
+        self._create_presentation = CreatePresentationTool()
+        self._edit_presentation = EditPresentationTool()
         self._index_document = IndexDocumentTool()
         self._search_documents = SearchDocumentsTool(
             vector_store=self._shared_vector_store,
@@ -174,6 +205,8 @@ class MCPServer:
         self.tools: dict[str, BaseMCPTool] = {
             "create_excel_document": self._create_excel,
             "edit_excel_document": self._edit_excel,
+            "create_presentation": self._create_presentation,
+            "edit_presentation": self._edit_presentation,
             "index_document": self._index_document,
             "search_documents": self._search_documents,
             "get_document": self._get_document,
@@ -397,7 +430,7 @@ class MCPServer:
                 },
             }
 
-        except (MCPZileoError, Exception) as e:
+        except Exception as e:
             return self._tool_error_response(request_id, e)
 
     def _tool_error_response(

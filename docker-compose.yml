@@ -25,6 +25,8 @@ services:
       - ./data:/app/data
       - ${DOCUMENTS_PATH:-./data/documents}:/app/documents:ro
       - ${OUTPUT_PATH:-./output}:/app/output
+      - ${TEMPLATES_PPTX_PATH:-./data/templatesPPTX}:/app/output/templatesPPTX:ro
+      - ${IMAGES_POWERPOINT_PATH:-./data/imagesPowerPoint}:/app/output/imagesPowerPoint:ro
     depends_on:
       qdrant:
         condition: service_healthy

@@ -280,12 +280,15 @@ class TestMCPServer:
         """Test l'initialisation du serveur MCP."""
         assert mcp_server_instance.name is not None
         assert mcp_server_instance.version is not None
-        assert len(mcp_server_instance.tools) == 10
+        assert len(mcp_server_instance.tools) == 12
 
     def test_mcp_tools_registered(self, mcp_server_instance: MCPServer) -> None:
         """Test que tous les tools sont enregistres."""
         expected_tools = [
             "create_excel_document",
+            "edit_excel_document",
+            "create_presentation",
+            "edit_presentation",
             "index_document",
             "search_documents",
             "get_document",
@@ -348,7 +351,7 @@ class TestMCPServer:
         )
         assert "result" in response
         assert "tools" in response["result"]
-        assert len(response["result"]["tools"]) == 10
+        assert len(response["result"]["tools"]) == 12
 
     @pytest.mark.asyncio
     async def test_mcp_initialize(self, mcp_server_instance: MCPServer) -> None:
