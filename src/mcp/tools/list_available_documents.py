@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""Tool MCP pour lister tous les documents disponibles (PDF, Excel, Word)."""
+"""Tool MCP pour lister les fichiers disponibles (documents, generated, templates, images)."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, NamedTuple
 
 from src.core.config import settings
 from src.mcp.tools.base import BaseMCPTool
@@ -16,30 +16,32 @@ from src.models.api import ListAvailableDocumentsParams
 logger = logging.getLogger(__name__)
 
 
-class ListAvailableDocumentsTool(BaseMCPTool):
-    """Liste tous les documents disponibles dans le dossier monté.
+class _SourceConfig(NamedTuple):
+    path_attr: str
+    extensions: dict[str, str]
+    excluded_dirs: set[str]
 
-    Remplace et étend list_available_pdfs pour supporter
-    tous les formats de documents.
+
+class ListAvailableDocumentsTool(BaseMCPTool):
+    """Liste les fichiers disponibles dans le projet.
+
+    Supporte 4 sources: documents (indexation), generated (fichiers crees),
+    templates (PowerPoint), images (pour slides).
 
     Attributes:
         name: Nom du tool MCP.
         description: Description du tool.
         input_schema: Schema JSON des parametres.
-        SUPPORTED_EXTENSIONS: Mapping extension -> type document.
-
-    Example:
-        >>> tool = ListAvailableDocumentsTool()
-        >>> result = await tool.execute({"type_filter": "excel"})
-        >>> for doc in result["files"]:
-        ...     print(f"{doc['filename']}: {doc['type']}")
     """
 
     name: ClassVar[str] = "list_available_documents"
     description: ClassVar[str] = (
-        "Liste les fichiers disponibles pour indexation. "
-        "Types supportés: PDF (.pdf), Excel (.xlsx, .xls), Word (.docx). "
-        "Peut filtrer par type et sous-dossier."
+        "Liste les fichiers disponibles dans le projet. "
+        "source='documents' (defaut): PDF/Excel/Word pour indexation via index_document. "
+        "source='generated': fichiers Excel/PowerPoint crees par create_excel_document/create_presentation. "
+        "source='templates': templates PowerPoint (.pptx) pour create_presentation (param template). "
+        "source='images': images disponibles pour les slides PowerPoint (param image.filename). "
+        "Filtrable par type et sous-dossier."
     )
 
     SUPPORTED_EXTENSIONS: ClassVar[dict[str, str]] = {
@@ -48,13 +50,50 @@ class ListAvailableDocumentsTool(BaseMCPTool):
         ".xls": "excel",
         ".docx": "word",
     }
+    GENERATED_EXTENSIONS: ClassVar[dict[str, str]] = {
+        ".xlsx": "excel",
+        ".pptx": "presentation",
+    }
+    TEMPLATE_EXTENSIONS: ClassVar[dict[str, str]] = {
+        ".pptx": "template",
+    }
+    IMAGE_EXTENSIONS: ClassVar[dict[str, str]] = {
+        ".png": "image",
+        ".jpg": "image",
+        ".jpeg": "image",
+        ".svg": "image",
+        ".gif": "image",
+        ".bmp": "image",
+        ".webp": "image",
+    }
+
+    _SOURCE_CONFIGS: ClassVar[dict[str, _SourceConfig]] = {
+        "documents": _SourceConfig("_documents_path", SUPPORTED_EXTENSIONS, set()),
+        "generated": _SourceConfig(
+            "_output_path", GENERATED_EXTENSIONS, {"templatesPPTX", "imagesPowerPoint"}
+        ),
+        "templates": _SourceConfig("_templates_path", TEMPLATE_EXTENSIONS, set()),
+        "images": _SourceConfig("_images_path", IMAGE_EXTENSIONS, set()),
+    }
 
     input_schema: ClassVar[dict[str, Any]] = {
         "type": "object",
         "properties": {
+            "source": {
+                "type": "string",
+                "enum": ["documents", "generated", "templates", "images"],
+                "description": (
+                    "Quelle source lister. "
+                    "'documents': fichiers PDF/Excel/Word a indexer (defaut). "
+                    "'generated': fichiers crees par create_excel_document ou create_presentation. "
+                    "'templates': templates PowerPoint pour create_presentation (param template). "
+                    "'images': images pour slides PowerPoint (param image.filename)."
+                ),
+                "default": "documents",
+            },
             "type_filter": {
                 "type": "string",
-                "enum": ["pdf", "excel", "word", "all"],
+                "enum": ["pdf", "excel", "word", "presentation", "template", "image", "all"],
                 "description": "Filtrer par type de document (defaut: all)",
                 "default": "all",
             },
@@ -76,31 +115,34 @@ class ListAvailableDocumentsTool(BaseMCPTool):
         """Initialise le tool."""
         super().__init__()
         self._documents_path = Path(settings.DOCUMENTS_PATH)
+        self._output_path = Path(settings.OUTPUT_PATH)
+        self._templates_path = Path(settings.TEMPLATES_PPTX_PATH)
+        self._images_path = Path(settings.IMAGES_POWERPOINT_PATH)
 
     async def _do_initialize(self) -> None:
         """Pas d'initialisation requise pour ce tool."""
 
     async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Liste les documents disponibles.
+        """Liste les fichiers disponibles.
 
         Args:
-            arguments: Parametres optionnels:
-                - type_filter: Filtrer par type (pdf/excel/word/all)
-                - subdirectory: Sous-dossier a scanner
-                - recursive: Scanner recursivement
+            arguments: Parametres optionnels (source, type_filter, subdirectory, recursive).
 
         Returns:
-            Dictionnaire avec base_path, total_files, by_type, files.
+            Dictionnaire avec source, base_path, total_files, by_type, files.
         """
         params = ListAvailableDocumentsParams(**arguments)
+        config = self._SOURCE_CONFIGS[params.source]
+        base_path: Path = getattr(self, config.path_attr)
 
-        scan_path = self._documents_path
+        scan_path = base_path
         if params.subdirectory:
-            scan_path = scan_path / params.subdirectory
+            scan_path = base_path / params.subdirectory
 
-        error = self._validate_scan_path(scan_path)
+        error = self._validate_scan_path(scan_path, base_path)
         if error:
             return {
+                "source": params.source,
                 "base_path": str(scan_path),
                 "total_files": 0,
                 "by_type": {},
@@ -109,13 +151,16 @@ class ListAvailableDocumentsTool(BaseMCPTool):
             }
 
         logger.info(
-            "Scanning for documents in: %s (recursive=%s, filter=%s)",
+            "Scanning %s in: %s (recursive=%s, filter=%s)",
+            params.source,
             scan_path,
             params.recursive,
             params.type_filter,
         )
 
-        files = self._scan_files(scan_path, params)
+        files = self._scan_files(
+            scan_path, params, config.extensions, config.excluded_dirs, base_path
+        )
         files.sort(key=lambda f: (f["type"], f["filename"].lower()))
 
         stats: dict[str, int] = {}
@@ -123,24 +168,28 @@ class ListAvailableDocumentsTool(BaseMCPTool):
             stats[f["type"]] = stats.get(f["type"], 0) + 1
 
         logger.info(
-            "Found %d documents: %s", len(files), ", ".join(f"{k}={v}" for k, v in stats.items())
+            "Found %d files (%s): %s",
+            len(files),
+            params.source,
+            ", ".join(f"{k}={v}" for k, v in stats.items()),
         )
 
         return {
+            "source": params.source,
             "base_path": str(scan_path),
             "total_files": len(files),
             "by_type": stats,
             "files": files,
         }
 
-    def _validate_scan_path(self, scan_path: Path) -> str | None:
+    def _validate_scan_path(self, scan_path: Path, base_path: Path) -> str | None:
         """Valide le chemin de scan (anti-traversal + existence)."""
         resolved = scan_path.resolve()
-        if not resolved.is_relative_to(self._documents_path.resolve()):
+        if not resolved.is_relative_to(base_path.resolve()):
             return "Subdirectory must stay within documents directory"
 
         if not scan_path.exists():
-            logger.warning("Documents path does not exist: %s", scan_path)
+            logger.warning("Path does not exist: %s", scan_path)
             return f"Dossier inexistant: {scan_path}"
 
         return None
@@ -149,6 +198,9 @@ class ListAvailableDocumentsTool(BaseMCPTool):
         self,
         scan_path: Path,
         params: ListAvailableDocumentsParams,
+        extensions: dict[str, str],
+        excluded_dirs: set[str],
+        base_path: Path,
     ) -> list[dict[str, Any]]:
         """Scanne les fichiers dans le dossier."""
         files: list[dict[str, Any]] = []
@@ -158,25 +210,61 @@ class ListAvailableDocumentsTool(BaseMCPTool):
             if not file_path.is_file():
                 continue
 
-            ext = file_path.suffix.lower()
-            if ext not in self.SUPPORTED_EXTENSIONS:
+            # Exclure les sous-dossiers configures
+            if excluded_dirs and self._is_in_excluded_dir(file_path, scan_path, excluded_dirs):
                 continue
 
-            doc_type = self.SUPPORTED_EXTENSIONS[ext]
+            ext = file_path.suffix.lower()
+            if ext not in extensions:
+                continue
+
+            doc_type = extensions[ext]
             if params.type_filter not in ("all", doc_type):
                 continue
 
-            stat = file_path.stat()
-            files.append(
-                {
-                    "filename": file_path.name,
-                    "path": str(file_path),
-                    "relative_path": str(file_path.relative_to(self._documents_path)),
-                    "type": doc_type,
-                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                    "extension": ext,
-                    "modified_at": stat.st_mtime,
-                }
-            )
+            entry = self._build_file_entry(file_path, base_path, doc_type, ext, params.source)
+            files.append(entry)
 
         return files
+
+    def _is_in_excluded_dir(
+        self, file_path: Path, scan_path: Path, excluded_dirs: set[str]
+    ) -> bool:
+        """Verifie si le fichier est dans un dossier exclu."""
+        try:
+            relative = file_path.relative_to(scan_path)
+        except ValueError:
+            return False
+        return any(part in excluded_dirs for part in relative.parts[:-1])
+
+    def _build_file_entry(
+        self,
+        file_path: Path,
+        base_path: Path,
+        doc_type: str,
+        ext: str,
+        source: str,
+    ) -> dict[str, Any]:
+        """Construit un dictionnaire representant un fichier."""
+        stat = file_path.stat()
+        entry: dict[str, Any] = {
+            "filename": file_path.name,
+            "path": str(file_path),
+            "relative_path": str(file_path.relative_to(base_path)),
+            "type": doc_type,
+            "size_mb": round(stat.st_size / (1024 * 1024), 2),
+            "extension": ext,
+            "modified_at": stat.st_mtime,
+        }
+
+        # Champs contextuels
+        if source == "generated":
+            editable_map = {"excel": "edit_excel_document", "presentation": "edit_presentation"}
+            if doc_type in editable_map:
+                entry["editable_with"] = editable_map[doc_type]
+        elif source == "templates":
+            entry["usable_in"] = "create_presentation (param: template)"
+        elif source == "images":
+            entry["usable_in"] = "create_presentation / edit_presentation (param: image.filename)"
+
+        return entry

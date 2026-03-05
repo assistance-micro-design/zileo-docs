@@ -43,6 +43,11 @@ from src.models.presentation_edit import (
     UpdateTitleOp,
 )
 from src.services.presentation.generator import PresentationGenerator
+from src.services.presentation.shape_finders import (
+    find_bullets_shape,
+    find_subtitle_shape,
+    find_title_shape,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -161,24 +166,15 @@ class PresentationEditor:
 
     def _find_title_shape(self, slide: Slide) -> BaseShape | None:
         """Trouve le premier shape contenant du texte (titre presume)."""
-        for shape in slide.shapes:
-            if shape.has_text_frame and shape.text_frame.text:
-                return shape
-        return None
+        return find_title_shape(slide)
 
     def _find_subtitle_shape(self, slide: Slide) -> BaseShape | None:
         """Trouve le deuxieme shape contenant du texte (sous-titre presume)."""
-        text_shapes = [s for s in slide.shapes if s.has_text_frame and s.text_frame.text]
-        if len(text_shapes) >= 2:
-            return text_shapes[1]
-        return None
+        return find_subtitle_shape(slide)
 
     def _find_bullets_shape(self, slide: Slide) -> BaseShape | None:
         """Trouve le shape contenant des puces (le plus grand textbox apres le titre)."""
-        text_shapes = [s for s in slide.shapes if s.has_text_frame]
-        if len(text_shapes) >= 2:
-            return text_shapes[1]
-        return None
+        return find_bullets_shape(slide)
 
     # === Operations ===
 

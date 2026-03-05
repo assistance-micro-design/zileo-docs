@@ -7,7 +7,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import TYPE_CHECKING, Annotated, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.models.excel_edit import EditOp
 from src.models.excel_generation import SheetDef
@@ -708,14 +708,19 @@ class ListAvailableDocumentsParams(BaseModel):
     """Paramètres du tool MCP list_available_documents.
 
     Attributes:
+        source: Source des fichiers a lister.
         type_filter: Filtrer par type de document.
         subdirectory: Sous-dossier à explorer.
         recursive: Explorer récursivement.
     """
 
+    source: Annotated[
+        str,
+        Field(default="documents", description="Source des fichiers a lister"),
+    ] = "documents"
     type_filter: str = Field(
         default="all",
-        description="Filtrer par type: pdf, excel, word, all",
+        description="Filtrer par type: pdf, excel, word, presentation, template, image, all",
     )
     subdirectory: str = Field(
         default="",
@@ -725,3 +730,57 @@ class ListAvailableDocumentsParams(BaseModel):
         default=True,
         description="Explorer récursivement les sous-dossiers",
     )
+
+    _VALID_TYPES_BY_SOURCE: dict[str, set[str]] = {
+        "documents": {"all", "pdf", "excel", "word"},
+        "generated": {"all", "excel", "presentation"},
+        "templates": {"all", "template"},
+        "images": {"all", "image"},
+    }
+
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, v: str) -> str:
+        """Valide que la source est une valeur connue."""
+        valid = {"documents", "generated", "templates", "images"}
+        if v not in valid:
+            msg = f"source invalide: '{v}'. Valeurs possibles: {', '.join(sorted(valid))}"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("type_filter")
+    @classmethod
+    def validate_type_filter(cls, v: str) -> str:
+        """Valide que le type_filter est une valeur connue."""
+        all_valid = {"all", "pdf", "excel", "word", "presentation", "template", "image"}
+        if v not in all_valid:
+            msg = f"type_filter invalide: '{v}'. Valeurs possibles: {', '.join(sorted(all_valid))}"
+            raise ValueError(msg)
+        return v
+
+
+class InspectGeneratedFileParams(BaseModel):
+    """Parametres du tool MCP inspect_generated_file.
+
+    Attributes:
+        filename: Nom du fichier dans OUTPUT_PATH.
+        max_rows_per_sheet: Nombre max de lignes a afficher par feuille Excel.
+    """
+
+    filename: Annotated[
+        str,
+        Field(min_length=1, max_length=255, description="Nom du fichier dans OUTPUT_PATH"),
+    ]
+    max_rows_per_sheet: Annotated[
+        int,
+        Field(default=10, ge=1, le=100, description="Nombre max de lignes a afficher par feuille"),
+    ] = 10
+
+    @field_validator("filename")
+    @classmethod
+    def validate_filename(cls, v: str) -> str:
+        """Valide que le nom de fichier ne contient pas de traversal."""
+        if ".." in v or "/" in v or "\\" in v:
+            msg = "Le nom de fichier ne doit pas contenir '..' , '/' ou '\\'"
+            raise ValueError(msg)
+        return v
