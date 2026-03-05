@@ -99,7 +99,7 @@ Rate limit : 30 requetes/minute.
 | Methode | Description |
 |---------|-------------|
 | `initialize` | Initialiser la session MCP, retourne les capabilities du serveur |
-| `tools/list` | Lister les 10 outils disponibles avec leurs schemas |
+| `tools/list` | Lister les 13 outils disponibles avec leurs schemas |
 | `tools/call` | Executer un outil par nom |
 
 ### Outils MCP
@@ -188,15 +188,22 @@ Retour : liste de documents avec `document_id`, `filename`, `total_chunks`, `ing
 
 #### list_available_documents
 
-Liste les fichiers disponibles pour indexation dans le dossier monte.
+Liste les fichiers disponibles dans le projet. Supporte 4 sources differentes.
 
 | Parametre | Type | Requis | Description |
 |-----------|------|--------|-------------|
-| `type_filter` | string | Non | `pdf`, `excel`, `word` ou `all` (defaut: all) |
+| `source` | string | Non | `documents` (defaut), `generated`, `templates`, `images` |
+| `type_filter` | string | Non | `pdf`, `excel`, `word`, `presentation`, `template`, `image` ou `all` (defaut: all) |
 | `subdirectory` | string | Non | Sous-dossier relatif a explorer |
 | `recursive` | boolean | Non | Explorer recursivement (defaut: true) |
 
-Retour : `base_path`, `total_files`, `by_type` (comptage par format), `files` (liste avec `filename`, `path`, `relative_path`, `type`, `size_mb`, `extension`).
+**Sources** :
+- `documents` : Fichiers PDF/Excel/Word a indexer (dans `DOCUMENTS_PATH`)
+- `generated` : Fichiers crees par `create_excel_document` ou `create_presentation` (dans `OUTPUT_PATH`)
+- `templates` : Templates PowerPoint (.pptx) pour `create_presentation` (dans `TEMPLATES_PPTX_PATH`)
+- `images` : Images pour slides PowerPoint (dans `IMAGES_POWERPOINT_PATH`)
+
+Retour : `source`, `base_path`, `total_files`, `by_type` (comptage par format), `files` (liste avec `filename`, `path`, `relative_path`, `type`, `size_mb`, `extension` et champs contextuels `editable_with` ou `usable_in`).
 
 #### read_document_content
 
@@ -344,6 +351,93 @@ Edite un fichier Excel (.xlsx) existant dans `OUTPUT_PATH`. Le fichier doit avoi
 ```
 
 **Note** : Les erreurs de graphique (ChartDef invalide) sont gerees en degradation gracieuse : l'operation est comptee comme `skipped` et les autres operations continuent.
+
+#### create_presentation
+
+Cree un fichier PowerPoint (.pptx) avec slides, images, graphiques et notes. Le fichier est cree dans `OUTPUT_PATH`.
+
+**Parametres** :
+
+| Parametre | Type | Requis | Description |
+|-----------|------|--------|-------------|
+| `filename` | string | Oui | Nom du fichier (doit se terminer par `.pptx`) |
+| `slides` | array[SlideDef] | Oui | Definitions des slides (1 a 100) |
+| `author` | string | Non | Auteur de la presentation (metadonnee) |
+| `template` | string | Non | Nom du template .pptx dans `TEMPLATES_PPTX_PATH` |
+
+**Layouts disponibles** : `title_slide`, `content_bullets`, `content_with_image`, `section_header`, `two_columns`, `image_full`, `chart_slide`, `closing`.
+
+**Retour** :
+
+```json
+{
+  "file_path": "/app/output/presentation.pptx",
+  "filename": "presentation.pptx",
+  "slides_created": 5,
+  "total_images": 2,
+  "total_charts": 1,
+  "file_size_bytes": 125000,
+  "overwritten": false
+}
+```
+
+#### edit_presentation
+
+Edite un fichier PowerPoint (.pptx) existant dans `OUTPUT_PATH`.
+
+**Parametres** :
+
+| Parametre | Type | Requis | Description |
+|-----------|------|--------|-------------|
+| `filename` | string | Oui | Nom du fichier existant dans OUTPUT_PATH |
+| `operations` | array[PresentationEditOp] | Oui | Operations a appliquer en ordre (1 a 100) |
+
+**Operations disponibles (champ `op`)** :
+
+| Op | Description |
+|----|-------------|
+| `update_title` | Modifier le titre d'un slide |
+| `update_subtitle` | Modifier le sous-titre |
+| `update_bullets` | Remplacer les puces |
+| `add_slide` | Ajouter un slide |
+| `delete_slide` | Supprimer un slide |
+| `reorder_slide` | Deplacer un slide |
+| `replace_image` | Remplacer l'image d'un slide |
+| `add_image` | Ajouter une image a un slide |
+| `update_notes` | Modifier les notes du presentateur |
+| `update_chart` | Remplacer le graphique d'un slide |
+| `set_background` | Definir la couleur de fond |
+
+**Retour** :
+
+```json
+{
+  "file_path": "/app/output/presentation.pptx",
+  "filename": "presentation.pptx",
+  "operations_applied": 3,
+  "operations_skipped": 0,
+  "file_size_bytes": 130000
+}
+```
+
+**Note** : Utiliser `inspect_generated_file` pour voir la structure actuelle avant d'editer.
+
+#### inspect_generated_file
+
+Inspecte la structure d'un fichier Excel ou PowerPoint cree par `create_excel_document` ou `create_presentation`. Retourne la structure dans le vocabulaire des tools d'edition pour permettre la construction directe d'operations.
+
+**Parametres** :
+
+| Parametre | Type | Requis | Description |
+|-----------|------|--------|-------------|
+| `filename` | string | Oui | Nom du fichier dans OUTPUT_PATH (.xlsx ou .pptx) |
+| `max_rows_per_sheet` | integer | Non | Excel : nombre max de lignes a afficher par feuille (1-100, defaut: 10) |
+
+**Retour Excel** : `filename`, `type`, `editable_with`, `sheets` (avec `name`, `headers`, `sample_data`, `formulas`, `charts`, `merged_cells`, `column_widths`, `freeze_panes`).
+
+**Retour PowerPoint** : `filename`, `type`, `editable_with`, `total_slides`, `slides` (avec `slide_index`, `layout`, `title`, `subtitle`, `bullets`, `images`, `charts`, `notes`, `background_color`).
+
+**Workflow recommande** : `list_available_documents(source='generated')` → `inspect_generated_file` → `edit_excel_document` ou `edit_presentation`.
 
 ---
 

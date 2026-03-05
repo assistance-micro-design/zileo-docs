@@ -95,11 +95,20 @@ L'image Docker inclut un healthcheck qui appelle `/health` toutes les 30 seconde
 
 ---
 
+## Configuration des clients MCP
+
+Une fois le serveur demarre, configurer vos clients MCP (Claude Desktop, Zileo Chat, etc.) pour se connecter a `http://localhost:8000/mcp`.
+
+Voir le guide complet : [Configuration clients MCP](mcp-client-setup.md)
+
+---
+
 ## Notes
 
 - L'application tourne avec l'utilisateur `appuser` (non-root) dans le container
 - Le dossier de documents est monte en lecture seule (`:ro`)
-- Le dossier de sortie (`OUTPUT_PATH`) est monte en lecture-ecriture pour les fichiers Excel generes
+- Le dossier de sortie (`OUTPUT_PATH`) est monte en lecture-ecriture pour les fichiers Excel et PowerPoint generes
+- Les dossiers de templates et images PowerPoint sont montes en lecture seule (`:ro`)
 - Qdrant utilise un volume Docker nomme (`qdrant_storage`) pour la persistance
 - Les logs sont en JSON par defaut (`LOG_FORMAT=json`)
 - `DEBUG=true` active Swagger UI sur `/docs` et le CORS avec `allow_origins=["*"]` — ne pas utiliser en production

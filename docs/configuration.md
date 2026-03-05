@@ -52,7 +52,9 @@ Toute la configuration se fait via variables d'environnement. Copier `.env.examp
 | Variable | Defaut | Description |
 |----------|--------|-------------|
 | `DOCUMENTS_PATH` | `/app/documents` | Dossier contenant les documents (PDF, Excel, Word) accessibles pour indexation |
-| `OUTPUT_PATH` | `/app/output` | Dossier de sortie des fichiers generes (Excel cree/edite via MCP) |
+| `OUTPUT_PATH` | `/app/output` | Dossier de sortie des fichiers generes (Excel, PowerPoint crees/edites via MCP) |
+| `TEMPLATES_PPTX_PATH` | `/app/output/templatesPPTX` | Dossier contenant les templates PowerPoint (.pptx) pour `create_presentation` |
+| `IMAGES_POWERPOINT_PATH` | `/app/output/imagesPowerPoint` | Dossier contenant les images pour les slides PowerPoint |
 
 ### Rate limiting
 
@@ -110,6 +112,8 @@ MAX_OUTPUT_FILE_SIZE_MB=10
 # Chemins
 DOCUMENTS_PATH=/home/user/Documents
 OUTPUT_PATH=/home/user/Documents/output
+TEMPLATES_PPTX_PATH=/home/user/Documents/output/templatesPPTX
+IMAGES_POWERPOINT_PATH=/home/user/Documents/output/imagesPowerPoint
 
 # Rate limiting
 RATE_LIMIT_DEFAULT=60/minute
@@ -130,7 +134,9 @@ En mode Docker, les variables sont passees via le fichier `.env` (lu automatique
 |--------|-----------|-------------|
 | `./data` | `/app/data` | Donnees persistantes de l'application |
 | `$DOCUMENTS_PATH` | `/app/documents` | Documents accessibles (monte en lecture seule) |
-| `$OUTPUT_PATH` | `/app/output` | Fichiers generes par les tools Excel (lecture-ecriture) |
+| `$OUTPUT_PATH` | `/app/output` | Fichiers generes par les tools Excel/PowerPoint (lecture-ecriture) |
+| `$TEMPLATES_PPTX_PATH` | `/app/output/templatesPPTX` | Templates PowerPoint (lecture seule) |
+| `$IMAGES_POWERPOINT_PATH` | `/app/output/imagesPowerPoint` | Images PowerPoint (lecture seule) |
 | `qdrant_storage` | `/qdrant/storage` | Donnees Qdrant (volume Docker nomme) |
 
 ### Variables forcees en Docker

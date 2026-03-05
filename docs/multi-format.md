@@ -1,6 +1,6 @@
-# Support multi-format : Excel et Word
+# Support multi-format : Excel, Word et PowerPoint
 
-Le support Excel et Word a ete ajoute apres le PDF. Le PDF reste le format le plus teste et le plus complet.
+Le support Excel, Word et PowerPoint a ete ajoute apres le PDF. Le PDF reste le format le plus teste et le plus complet. Excel et Word sont supportes en extraction/indexation et en generation/edition. PowerPoint est supporte en generation/edition uniquement (pas d'indexation).
 
 ## Formats supportes
 
@@ -148,6 +148,109 @@ Les operations sont appliquees en sequence. Les erreurs de graphique sont gerees
 
 Ces modeles sont definis dans `src/models/excel_generation.py` et `src/models/excel_edit.py`.
 
+## Generation et edition PowerPoint
+
+Le serveur MCP permet de creer et editer des presentations PowerPoint via deux outils dedies.
+
+### Architecture
+
+```
+LLM (Claude, etc.)
+    |
+    v (tools/call)
++-------------------------+     +-------------------------+
+| CreatePresentationTool  |---->| PresentationGenerator   |  -> fichier .pptx
++-------------------------+     +-------------------------+
+| EditPresentationTool    |---->| PresentationEditor      |  -> fichier .pptx modifie
++-------------------------+     +-------------------------+
+                                      |
+                                      v (partage)
+                                 shape_finders.py
+                                 (detection titre/sous-titre/puces)
+```
+
+Les fichiers sont crees/edites dans `OUTPUT_PATH` (defaut: `/app/output`). Un template `.pptx` optionnel peut etre charge depuis `TEMPLATES_PPTX_PATH`. Les images pour les slides sont lues depuis `IMAGES_POWERPOINT_PATH`.
+
+### create_presentation
+
+Cree un fichier `.pptx` a partir de definitions de slides (`SlideDef`). 8 layouts disponibles via **discriminated union** Pydantic (discriminateur: `layout`) :
+
+| Layout | Description |
+|--------|-------------|
+| `title_slide` | Slide de titre avec titre et sous-titre |
+| `content_bullets` | Contenu avec puces |
+| `content_with_image` | Contenu avec image |
+| `section_header` | Separateur de section |
+| `two_columns` | Deux colonnes de texte |
+| `image_full` | Image plein ecran |
+| `chart_slide` | Slide avec graphique |
+| `closing` | Slide de cloture |
+
+Options :
+- **Template** : fichier `.pptx` dans `TEMPLATES_PPTX_PATH` pour appliquer un theme
+- **Auteur** : metadata auteur (max 255 caracteres)
+- **Notes** : notes de presentation par slide
+
+### edit_presentation
+
+Edite un fichier existant via une liste d'operations (`PresentationEditOp`). Les operations utilisent un **discriminated union** Pydantic avec le champ `op` comme discriminateur.
+
+**11 operations disponibles** :
+
+| Op | Description |
+|----|-------------|
+| `update_title` | Modifier le titre d'une slide |
+| `update_subtitle` | Modifier le sous-titre d'une slide |
+| `update_bullets` | Modifier les puces d'une slide |
+| `add_slide` | Ajouter une nouvelle slide |
+| `delete_slide` | Supprimer une slide |
+| `reorder_slide` | Deplacer une slide |
+| `replace_image` | Remplacer une image existante |
+| `add_image` | Ajouter une image a une slide |
+| `update_notes` | Modifier les notes d'une slide |
+| `update_chart` | Modifier un graphique existant |
+| `set_background` | Definir la couleur de fond d'une slide |
+
+Les operations sont appliquees en sequence. Maximum 100 operations par appel.
+
+### Modeles de donnees (PowerPoint)
+
+- `SlideDef` : Union discriminee des 8 layouts (discriminator: `layout`)
+- `PresentationEditOp` : Union discriminee des 11 types d'operations (discriminator: `op`)
+
+Ces modeles sont definis dans `src/models/presentation_generation.py` et `src/models/presentation_edit.py`.
+
+### shape_finders
+
+Module partage (`src/services/presentation/shape_finders.py`) contenant 3 fonctions de detection de shapes PowerPoint :
+- `find_title_shape(slide)` : Trouve le shape titre d'une slide
+- `find_subtitle_shape(slide)` : Trouve le shape sous-titre
+- `find_bullets_shape(slide)` : Trouve le shape puces
+
+Utilise par `PresentationEditor` et `FileInspector` pour eviter la duplication.
+
+## Inspection de fichiers generes
+
+L'outil `inspect_generated_file` permet d'inspecter la structure d'un fichier Excel ou PowerPoint cree par les outils de generation/edition.
+
+### Fonctionnement
+
+Le service `FileInspector` (`src/services/inspection/file_inspector.py`) ouvre le fichier et retourne sa structure dans un format compatible avec les outils d'edition, facilitant ainsi le workflow : creer → inspecter → editer.
+
+**Pour Excel** : retourne les feuilles, colonnes, donnees (echantillon), graphiques, validations, proprietes.
+
+**Pour PowerPoint** : retourne les slides avec titre, sous-titre, puces, images, graphiques, notes.
+
+### Parametres
+
+- `filename` : Nom du fichier dans `OUTPUT_PATH` (`.xlsx` ou `.pptx`)
+- `max_rows_per_sheet` : Nombre max de lignes echantillon par feuille Excel (defaut: 10, max: 100)
+
+### Securite
+
+- Validation anti-traversal sur `filename` (pas de `..`, `/`, `\`)
+- Le fichier doit exister dans `OUTPUT_PATH`
+
 ## Outils MCP specifiques
 
 ### index_document
@@ -168,9 +271,30 @@ Cree un fichier Excel dans OUTPUT_PATH. Voir la section "Generation et edition E
 
 Edite un fichier Excel existant dans OUTPUT_PATH. Voir la section "Generation et edition Excel" ci-dessus.
 
+### create_presentation
+
+Cree un fichier PowerPoint dans OUTPUT_PATH. Voir la section "Generation et edition PowerPoint" ci-dessus.
+
+### edit_presentation
+
+Edite un fichier PowerPoint existant dans OUTPUT_PATH. Voir la section "Generation et edition PowerPoint" ci-dessus.
+
+### inspect_generated_file
+
+Inspecte la structure d'un fichier Excel ou PowerPoint genere. Voir la section "Inspection de fichiers generes" ci-dessus.
+
 ### list_available_documents
 
-Liste les fichiers dans le dossier monte. Peut filtrer par type : `pdf`, `excel`, `word`, `all`.
+Liste les fichiers disponibles dans 4 sources differentes :
+
+| Source | Chemin | Description | Types valides |
+|--------|--------|-------------|---------------|
+| `documents` (defaut) | `DOCUMENTS_PATH` | Documents indexables | pdf, excel, word, all |
+| `generated` | `OUTPUT_PATH` | Fichiers generes par les tools | excel, presentation, all |
+| `templates` | `TEMPLATES_PPTX_PATH` | Templates PowerPoint | template, all |
+| `images` | `IMAGES_POWERPOINT_PATH` | Images pour slides | image, all |
+
+Parametres : `source`, `type_filter`, `subdirectory`, `recursive`.
 
 ## Limitations connues
 
@@ -193,6 +317,14 @@ Liste les fichiers dans le dossier monte. Peut filtrer par type : `pdf`, `excel`
 - Styles personnalises : La detection des headings se fait par regex sur le texte, pas par les styles Word
 - Commentaires et revisions : Non extraits
 - Mise en page complexe (colonnes, sections) : Non prise en compte
+
+### PowerPoint (generation/edition)
+- Taille maximum du fichier genere : `MAX_OUTPUT_FILE_SIZE_MB` (defaut: 10 Mo)
+- Maximum 100 slides par fichier, 100 operations par appel
+- Les graphiques utilisent python-pptx : certains types avances ne sont pas supportes
+- L'indexation de fichiers PowerPoint n'est pas supportee (generation/edition uniquement)
+- Templates : seuls les fichiers `.pptx` dans `TEMPLATES_PPTX_PATH` sont acceptes
+- Images : seuls les fichiers dans `IMAGES_POWERPOINT_PATH` sont acceptes (validation anti-traversal)
 
 ### Recherche
 - La recherche semantique de noms propres dans des fichiers Excel donne de mauvais resultats avec le seuil par defaut (0.7). Utiliser `score_threshold: 0.3` et combiner avec le filtre `text_search` pour une recherche exacte.
