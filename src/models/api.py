@@ -614,6 +614,18 @@ class CreatePresentationParams(BaseModel):
             description="Nom du fichier template .pptx dans le dossier templates",
         ),
     ] = None
+    template_slide_map: Annotated[
+        list[int] | None,
+        Field(
+            default=None,
+            max_length=100,
+            description=(
+                "Map each slide to a template slide index to clone its design. "
+                "Length must match slides array. Use inspect_template to see available slides. "
+                "Example: [0, 4, 3, 5] clones template slides 0,4,3,5 for slides 0,1,2,3."
+            ),
+        ),
+    ] = None
 
 
 class CreatePresentationResult(BaseModel):
@@ -784,3 +796,20 @@ class InspectGeneratedFileParams(BaseModel):
             msg = "Le nom de fichier ne doit pas contenir '..' , '/' ou '\\'"
             raise ValueError(msg)
         return v
+
+
+class InspectTemplateParams(BaseModel):
+    """Parametres du tool MCP inspect_template.
+
+    Attributes:
+        template: Nom du fichier template .pptx dans TEMPLATES_PPTX_PATH.
+    """
+
+    template: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=255,
+            description="Nom du fichier template .pptx dans TEMPLATES_PPTX_PATH",
+        ),
+    ]

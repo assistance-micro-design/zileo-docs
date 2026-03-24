@@ -48,6 +48,9 @@ logs/
 # Docker
 .docker/
 
+# Data (templates, documents, images - user-specific)
+data/
+
 # Session state (context broker)
 .claude/session-state.json
 

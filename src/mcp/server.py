@@ -28,6 +28,7 @@ from src.mcp.tools.get_document import GetDocumentTool
 from src.mcp.tools.get_excel_formulas import GetExcelFormulasTool
 from src.mcp.tools.index_document import IndexDocumentTool
 from src.mcp.tools.inspect_generated_file import InspectGeneratedFileTool
+from src.mcp.tools.inspect_template import InspectTemplateTool
 from src.mcp.tools.list_available_documents import ListAvailableDocumentsTool
 from src.mcp.tools.list_indexed_documents import ListIndexedDocumentsTool
 from src.mcp.tools.read_document_content import ReadDocumentContentTool
@@ -181,6 +182,7 @@ class MCPServer:
         self._create_presentation = CreatePresentationTool()
         self._edit_presentation = EditPresentationTool()
         self._inspect_generated_file = InspectGeneratedFileTool()
+        self._inspect_template = InspectTemplateTool()
         self._index_document = IndexDocumentTool()
         self._search_documents = SearchDocumentsTool(
             vector_store=self._shared_vector_store,
@@ -210,6 +212,7 @@ class MCPServer:
             "create_presentation": self._create_presentation,
             "edit_presentation": self._edit_presentation,
             "inspect_generated_file": self._inspect_generated_file,
+            "inspect_template": self._inspect_template,
             "index_document": self._index_document,
             "search_documents": self._search_documents,
             "get_document": self._get_document,

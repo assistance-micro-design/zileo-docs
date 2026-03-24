@@ -480,3 +480,164 @@ class TestTemplateUsage:
         )
         result = await generator.generate(params)
         assert result.slides_created == 1
+
+
+class TestTemplatePlaceholders:
+    """Tests pour l'utilisation des placeholders natifs des templates."""
+
+    @pytest.fixture
+    def rich_template_dir(self, tmp_path: Path) -> Path:
+        """Cree un template avec des layouts riches (placeholders natifs)."""
+        tpl_dir = tmp_path / "rich_templates"
+        tpl_dir.mkdir()
+        # Le template par defaut de python-pptx a des layouts standard
+        # avec de vrais placeholders (Title Slide, Title and Content, etc.)
+        prs = Presentation()
+        prs.save(str(tpl_dir / "rich.pptx"))
+        return tpl_dir
+
+    @pytest.fixture
+    def rich_generator(
+        self, tmp_output: Path, tmp_images: Path, rich_template_dir: Path
+    ) -> PresentationGenerator:
+        """Generateur avec template riche."""
+        return PresentationGenerator(
+            output_path=tmp_output,
+            images_path=tmp_images,
+            templates_path=rich_template_dir,
+        )
+
+    async def test_title_slide_uses_native_layout(
+        self, rich_generator: PresentationGenerator
+    ) -> None:
+        """Avec template, title_slide doit utiliser un layout natif, pas Blank."""
+        params = CreatePresentationParams(
+            filename="native.pptx",
+            slides=[TitleSlideDef(title="Native Title", subtitle="Native Sub")],
+            template="rich.pptx",
+        )
+        result = await rich_generator.generate(params)
+        prs = Presentation(result.file_path)
+        slide = prs.slides[0]
+        # Le layout ne doit pas etre Blank
+        assert slide.slide_layout.name != "Blank"
+
+    async def test_content_bullets_uses_native_layout(
+        self, rich_generator: PresentationGenerator
+    ) -> None:
+        """Avec template, content_bullets doit utiliser un layout avec BODY."""
+        params = CreatePresentationParams(
+            filename="native_bullets.pptx",
+            slides=[
+                ContentBulletsSlideDef(
+                    title="Points",
+                    bullets=[BulletItem(text="Point 1"), BulletItem(text="Point 2")],
+                )
+            ],
+            template="rich.pptx",
+        )
+        result = await rich_generator.generate(params)
+        prs = Presentation(result.file_path)
+        slide = prs.slides[0]
+        assert slide.slide_layout.name != "Blank"
+
+    async def test_section_header_uses_native_layout(
+        self, rich_generator: PresentationGenerator
+    ) -> None:
+        params = CreatePresentationParams(
+            filename="native_section.pptx",
+            slides=[SectionHeaderSlideDef(title="Section", subtitle="Sub")],
+            template="rich.pptx",
+        )
+        result = await rich_generator.generate(params)
+        prs = Presentation(result.file_path)
+        slide = prs.slides[0]
+        assert slide.slide_layout.name != "Blank"
+
+    async def test_two_columns_uses_native_layout(
+        self, rich_generator: PresentationGenerator
+    ) -> None:
+        params = CreatePresentationParams(
+            filename="native_cols.pptx",
+            slides=[
+                TwoColumnsSlideDef(
+                    title="Compare",
+                    left_bullets=[BulletItem(text="L")],
+                    right_bullets=[BulletItem(text="R")],
+                )
+            ],
+            template="rich.pptx",
+        )
+        result = await rich_generator.generate(params)
+        prs = Presentation(result.file_path)
+        slide = prs.slides[0]
+        assert slide.slide_layout.name != "Blank"
+
+    async def test_template_existing_slides_removed(
+        self, rich_generator: PresentationGenerator, tmp_output: Path
+    ) -> None:
+        """Les slides existants du template doivent etre supprimes."""
+        # Le template par defaut de python-pptx n'a pas de slides existants
+        # Creons un template avec un slide existant
+        tpl_dir = rich_generator._templates_path
+        prs = Presentation()
+        prs.slides.add_slide(prs.slide_layouts[6])  # 1 slide existant
+        prs.save(str(tpl_dir / "with_slide.pptx"))
+
+        params = CreatePresentationParams(
+            filename="cleaned.pptx",
+            slides=[TitleSlideDef(title="Only This")],
+            template="with_slide.pptx",
+        )
+        result = await rich_generator.generate(params)
+        prs_out = Presentation(result.file_path)
+        # Seul le slide demande doit etre present, pas celui du template
+        assert len(prs_out.slides) == 1
+
+    async def test_without_template_uses_blank(
+        self, rich_generator: PresentationGenerator
+    ) -> None:
+        """Sans template, le comportement reste Blank + textbox."""
+        params = CreatePresentationParams(
+            filename="no_tpl.pptx",
+            slides=[TitleSlideDef(title="No Template")],
+        )
+        result = await rich_generator.generate(params)
+        prs = Presentation(result.file_path)
+        slide = prs.slides[0]
+        assert slide.slide_layout.name == "Blank"
+
+    async def test_full_presentation_with_template(
+        self, rich_generator: PresentationGenerator
+    ) -> None:
+        """Presentation complete avec template riche : aucun crash."""
+        params = CreatePresentationParams(
+            filename="full_tpl.pptx",
+            slides=[
+                TitleSlideDef(title="Intro", subtitle="Sub"),
+                ContentBulletsSlideDef(
+                    title="Points",
+                    bullets=[BulletItem(text="A"), BulletItem(text="B", level=1)],
+                ),
+                SectionHeaderSlideDef(title="Section 1"),
+                TwoColumnsSlideDef(
+                    title="Compare",
+                    left_bullets=[BulletItem(text="L")],
+                    right_bullets=[BulletItem(text="R")],
+                ),
+                ChartSlideDef(
+                    title="Data",
+                    chart=PresentationChartDef(
+                        chart_type="bar",
+                        categories=["A"],
+                        series=[ChartSeriesDef(name="S", values=[1])],
+                    ),
+                ),
+                ClosingSlideDef(title="Merci"),
+            ],
+            template="rich.pptx",
+        )
+        result = await rich_generator.generate(params)
+        assert result.slides_created == 6
+        prs = Presentation(result.file_path)
+        assert len(prs.slides) == 6
