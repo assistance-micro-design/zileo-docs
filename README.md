@@ -203,6 +203,7 @@ src/
 
 ## Documentation
 
+- [Guide de generation Excel/PowerPoint](docs/generation-guide.md) — Options, design, exemples complets
 - [Configuration clients MCP](docs/mcp-client-setup.md) — Claude Desktop, Zileo Chat, autres clients
 - [Architecture](docs/architecture.md) — Pipeline de traitement et composants
 - [Reference API](docs/api-reference.md) — Endpoints REST et outils MCP
