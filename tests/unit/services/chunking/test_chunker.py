@@ -230,7 +230,12 @@ def ocr_content() -> dict[int, OCRResult]:
 
 @pytest.fixture
 def native_and_ocr_content() -> tuple[dict[int, ExtractedContent], dict[int, OCRResult]]:
-    """Cree du contenu mixte natif et OCR."""
+    """Cree du contenu mixte natif et OCR.
+
+    Page 0: natif seul
+    Page 1: natif ET OCR -> OCR prioritaire
+    Page 2: OCR seul
+    """
     native = {
         0: ExtractedContent(
             page_number=0,
@@ -239,10 +244,10 @@ def native_and_ocr_content() -> tuple[dict[int, ExtractedContent], dict[int, OCR
             char_count=60,
             word_count=10,
         ),
-        # Page 1 a du contenu natif ET OCR (natif prioritaire)
+        # Page 1 a du contenu natif ET OCR (OCR prioritaire)
         1: ExtractedContent(
             page_number=1,
-            markdown_content="# Page Native Prioritaire\n\nLe contenu natif a priorite.",
+            markdown_content="# Page Native Ignoree\n\nLe contenu natif sera ignore.",
             extraction_method="pymupdf4llm",
             char_count=70,
             word_count=12,
@@ -250,10 +255,10 @@ def native_and_ocr_content() -> tuple[dict[int, ExtractedContent], dict[int, OCR
     }
 
     ocr = {
-        # Page 1 a aussi de l'OCR mais ne sera pas utilise
+        # Page 1 a aussi de l'OCR -> OCR gagne
         1: OCRResult(
             page_number=1,
-            markdown_content="# Page OCR Ignoree\n\nCe contenu OCR sera ignore.",
+            markdown_content="# Page OCR Prioritaire\n\nLe contenu OCR a priorite.",
             confidence_score=0.90,
             processing_time_ms=400,
         ),
@@ -736,12 +741,12 @@ class TestMergeNativeAndOCRContent:
     """Tests pour la fusion du contenu natif et OCR."""
 
     @pytest.mark.asyncio
-    async def test_native_priority_over_ocr(
+    async def test_ocr_priority_over_native(
         self,
         chunker: SmartChunker,
         native_and_ocr_content: tuple[dict[int, ExtractedContent], dict[int, OCRResult]],
     ) -> None:
-        """Verifier que le contenu natif a priorite sur l'OCR."""
+        """Verifier que le contenu OCR a priorite sur le natif."""
         native, ocr = native_and_ocr_content
 
         metadata = DocumentMetadata(
@@ -762,14 +767,14 @@ class TestMergeNativeAndOCRContent:
         # Concatener tout le contenu des chunks
         all_content = " ".join([c.content for c in chunks])
 
-        # Le contenu natif de la page 1 doit etre present
+        # Le contenu natif de la page 1 doit etre present (pas d'OCR pour cette page)
         assert "Page Texte Natif" in all_content or "Contenu natif" in all_content
 
-        # Le contenu natif prioritaire de la page 2 doit etre present
-        assert "Native Prioritaire" in all_content or "priorite" in all_content
+        # Le contenu OCR prioritaire de la page 2 doit etre present
+        assert "OCR Prioritaire" in all_content or "OCR a priorite" in all_content
 
-        # Le contenu OCR de la page 2 ne doit PAS etre present
-        assert "Page OCR Ignoree" not in all_content
+        # Le contenu natif de la page 2 ne doit PAS etre present
+        assert "Page Native Ignoree" not in all_content
 
         # Le contenu OCR de la page 3 DOIT etre present (pas de natif)
         assert "Page OCR Seul" in all_content or "OCR pour page" in all_content
@@ -1200,3 +1205,159 @@ class TestChunkerConfiguration:
 
         code_regions = [r for r in regions if r[2] == "code"]
         assert len(code_regions) == 0
+
+
+# --- Tests: Conversion 0-indexed -> 1-indexed ---
+
+
+class TestDisplayPageConversion:
+    """Tests pour la centralisation de la conversion page 0-indexed -> 1-indexed."""
+
+    def test_to_display_page_zero(self, chunker: SmartChunker) -> None:
+        """Page 0 interne -> page 1 affichee."""
+        assert chunker._to_display_page(0) == 1
+
+    def test_to_display_page_positive(self, chunker: SmartChunker) -> None:
+        """Page N interne -> page N+1 affichee."""
+        assert chunker._to_display_page(4) == 5
+        assert chunker._to_display_page(99) == 100
+
+
+# --- Tests: Propagation des pages dans le chunking ---
+
+
+class TestPagePropagationThroughChunking:
+    """Tests pour la propagation robuste des pages a travers _recursive_chunk."""
+
+    @pytest.mark.asyncio
+    async def test_pages_propagated_without_markers_in_content(
+        self,
+        small_chunker: SmartChunker,
+    ) -> None:
+        """Les chunks ont les bonnes pages meme quand le contenu est decoupe."""
+        native = {
+            0: ExtractedContent(
+                page_number=0,
+                markdown_content=(
+                    "# Titre Page Un\n\n" + "Paragraphe long de la page un avec du contenu. " * 10
+                ),
+                extraction_method="pymupdf4llm",
+            ),
+        }
+        ocr = {
+            1: OCRResult(
+                page_number=1,
+                markdown_content=(
+                    "# Chapitre OCR Page Deux\n\n"
+                    + "Contenu OCR de la page deux avec du texte. " * 10
+                ),
+                confidence_score=0.95,
+                processing_time_ms=300,
+            ),
+        }
+        metadata = DocumentMetadata(
+            document_id="doc_prop_001",
+            file_hash="prop123",
+            filename="prop.pdf",
+            file_size_bytes=2048,
+            total_pages=2,
+        )
+
+        chunks = await small_chunker.chunk_document(
+            document_id="doc_prop_001",
+            native_content=native,
+            ocr_content=ocr,
+            metadata=metadata,
+        )
+
+        # Plusieurs chunks doivent etre crees (small_chunker = 50 tokens)
+        assert len(chunks) > 1
+
+        # Les pages doivent etre correctement assignees (1-indexed)
+        all_pages = set()
+        for chunk in chunks:
+            all_pages.update(chunk.metadata.page_numbers)
+        assert 1 in all_pages
+        assert 2 in all_pages
+
+        # Chaque chunk doit avoir au moins une page assignee
+        for chunk in chunks:
+            assert len(chunk.metadata.page_numbers) > 0
+
+    @pytest.mark.asyncio
+    async def test_multipage_chunks_have_correct_pages(
+        self,
+        small_chunker: SmartChunker,
+    ) -> None:
+        """Un chunk couvrant 2 pages a les 2 numeros de page."""
+        # Page 0 finit court, page 1 commence -> le chunk peut couvrir les 2
+        native = {
+            0: ExtractedContent(
+                page_number=0,
+                markdown_content="Contenu court page un.",
+                extraction_method="pymupdf4llm",
+            ),
+            1: ExtractedContent(
+                page_number=1,
+                markdown_content="Contenu court page deux.",
+                extraction_method="pymupdf4llm",
+            ),
+        }
+        metadata = DocumentMetadata(
+            document_id="doc_multi_pages",
+            file_hash="multi123",
+            filename="multi.pdf",
+            file_size_bytes=1024,
+            total_pages=2,
+        )
+
+        chunks = await small_chunker.chunk_document(
+            document_id="doc_multi_pages",
+            native_content=native,
+            ocr_content={},
+            metadata=metadata,
+        )
+
+        # Verifier que les pages couvrent [1, 2]
+        all_pages = set()
+        for chunk in chunks:
+            all_pages.update(chunk.metadata.page_numbers)
+        assert 1 in all_pages
+        assert 2 in all_pages
+
+    def test_merge_content_ocr_priority(self, chunker: SmartChunker) -> None:
+        """_merge_content donne priorite a l'OCR quand les 2 existent."""
+        native = {
+            0: ExtractedContent(
+                page_number=0,
+                markdown_content="Contenu natif",
+                extraction_method="pymupdf4llm",
+            ),
+        }
+        ocr = {
+            0: OCRResult(
+                page_number=0,
+                markdown_content="Contenu OCR",
+                confidence_score=0.95,
+                processing_time_ms=200,
+            ),
+        }
+
+        merged, _ = chunker._merge_content(native, ocr, total_pages=1)
+
+        assert "Contenu OCR" in merged
+        assert "Contenu natif" not in merged
+
+    def test_merge_content_native_fallback(self, chunker: SmartChunker) -> None:
+        """_merge_content utilise le natif quand pas d'OCR."""
+        native = {
+            0: ExtractedContent(
+                page_number=0,
+                markdown_content="Contenu natif seul",
+                extraction_method="pymupdf4llm",
+            ),
+        }
+
+        merged, _ = chunker._merge_content(native, {}, total_pages=1)
+
+        assert "Contenu natif seul" in merged

@@ -25,6 +25,9 @@ if TYPE_CHECKING:
     from src.models.document import DocumentMetadata
     from src.models.extraction import ExtractedContent, OCRResult
 
+# Offset pour convertir les pages 0-indexed (interne) en 1-indexed (affichage/stockage)
+_PAGE_INDEX_OFFSET = 1
+
 
 class SmartChunker:
     """Chunking semantique intelligent pour documents.
@@ -125,8 +128,10 @@ class SmartChunker:
         # 3. Parser structure (sections et hierarchie)
         sections = self._parse_sections(merged_content)
 
-        # 4. Chunking recursif semantique
-        raw_chunks = self._recursive_chunk(merged_content, protected_regions, sections)
+        # 4. Chunking recursif semantique (avec propagation des pages)
+        raw_chunks = self._recursive_chunk(
+            merged_content, protected_regions, sections, page_mapping
+        )
 
         # 5. Enrichir avec metadata et construire DocumentChunk
         chunks = self._build_document_chunks(
@@ -151,7 +156,7 @@ class SmartChunker:
     ) -> tuple[str, dict[int, tuple[int, int, int]]]:
         """Fusionne les contenus natif et OCR dans l'ordre des pages.
 
-        Priorite: contenu natif > contenu OCR.
+        Priorite: contenu OCR > contenu natif (l'OCR traite texte + elements complexes).
 
         Args:
             native: Contenu natif indexe par page (0-indexed).
@@ -169,16 +174,16 @@ class SmartChunker:
 
         for page_num in range(total_pages):
             # Marqueur de page pour tracabilite
-            page_marker = f"\n<!-- Page {page_num + 1} -->\n"
+            page_marker = f"\n<!-- Page {self._to_display_page(page_num)} -->\n"
             parts.append(page_marker)
             current_pos += len(page_marker)
 
-            # Le contenu natif a la priorite sur l'OCR
+            # Le contenu OCR a la priorite sur le natif
             content = ""
-            if page_num in native and native[page_num].markdown_content:
-                content = native[page_num].markdown_content
-            elif page_num in ocr and ocr[page_num].markdown_content:
+            if page_num in ocr and ocr[page_num].markdown_content:
                 content = ocr[page_num].markdown_content
+            elif page_num in native and native[page_num].markdown_content:
+                content = native[page_num].markdown_content
 
             if content:
                 start_pos = current_pos
@@ -265,24 +270,28 @@ class SmartChunker:
         content: str,
         protected_regions: list[tuple[int, int, str]],
         sections: list[dict[str, object]],
-    ) -> list[tuple[str, dict[str, object], str]]:
+        page_mapping: dict[int, tuple[int, int, int]] | None = None,
+    ) -> list[tuple[str, dict[str, object], str, set[int]]]:
         """Chunking recursif semantique.
 
         Decoupe le contenu en preservant:
         - Les regions protegees (tableaux, code, equations)
         - Les limites de sections
         - L'overlap entre chunks
+        - Les numeros de pages par chunk (propages via page_mapping)
 
         Args:
             content: Contenu textuel complet.
             protected_regions: Regions a ne pas couper.
             sections: Information sur les sections.
+            page_mapping: Mapping page_num -> (start_pos, end_pos, page_num).
 
         Returns:
-            Liste de tuples (contenu, info_section, type_contenu).
+            Liste de tuples (contenu, info_section, type_contenu, pages_set).
         """
-        chunks: list[tuple[str, dict[str, object], str]] = []
+        chunks: list[tuple[str, dict[str, object], str, set[int]]] = []
         current_chunk = ""
+        current_pages: set[int] = set()
         current_section: dict[str, object] = {"title": None, "hierarchy": []}
 
         paragraphs = re.split(r"\n\n+", content)
@@ -292,11 +301,17 @@ class SmartChunker:
             if not para or self.PAGE_MARKER_PATTERN.match(para):
                 continue
 
+            # Determiner la page de ce paragraphe
+            para_pages = self._get_pages_at_position(content.find(para), len(para), page_mapping)
+
             # Header: save current chunk + update section
             header_match = re.match(r"^(#{1,6})\s+(.+)$", para)
             if header_match:
-                self._save_current_chunk(chunks, current_chunk, current_section)
+                self._save_current_chunk_with_pages(
+                    chunks, current_chunk, current_section, current_pages
+                )
                 current_chunk = header_match.group(0) + "\n\n"
+                current_pages = set(para_pages)
                 current_section = {
                     "title": header_match.group(2),
                     "hierarchy": self._get_hierarchy_at(content.find(para), sections),
@@ -306,56 +321,47 @@ class SmartChunker:
             # Protected region: save current chunk + add protected element
             is_protected, region_type = self._is_in_protected(para, content, protected_regions)
             if is_protected:
-                current_chunk = self._flush_and_add_protected(
-                    chunks,
-                    current_chunk,
-                    current_section,
-                    para,
-                    region_type,
+                self._save_current_chunk_with_pages(
+                    chunks, current_chunk, current_section, current_pages
                 )
+                chunks.append((para, dict(current_section), region_type, set(para_pages)))
+                current_chunk = ""
+                current_pages = set()
                 continue
 
             # Normal paragraph: check size
             test_chunk = current_chunk + para + "\n\n"
             if self._count_tokens(test_chunk) <= self.chunk_size:
                 current_chunk = test_chunk
+                current_pages.update(para_pages)
                 continue
 
             # Chunk full: save and restart with overlap
-            self._save_current_chunk(chunks, current_chunk, current_section)
+            self._save_current_chunk_with_pages(
+                chunks, current_chunk, current_section, current_pages
+            )
             overlap = self._get_overlap(current_chunk)
             current_chunk = overlap + para + "\n\n"
+            current_pages = set(para_pages)
 
         # Save last chunk
-        self._save_current_chunk(chunks, current_chunk, current_section)
+        self._save_current_chunk_with_pages(chunks, current_chunk, current_section, current_pages)
         return chunks
 
-    def _save_current_chunk(
+    def _save_current_chunk_with_pages(
         self,
-        chunks: list[tuple[str, dict[str, object], str]],
+        chunks: list[tuple[str, dict[str, object], str, set[int]]],
         chunk: str,
         section_info: dict[str, object],
+        pages: set[int],
     ) -> None:
-        """Valide et ajoute le chunk courant a la liste."""
+        """Valide et ajoute le chunk courant a la liste avec ses pages."""
         if self._should_save_chunk(chunk):
-            chunks.append((chunk.strip(), dict(section_info), "text"))
-
-    def _flush_and_add_protected(
-        self,
-        chunks: list[tuple[str, dict[str, object], str]],
-        current_chunk: str,
-        current_section: dict[str, object],
-        para: str,
-        region_type: str,
-    ) -> str:
-        """Sauvegarde le chunk courant et ajoute l'element protege."""
-        self._save_current_chunk(chunks, current_chunk, current_section)
-        chunks.append((para, dict(current_section), region_type))
-        return ""
+            chunks.append((chunk.strip(), dict(section_info), "text", set(pages)))
 
     def _build_document_chunks(
         self,
-        raw_chunks: list[tuple[str, dict[str, object], str]],
+        raw_chunks: list[tuple[str, dict[str, object], str, set[int]]],
         document_id: str,
         merged_content: str,
         page_mapping: dict[int, tuple[int, int, int]],
@@ -363,7 +369,7 @@ class SmartChunker:
         """Construit les DocumentChunk a partir des chunks bruts.
 
         Args:
-            raw_chunks: Liste de tuples (contenu, info_section, type).
+            raw_chunks: Liste de tuples (contenu, info_section, type, pages).
             document_id: Identifiant du document.
             merged_content: Contenu fusionne complet.
             page_mapping: Mapping page_num -> (start_pos, end_pos, page_num).
@@ -373,8 +379,12 @@ class SmartChunker:
         """
         chunks: list[DocumentChunk] = []
 
-        for i, (content, section_info, content_type) in enumerate(raw_chunks):
-            pages = self._get_pages_for_chunk(content, merged_content, page_mapping)
+        for i, (content, section_info, content_type, propagated_pages) in enumerate(raw_chunks):
+            pages = (
+                sorted(propagated_pages)
+                if propagated_pages
+                else self._get_pages_for_chunk(content, merged_content, page_mapping)
+            )
             preceding, following = self._extract_chunk_context(content, merged_content)
             chunk_metadata = self._build_chunk_metadata(
                 content,
@@ -542,15 +552,43 @@ class SmartChunker:
 
         return hierarchy
 
+    def _get_pages_at_position(
+        self,
+        pos: int,
+        length: int,
+        page_mapping: dict[int, tuple[int, int, int]] | None,
+    ) -> set[int]:
+        """Determine les pages (1-indexed) couvrant une plage de positions.
+
+        Args:
+            pos: Position de debut dans le contenu fusionne.
+            length: Longueur du texte.
+            page_mapping: Mapping page_num -> (start_pos, end_pos, page_num).
+
+        Returns:
+            Ensemble de numeros de pages (1-indexed).
+        """
+        if not page_mapping or pos == -1:
+            return set()
+
+        pages: set[int] = set()
+        end_pos = pos + length
+        for page_num, (page_start, page_end, _) in page_mapping.items():
+            if pos < page_end and end_pos > page_start:
+                pages.add(self._to_display_page(page_num))
+
+        return pages
+
     def _get_pages_for_chunk(
         self,
         chunk: str,
         full_content: str,
         page_mapping: dict[int, tuple[int, int, int]],
     ) -> list[int]:
-        """Determine les pages couvertes par un chunk.
+        """Fallback: determine les pages couvertes par un chunk via position.
 
-        Utilise les marqueurs <!-- Page X --> dans le chunk ou la position.
+        Utilise uniquement quand les pages n'ont pas ete propagees
+        par _recursive_chunk.
 
         Args:
             chunk: Contenu du chunk.
@@ -560,35 +598,21 @@ class SmartChunker:
         Returns:
             Liste des numeros de pages (1-indexed) triee.
         """
-        pages: set[int] = set()
+        chunk_start = full_content.find(chunk)
+        if chunk_start != -1:
+            pages = self._get_pages_at_position(chunk_start, len(chunk), page_mapping)
+            if pages:
+                return sorted(pages)
 
-        # Methode 1: Extraire les marqueurs de page du chunk
-        page_markers = re.findall(r"<!--\s*Page\s+(\d+)\s*-->", chunk)
-        if page_markers:
-            for marker in page_markers:
-                pages.add(int(marker))
-
-        # Methode 2: Chercher la position du chunk dans le contenu original
-        if not pages:
-            chunk_start = full_content.find(chunk)
+        # Fallback: prefixe du chunk
+        if len(chunk) > 50:
+            chunk_start = full_content.find(chunk[:200])
             if chunk_start != -1:
-                chunk_end = chunk_start + len(chunk)
+                pages = self._get_pages_at_position(chunk_start, 200, page_mapping)
+                if pages:
+                    return sorted(pages)
 
-                for page_num, (page_start, page_end, _) in page_mapping.items():
-                    if chunk_start < page_end and chunk_end > page_start:
-                        pages.add(page_num + 1)
-
-        # Methode 3: Chercher avec le debut du chunk (premiers 200 chars)
-        if not pages and len(chunk) > 50:
-            chunk_prefix = chunk[:200]
-            chunk_start = full_content.find(chunk_prefix)
-            if chunk_start != -1:
-                for page_num, (page_start, page_end, _) in page_mapping.items():
-                    if page_start <= chunk_start < page_end:
-                        pages.add(page_num + 1)
-                        break
-
-        return sorted(pages) if pages else [1]
+        return [1]
 
     def _has_table(self, content: str) -> bool:
         """Detecte la presence d'un tableau Markdown.
@@ -680,3 +704,15 @@ class SmartChunker:
             Nombre de tokens.
         """
         return self._count_tokens(text)
+
+    @staticmethod
+    def _to_display_page(page_num: int) -> int:
+        """Convertit un numero de page 0-indexed en 1-indexed.
+
+        Args:
+            page_num: Numero de page interne (0-indexed).
+
+        Returns:
+            Numero de page pour affichage/stockage (1-indexed).
+        """
+        return page_num + _PAGE_INDEX_OFFSET
