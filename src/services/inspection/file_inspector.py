@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from src.core.config import settings
+from src.core.file_validation import validate_filename_safety
 
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ class FileInspector:
             Structure du fichier ou dict avec "error" en cas de probleme.
         """
         # Validation anti-traversal
-        if ".." in filename or "/" in filename or "\\" in filename:
+        if not validate_filename_safety(filename):
             return {"error": "Nom de fichier invalide", "filename": filename}
 
         file_path = (self._output_path / filename).resolve()

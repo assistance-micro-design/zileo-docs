@@ -363,133 +363,88 @@ class QdrantVectorStore:
                 points=batch,
             )
 
-    def _build_unified_payload(
-        self,
-        chunk: DocumentChunk,
-        unified_meta: UnifiedMetadata,
-    ) -> dict[str, Any]:
-        """Construit le payload pour documents unifiés (Excel/Word).
+    def _build_common_payload(self, chunk: DocumentChunk) -> dict[str, Any]:
+        """Construit les champs communs du payload Qdrant.
 
         Args:
             chunk: Chunk a stocker.
-            unified_meta: Metadata unifiée du document parent.
 
         Returns:
-            Dictionnaire du payload avec toutes les metadonnees.
+            Dictionnaire partiel du payload (chunk + contenu + stats).
         """
         meta = chunk.metadata
-
-        # Sanitize content to remove problematic Unicode characters
         content = _sanitize_text(chunk.content)
-        content_preview = content[:500] if content else ""
 
         return {
-            # --- Identifiants du chunk ---
             "chunk_id": meta.chunk_id,
             "document_id": meta.document_id,
             "parent_chunk_id": meta.parent_chunk_id or "",
-            # --- Contenu textuel ---
             "content": content,
-            "content_preview": content_preview,
-            # --- Localisation dans le document ---
+            "content_preview": content[:500] if content else "",
             "page_numbers": meta.page_numbers,
             "start_page": meta.start_page,
             "end_page": meta.end_page,
             "chunk_index": meta.chunk_index,
             "total_chunks": meta.total_chunks,
-            # --- Structure hierarchique ---
             "section_title": meta.section_title or "",
             "section_hierarchy": meta.section_hierarchy,
-            # --- Type de contenu detecte ---
             "content_type": meta.content_type,
             "has_table": meta.has_table,
             "has_image": meta.has_image,
             "has_equation": meta.has_equation,
-            # --- Type de document ---
-            "document_type": unified_meta.document_type.value,
-            "has_formula": unified_meta.has_formulas,
-            "sheet_names": unified_meta.sheet_names,
-            # --- Statistiques du chunk ---
             "token_count": meta.token_count,
             "char_count": meta.char_count,
             "word_count": meta.word_count,
-            # --- Contexte environnant ---
             "preceding_context": meta.preceding_context,
             "following_context": meta.following_context,
-            # --- Metadonnees document denormalisees ---
-            "doc_filename": unified_meta.filename,
-            "doc_title": unified_meta.title or "",
-            "doc_author": unified_meta.author or "",
-            "doc_total_pages": unified_meta.page_count or 0,
-            "doc_file_hash": "",  # Non disponible pour documents unifiés
-            # --- Horodatages ---
-            "ingested_at": unified_meta.indexed_at.isoformat(),
-            "doc_creation_date": (
-                unified_meta.created_at.isoformat() if unified_meta.created_at else None
-            ),
         }
+
+    def _build_unified_payload(
+        self,
+        chunk: DocumentChunk,
+        unified_meta: UnifiedMetadata,
+    ) -> dict[str, Any]:
+        """Construit le payload pour documents unifiés (Excel/Word)."""
+        payload = self._build_common_payload(chunk)
+        payload.update(
+            {
+                "document_type": unified_meta.document_type.value,
+                "has_formula": unified_meta.has_formulas,
+                "sheet_names": unified_meta.sheet_names,
+                "doc_filename": unified_meta.filename,
+                "doc_title": unified_meta.title or "",
+                "doc_author": unified_meta.author or "",
+                "doc_total_pages": unified_meta.page_count or 0,
+                "doc_file_hash": "",
+                "ingested_at": unified_meta.indexed_at.isoformat(),
+                "doc_creation_date": (
+                    unified_meta.created_at.isoformat() if unified_meta.created_at else None
+                ),
+            }
+        )
+        return payload
 
     def _build_payload(
         self,
         chunk: DocumentChunk,
         doc_meta: DocumentMetadata,
     ) -> dict[str, Any]:
-        """Construit le payload optimise pour Qdrant.
-
-        Args:
-            chunk: Chunk a stocker.
-            doc_meta: Metadata du document parent.
-
-        Returns:
-            Dictionnaire du payload avec toutes les metadonnees.
-        """
-        meta = chunk.metadata
-
-        # Sanitize content to remove problematic Unicode characters
-        content = _sanitize_text(chunk.content)
-        content_preview = content[:500] if content else ""
-
-        return {
-            # --- Identifiants du chunk ---
-            "chunk_id": meta.chunk_id,
-            "document_id": meta.document_id,
-            "parent_chunk_id": meta.parent_chunk_id or "",
-            # --- Contenu textuel ---
-            "content": content,
-            "content_preview": content_preview,
-            # --- Localisation dans le document ---
-            "page_numbers": meta.page_numbers,
-            "start_page": meta.start_page,
-            "end_page": meta.end_page,
-            "chunk_index": meta.chunk_index,
-            "total_chunks": meta.total_chunks,
-            # --- Structure hierarchique ---
-            "section_title": meta.section_title or "",
-            "section_hierarchy": meta.section_hierarchy,
-            # --- Type de contenu detecte ---
-            "content_type": meta.content_type,
-            "has_table": meta.has_table,
-            "has_image": meta.has_image,
-            "has_equation": meta.has_equation,
-            # --- Statistiques du chunk ---
-            "token_count": meta.token_count,
-            "char_count": meta.char_count,
-            "word_count": meta.word_count,
-            # --- Contexte environnant ---
-            "preceding_context": meta.preceding_context,
-            "following_context": meta.following_context,
-            # --- Metadonnees document denormalisees ---
-            "doc_filename": doc_meta.filename,
-            "doc_title": doc_meta.title or "",
-            "doc_author": doc_meta.author or "",
-            "doc_total_pages": doc_meta.total_pages,
-            "doc_file_hash": doc_meta.file_hash,
-            # --- Horodatages ---
-            "ingested_at": doc_meta.ingested_at.isoformat(),
-            "doc_creation_date": (
-                doc_meta.creation_date.isoformat() if doc_meta.creation_date else None
-            ),
-        }
+        """Construit le payload pour documents PDF."""
+        payload = self._build_common_payload(chunk)
+        payload.update(
+            {
+                "doc_filename": doc_meta.filename,
+                "doc_title": doc_meta.title or "",
+                "doc_author": doc_meta.author or "",
+                "doc_total_pages": doc_meta.total_pages,
+                "doc_file_hash": doc_meta.file_hash,
+                "ingested_at": doc_meta.ingested_at.isoformat(),
+                "doc_creation_date": (
+                    doc_meta.creation_date.isoformat() if doc_meta.creation_date else None
+                ),
+            }
+        )
+        return payload
 
     def _generate_point_id(self, chunk_id: str) -> int:
         """Genere un ID numerique unique a partir du chunk_id.
@@ -754,14 +709,8 @@ class QdrantVectorStore:
             >>> for doc in docs:
             ...     print(f"{doc['filename']}: {doc['total_chunks']} chunks")
         """
-        # Scroll pour recuperer tous les points (metadata seulement)
-        documents: dict[str, dict[str, Any]] = {}
-        offset = None
-        batch_size = 100
-
-        # Ne recuperer que les champs necessaires (pas le contenu textuel)
-        payload_fields = PayloadSelectorInclude(
-            include=[
+        all_points = await self._scroll_all_points(
+            payload_fields=[
                 "document_id",
                 "doc_filename",
                 "doc_title",
@@ -770,42 +719,57 @@ class QdrantVectorStore:
                 "ingested_at",
             ],
         )
+        return self._group_documents_from_points(all_points)
+
+    async def _scroll_all_points(
+        self,
+        payload_fields: list[str],
+        scroll_filter: Filter | None = None,
+    ) -> list[Any]:
+        """Scroll tous les points avec les champs payload demandes."""
+        all_points: list[Any] = []
+        offset = None
 
         while True:
             results, next_offset = await asyncio.to_thread(
                 self.client.scroll,
                 collection_name=self.COLLECTION_NAME,
-                scroll_filter=None,
-                limit=batch_size,
+                scroll_filter=scroll_filter,
+                limit=100,
                 offset=offset,
-                with_payload=payload_fields,
+                with_payload=PayloadSelectorInclude(include=payload_fields),
                 with_vectors=False,
             )
-
-            for point in results:
-                if not point.payload:
-                    continue
-
-                doc_id = point.payload.get("document_id")
-                if not doc_id or doc_id in documents:
-                    # Skip si pas d'ID ou deja vu (on compte les chunks)
-                    if doc_id and doc_id in documents:
-                        documents[doc_id]["total_chunks"] += 1
-                    continue
-
-                documents[doc_id] = {
-                    "document_id": doc_id,
-                    "filename": point.payload.get("doc_filename", ""),
-                    "title": point.payload.get("doc_title", ""),
-                    "author": point.payload.get("doc_author", ""),
-                    "total_pages": point.payload.get("doc_total_pages", 0),
-                    "total_chunks": 1,
-                    "ingested_at": point.payload.get("ingested_at", ""),
-                }
-
+            all_points.extend(results)
             if next_offset is None:
                 break
             offset = next_offset
+
+        return all_points
+
+    @staticmethod
+    def _group_documents_from_points(points: list[Any]) -> list[dict[str, Any]]:
+        """Regroupe les points par document_id avec comptage des chunks."""
+        documents: dict[str, dict[str, Any]] = {}
+
+        for point in points:
+            if not point.payload:
+                continue
+            doc_id = point.payload.get("document_id")
+            if not doc_id:
+                continue
+            if doc_id in documents:
+                documents[doc_id]["total_chunks"] += 1
+                continue
+            documents[doc_id] = {
+                "document_id": doc_id,
+                "filename": point.payload.get("doc_filename", ""),
+                "title": point.payload.get("doc_title", ""),
+                "author": point.payload.get("doc_author", ""),
+                "total_pages": point.payload.get("doc_total_pages", 0),
+                "total_chunks": 1,
+                "ingested_at": point.payload.get("ingested_at", ""),
+            }
 
         return list(documents.values())
 

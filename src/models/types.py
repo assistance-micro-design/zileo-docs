@@ -13,9 +13,3 @@ CellValue: TypeAlias = str | int | float | bool | datetime | None
 
 # Résultat calculé d'une formule Excel
 FormulaResult: TypeAlias = str | int | float | bool | None
-
-# Identifiants
-DocumentId: TypeAlias = str
-ChunkId: TypeAlias = str
-PageNumber: TypeAlias = int
-SheetIndex: TypeAlias = int

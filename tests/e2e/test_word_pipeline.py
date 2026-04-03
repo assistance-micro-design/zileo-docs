@@ -165,6 +165,7 @@ class TestIndexDocumentWord:
         with (
             patch.object(settings, "DOCUMENTS_PATH", "/app/documents"),
             patch("pathlib.Path.exists", return_value=True),
+            patch("src.mcp.tools.index_document.validate_file_magic", return_value=True),
         ):
             result = await index_tool.execute({"file_path": "/app/documents/rapport.docx"})
 
@@ -208,6 +209,7 @@ class TestIndexDocumentWord:
         with (
             patch.object(settings, "DOCUMENTS_PATH", "/app/documents"),
             patch("pathlib.Path.exists", return_value=True),
+            patch("src.mcp.tools.index_document.validate_file_magic", return_value=True),
         ):
             await index_tool.execute({"file_path": "/app/documents/rapport.docx"})
 

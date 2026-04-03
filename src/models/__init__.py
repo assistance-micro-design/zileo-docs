@@ -5,22 +5,11 @@
 from __future__ import annotations
 
 from src.models.api import (
-    DeleteDocumentRequest,
     DeleteResult,
-    DocumentInfo,
-    DocumentSummary,
-    ErrorResponse,
-    ExtractionResult,
-    ExtractPDFParams,
-    ExtractPDFRequest,
     GetDocumentParams,
     HealthResponse,
-    IndexDocumentParams,
-    IndexDocumentRequest,
-    IndexResult,
     ProcessingStatus,
     SearchDocumentsParams,
-    TableFormat,
 )
 from src.models.chunk import ChunkMetadata, DocumentChunk
 from src.models.document import (
@@ -52,27 +41,17 @@ from src.models.search import (
 __all__ = [
     "ChartData",
     "ChunkMetadata",
-    "DeleteDocumentRequest",
     "DeleteResult",
     "DocumentAnalysisResult",
     "DocumentChunk",
-    "DocumentInfo",
     "DocumentMetadata",
-    "DocumentSummary",
     "EquationData",
-    "ErrorResponse",
-    "ExtractPDFParams",
-    "ExtractPDFRequest",
     "ExtractedContent",
-    "ExtractionResult",
     "GetDocumentParams",
     "HeaderInfo",
     "HealthResponse",
     "ImageData",
     "ImagePlaceholder",
-    "IndexDocumentParams",
-    "IndexDocumentRequest",
-    "IndexResult",
     "ListInfo",
     "OCRResult",
     "PageAnalysis",
@@ -84,6 +63,5 @@ __all__ = [
     "SearchResponse",
     "SearchResultItem",
     "TableData",
-    "TableFormat",
     "TablePlaceholder",
 ]

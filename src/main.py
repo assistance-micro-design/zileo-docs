@@ -14,13 +14,14 @@ import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from src.api.auth import verify_api_key
 from src.api.routes import documents, health, search
 from src.core.config import settings
 from src.core.exceptions import MCPZileoError
@@ -52,6 +53,9 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         settings.APP_NAME,
         settings.APP_VERSION,
     )
+
+    if settings.DEBUG:
+        logger.warning("APPLICATION EN MODE DEBUG - NE PAS UTILISER EN PRODUCTION")
 
     # Initialiser le serveur MCP
     try:
@@ -102,9 +106,9 @@ def _configure_middleware(app: FastAPI, limiter: Limiter) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"] if settings.DEBUG else [],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["Content-Type", "X-API-Key"],
     )
 
 
@@ -118,7 +122,7 @@ def _register_routes(app: FastAPI, limiter: Limiter) -> None:
     async def mcp_exception_handler(_request: Request, exc: MCPZileoError) -> JSONResponse:
         return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=exc.to_dict())
 
-    @app.post("/mcp")
+    @app.post("/mcp", dependencies=[Depends(verify_api_key)])
     @limiter.limit(settings.RATE_LIMIT_MCP)  # type: ignore[untyped-decorator]
     async def mcp_endpoint(request: Request) -> dict[str, Any]:
         try:

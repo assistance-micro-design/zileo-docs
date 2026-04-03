@@ -159,10 +159,11 @@ class TestIndexDocumentExcel:
         mock_store.find_document_by_filename = AsyncMock(return_value=None)
         index_tool._vector_store = mock_store
 
-        # Mock file existence + DOCUMENTS_PATH
+        # Mock file existence + DOCUMENTS_PATH + magic number
         with (
             patch.object(settings, "DOCUMENTS_PATH", "/app/documents"),
             patch("pathlib.Path.exists", return_value=True),
+            patch("src.mcp.tools.index_document.validate_file_magic", return_value=True),
         ):
             result = await index_tool.execute({"file_path": "/app/documents/test.xlsx"})
 
@@ -205,6 +206,7 @@ class TestIndexDocumentExcel:
         with (
             patch.object(settings, "DOCUMENTS_PATH", "/app/documents"),
             patch("pathlib.Path.exists", return_value=True),
+            patch("src.mcp.tools.index_document.validate_file_magic", return_value=True),
         ):
             await index_tool.execute({"file_path": "/app/documents/test.xlsx"})
 

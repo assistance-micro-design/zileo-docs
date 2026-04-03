@@ -256,17 +256,6 @@ class VectorStoreConnectionError(VectorStoreError):
         )
 
 
-class CollectionNotFoundError(VectorStoreError):
-    """Collection introuvable dans le vector store."""
-
-    def __init__(self, collection_name: str) -> None:
-        super().__init__(
-            message=f"Collection introuvable: {collection_name}",
-            code="COLLECTION_NOT_FOUND",
-            details={"collection_name": collection_name},
-        )
-
-
 class DocumentNotFoundError(VectorStoreError):
     """Document introuvable dans le vector store."""
 
@@ -407,19 +396,4 @@ class EmptyQueryError(ValidationError):
             message="La requete de recherche est vide",
             field="query",
             suggestion="Fournir une requete en langage naturel. Ex: 'comment configurer X?'",
-        )
-
-
-class NoResultsError(MCPZileoError):
-    """Aucun resultat trouve pour la recherche."""
-
-    def __init__(self, query: str) -> None:
-        preview = query[:50] + "..." if len(query) > 50 else query
-        super().__init__(
-            message=f"Aucun resultat pour: {preview}",
-            code="NO_RESULTS",
-            details={"query": query},
-            suggestion="Reformuler avec d'autres mots-cles, ou verifier que des documents sont indexes.",
-            parameter="query",
-            retry=True,
         )

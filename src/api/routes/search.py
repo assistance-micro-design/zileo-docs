@@ -8,10 +8,11 @@ import logging
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from src.api.auth import verify_api_key
 from src.api.dependencies import EmbedderDep, VectorStoreDep
 from src.core.config import settings
 from src.models.search import SearchFilters, SearchQuery, SearchResponse, SearchResultItem
@@ -20,7 +21,7 @@ from src.models.search import SearchFilters, SearchQuery, SearchResponse, Search
 logger = logging.getLogger(__name__)
 
 limiter = Limiter(key_func=get_remote_address)
-router = APIRouter(prefix="/search", tags=["Search"])
+router = APIRouter(prefix="/search", tags=["Search"], dependencies=[Depends(verify_api_key)])
 
 
 @router.post(

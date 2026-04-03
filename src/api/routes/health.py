@@ -8,8 +8,8 @@ import asyncio
 import logging
 
 from fastapi import APIRouter
-from qdrant_client import QdrantClient
 
+from src.api.dependencies import VectorStoreDep
 from src.core.config import settings
 from src.models.api import HealthResponse
 
@@ -25,14 +25,14 @@ router = APIRouter(prefix="/health", tags=["Health"])
     summary="Health check",
     description="Verifie l'etat de sante du service et de ses dependances.",
 )
-async def health_check() -> HealthResponse:
+async def health_check(vector_store: VectorStoreDep) -> HealthResponse:
     """Verifie l'etat de sante du service.
 
     Returns:
         HealthResponse avec le statut de chaque composant.
     """
     # Verifier Qdrant
-    qdrant_status = await _check_qdrant()
+    qdrant_status = await _check_qdrant(vector_store)
 
     # Verifier Mistral API (via cle API configuree)
     mistral_status = _check_mistral_config()
@@ -67,7 +67,7 @@ async def liveness() -> dict[str, str]:
     summary="Readiness check",
     description="Verifie que le service est pret a recevoir du trafic.",
 )
-async def readiness() -> dict[str, str]:
+async def readiness(vector_store: VectorStoreDep) -> dict[str, str]:
     """Readiness probe pour Kubernetes.
 
     Verifie que les dependances critiques sont accessibles.
@@ -75,7 +75,7 @@ async def readiness() -> dict[str, str]:
     Returns:
         Dictionnaire avec le statut de readiness.
     """
-    qdrant_status = await _check_qdrant()
+    qdrant_status = await _check_qdrant(vector_store)
 
     if qdrant_status == "healthy":
         return {"status": "ready"}
@@ -97,19 +97,17 @@ def _compute_health_status(qdrant: str, mistral: str) -> str:
     return "healthy"
 
 
-async def _check_qdrant() -> str:
-    """Verifie la connexion a Qdrant.
+async def _check_qdrant(vector_store: VectorStoreDep) -> str:
+    """Verifie la connexion a Qdrant via le service vector store.
+
+    Args:
+        vector_store: Instance du vector store injectee.
 
     Returns:
         "healthy" si connecte, "unhealthy" sinon.
     """
     try:
-        client = QdrantClient(
-            host=settings.QDRANT_HOST,
-            port=settings.QDRANT_PORT,
-            api_key=settings.QDRANT_API_KEY,
-        )
-        await asyncio.to_thread(client.get_collections)
+        await asyncio.to_thread(vector_store.client.get_collections)
         return "healthy"
     except Exception as e:
         logger.warning("Qdrant health check failed: %s", e)

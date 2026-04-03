@@ -101,6 +101,12 @@ class Settings(BaseSettings):
         description="Taille max d'un fichier genere en MB",
     )
 
+    # === Authentication ===
+    API_KEY: str = Field(
+        default="",
+        description="Cle API pour authentification (vide = pas d'auth)",
+    )
+
     # === Rate Limiting ===
     RATE_LIMIT_DEFAULT: str = "60/minute"
     RATE_LIMIT_INDEX: str = "10/minute"

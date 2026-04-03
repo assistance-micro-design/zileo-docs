@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from src.core.config import Settings, settings
 from src.core.exceptions import (
-    CollectionNotFoundError,
     DocumentNotFoundError,
     EmbeddingAPIError,
     EmbeddingError,
@@ -27,7 +26,6 @@ from src.core.logging import setup_logging
 
 
 __all__ = [
-    "CollectionNotFoundError",
     "DocumentNotFoundError",
     "EmbeddingAPIError",
     "EmbeddingError",

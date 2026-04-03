@@ -67,6 +67,10 @@ class ExcelEditor:
         self._output_path = Path(output_path or settings.OUTPUT_PATH)
         self._generator = ExcelGenerator(output_path=self._output_path)
 
+    def ensure_output_dir(self) -> None:
+        """Delegue la creation du repertoire de sortie au generator."""
+        self._generator.ensure_output_dir()
+
     async def edit(self, params: EditExcelParams) -> EditExcelResult:
         """Point d'entree principal. Edite le fichier xlsx.
 

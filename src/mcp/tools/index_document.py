@@ -11,6 +11,7 @@ from typing import Any, ClassVar
 
 from src.core.config import settings
 from src.core.exceptions import SourceFileNotFoundError
+from src.core.file_validation import validate_file_magic
 from src.mcp.tools.base import BaseMCPTool
 from src.models.api import UnifiedIndexDocumentParams
 from src.models.chunk import ChunkMetadata, DocumentChunk
@@ -130,6 +131,13 @@ class IndexDocumentTool(BaseMCPTool):
 
         if not file_path.exists():
             raise SourceFileNotFoundError(str(file_path))
+
+        # Verification magic number
+        if not validate_file_magic(file_path):
+            return {
+                "error": f"Invalid file: magic number mismatch for {file_path.suffix}",
+                "file_path": str(file_path),
+            }
 
         # Verification doublon : le fichier est-il deja indexe ?
         existing = await self._vector_store.find_document_by_filename(file_path.name)

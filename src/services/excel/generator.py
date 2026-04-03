@@ -23,6 +23,7 @@ from src.core.exceptions import (
     ExcelGenerationError,
     ExcelOutputTooLargeError,
 )
+from src.core.file_validation import validate_filename_safety
 from src.models.api import CreateExcelParams, CreateExcelResult
 from src.models.excel_generation import (
     CellStyleDef,
@@ -377,7 +378,7 @@ class ExcelGenerator:
         Raises:
             ExcelGenerationError: Si le nom est invalide ou dangereux.
         """
-        if ".." in filename or "/" in filename or "\\" in filename:
+        if not validate_filename_safety(filename):
             raise ExcelGenerationError(
                 message=f"Nom de fichier invalide: {filename}",
                 code="INVALID_FILENAME",

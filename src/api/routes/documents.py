@@ -9,10 +9,12 @@ import tempfile
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import Path as PathParam
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from src.api.auth import verify_api_key
 from src.api.dependencies import OrchestratorDep, VectorStoreDep
 from src.core.config import settings
 from src.core.exceptions import (
@@ -28,7 +30,7 @@ from src.models.api import DeleteResult, ProcessingStatus
 logger = logging.getLogger(__name__)
 
 limiter = Limiter(key_func=get_remote_address)
-router = APIRouter(prefix="/documents", tags=["Documents"])
+router = APIRouter(prefix="/documents", tags=["Documents"], dependencies=[Depends(verify_api_key)])
 
 
 @router.post(
@@ -71,9 +73,15 @@ async def index_pdf(
             detail="Le fichier doit etre un PDF",
         )
 
-    # Verifier la taille
+    # Verifier la taille et le magic number
     content = await file.read()
     size_mb = len(content) / (1024 * 1024)
+
+    if not content.startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fichier invalide: magic number PDF manquant (%PDF-)",
+        )
 
     if size_mb > settings.MAX_FILE_SIZE_MB:
         raise HTTPException(
@@ -139,7 +147,7 @@ async def index_pdf(
     description="Retourne les informations et chunks d'un document indexe.",
 )
 async def get_document(
-    document_id: str,
+    document_id: Annotated[str, PathParam(min_length=1, max_length=255, pattern=r"^[\w\-]+$")],
     vector_store: VectorStoreDep,
 ) -> dict[str, Any]:
     """Recupere les informations d'un document indexe.
@@ -197,7 +205,7 @@ async def get_document(
     description="Supprime un document et tous ses chunks de l'index.",
 )
 async def delete_document(
-    document_id: str,
+    document_id: Annotated[str, PathParam(min_length=1, max_length=255, pattern=r"^[\w\-]+$")],
     vector_store: VectorStoreDep,
 ) -> DeleteResult:
     """Supprime un document de l'index vectoriel.

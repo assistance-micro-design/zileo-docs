@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import datetime
@@ -80,6 +81,10 @@ class ExcelExtractor:
 
     async def _extract_xlsx(self, path: Path) -> ExcelDocument:
         """Extrait les données d'un fichier .xlsx avec openpyxl."""
+        return await asyncio.to_thread(self._extract_xlsx_sync, path)
+
+    def _extract_xlsx_sync(self, path: Path) -> ExcelDocument:
+        """Extraction synchrone d'un fichier .xlsx (appelé via to_thread)."""
         # Charger deux fois : une pour les formules, une pour les valeurs
         wb_formulas = load_workbook(path, data_only=False)
         wb_values = load_workbook(path, data_only=True)
@@ -97,7 +102,7 @@ class ExcelExtractor:
                 logger.warning("Feuille %s n'est pas un Worksheet standard, ignorée", sheet_name)
                 continue
 
-            sheet = await self._extract_sheet(ws_formulas, ws_values, sheet_name, idx)
+            sheet = self._extract_sheet(ws_formulas, ws_values, sheet_name, idx)
             sheets.append(sheet)
             total_formulas += len(sheet.formulas)
             total_tables += len(sheet.tables)
@@ -138,7 +143,7 @@ class ExcelExtractor:
             total_tables=total_tables,
         )
 
-    async def _extract_sheet(
+    def _extract_sheet(
         self,
         ws_formulas: Worksheet,
         ws_values: Worksheet,
@@ -342,6 +347,10 @@ class ExcelExtractor:
 
     async def _extract_xls(self, path: Path) -> ExcelDocument:
         """Extrait les données d'un fichier .xls legacy avec xlrd."""
+        return await asyncio.to_thread(self._extract_xls_sync, path)
+
+    def _extract_xls_sync(self, path: Path) -> ExcelDocument:
+        """Extraction synchrone d'un fichier .xls (appelé via to_thread)."""
         wb = xlrd.open_workbook(str(path))
         sheets: list[ExcelSheet] = []
 

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import re
@@ -70,6 +71,10 @@ class WordExtractor:
 
     async def _extract_docx(self, path: Path) -> WordDocument:
         """Extrait le contenu d'un fichier .docx."""
+        return await asyncio.to_thread(self._extract_docx_sync, path)
+
+    def _extract_docx_sync(self, path: Path) -> WordDocument:
+        """Extraction synchrone d'un fichier .docx (appelé via to_thread)."""
         doc = docx2python(str(path))
 
         content_blocks: list[ContentBlock] = []

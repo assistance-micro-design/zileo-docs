@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from src.api.dependencies import get_embedder, get_vector_store
+from src.api.dependencies import get_embedder, get_orchestrator, get_vector_store
 from src.core.config import settings
 from src.core.exceptions import DocumentNotFoundError, EmptyQueryError, SourceFileNotFoundError
 from src.main import app
@@ -128,10 +128,8 @@ class TestDocumentsAPI:
         # Un PDF vide n'est pas valide
         assert response.status_code in [400, 500]
 
-    @patch("src.api.dependencies.get_orchestrator")
     def test_index_pdf_success(
         self,
-        mock_get_orchestrator: MagicMock,
         client: TestClient,
         sample_text_pdf: Path,
     ) -> None:
@@ -151,19 +149,28 @@ class TestDocumentsAPI:
 
         mock_orchestrator.initialize = AsyncMock()
         mock_orchestrator.process_and_index = AsyncMock(return_value=mock_result)
-        mock_get_orchestrator.return_value = mock_orchestrator
 
-        with Path(sample_text_pdf).open("rb") as f:
-            response = client.post(
-                "/api/v1/documents/index",
-                files={"file": ("test.pdf", f, "application/pdf")},
-            )
+        mock_store = MagicMock()
+        mock_store.initialize = AsyncMock()
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "completed"
-        assert "document_id" in data
-        assert "chunks_stored" in data
+        app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
+        app.dependency_overrides[get_vector_store] = lambda: mock_store
+
+        try:
+            with Path(sample_text_pdf).open("rb") as f:
+                response = client.post(
+                    "/api/v1/documents/index",
+                    files={"file": ("test.pdf", f, "application/pdf")},
+                )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "completed"
+            assert "document_id" in data
+            assert "chunks_stored" in data
+        finally:
+            app.dependency_overrides.pop(get_orchestrator, None)
+            app.dependency_overrides.pop(get_vector_store, None)
 
     def test_get_document_stats(self, client: TestClient) -> None:
         """Test la recuperation des statistiques."""
@@ -449,6 +456,7 @@ class TestMCPTools:
     async def test_index_document_tool_file_not_found(self) -> None:
         """Test que index_document leve une erreur si fichier introuvable."""
         tool = IndexDocumentTool()
+        tool._initialized = True
         with (
             patch.object(settings, "DOCUMENTS_PATH", "/app/documents"),
             pytest.raises(SourceFileNotFoundError),

@@ -8,6 +8,7 @@ le plan d'extraction optimal (extraction native vs OCR).
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import uuid
 from datetime import UTC, datetime
@@ -82,7 +83,10 @@ class DocumentAnalyzer:
             PDFTooManyPagesError: Si le fichier a trop de pages.
         """
         self._validate_file()
+        return await asyncio.to_thread(self._analyze_sync)
 
+    def _analyze_sync(self) -> DocumentAnalysisResult:
+        """Analyse synchrone du PDF (appelé via to_thread)."""
         try:
             self._doc = fitz.open(self.pdf_path)
 

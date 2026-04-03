@@ -5,16 +5,13 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.core.file_validation import validate_filename_safety
 from src.models.excel_edit import EditOp
 from src.models.excel_generation import SheetDef
-
-
-if TYPE_CHECKING:
-    from datetime import datetime
 
 
 # === Enums ===
@@ -33,132 +30,7 @@ class ProcessingStatus(str, Enum):
     FAILED = "failed"
 
 
-class TableFormat(str, Enum):
-    """Format de sortie des tableaux."""
-
-    MARKDOWN = "markdown"
-    HTML = "html"
-
-
-# === Request Models ===
-
-
-class ExtractPDFRequest(BaseModel):
-    """Requete d'extraction PDF.
-
-    Attributes:
-        file_path: Chemin vers le fichier PDF.
-        force_ocr: Forcer OCR sur toutes les pages.
-        table_format: Format des tableaux extraits.
-        include_images: Inclure descriptions des images.
-    """
-
-    file_path: str | None = Field(
-        default=None,
-        description="Chemin vers le fichier PDF",
-    )
-    force_ocr: bool = Field(
-        default=False,
-        description="Forcer OCR sur toutes les pages",
-    )
-    table_format: TableFormat = Field(
-        default=TableFormat.MARKDOWN,
-        description="Format des tableaux",
-    )
-    include_images: bool = Field(
-        default=True,
-        description="Inclure descriptions des images",
-    )
-
-
-class IndexDocumentRequest(BaseModel):
-    """Requete d'indexation d'un document.
-
-    Attributes:
-        document_id: Identifiant du document a indexer.
-        collection_name: Nom de la collection Qdrant.
-    """
-
-    document_id: str
-    collection_name: str = "documents"
-
-
-class DeleteDocumentRequest(BaseModel):
-    """Requete de suppression d'un document.
-
-    Attributes:
-        document_id: Identifiant du document a supprimer.
-    """
-
-    document_id: str
-
-
 # === Response Models ===
-
-
-class DocumentSummary(BaseModel):
-    """Resume d'un document indexe.
-
-    Attributes:
-        document_id: Identifiant unique.
-        filename: Nom du fichier.
-        title: Titre du document.
-        author: Auteur du document.
-        total_pages: Nombre total de pages.
-        total_chunks: Nombre de chunks generes.
-        ingested_at: Date d'ingestion.
-    """
-
-    document_id: str
-    filename: str
-    title: str | None
-    author: str | None
-    total_pages: int
-    total_chunks: int
-    ingested_at: datetime
-
-
-class ExtractionResult(BaseModel):
-    """Resultat d'extraction d'un document.
-
-    Attributes:
-        document_id: Identifiant du document.
-        status: Statut du traitement.
-        metadata: Metadonnees extraites.
-    """
-
-    document_id: str
-    status: ProcessingStatus
-    metadata: dict[str, Any]
-
-    # Statistiques
-    total_pages: int
-    pages_extracted_native: int
-    pages_extracted_ocr: int
-    total_chunks: int
-    total_tokens: int
-
-    # Couts
-    ocr_cost: float
-
-    # Timing
-    processing_time_seconds: float
-
-
-class IndexResult(BaseModel):
-    """Resultat d'indexation d'un document.
-
-    Attributes:
-        document_id: Identifiant du document.
-        chunks_indexed: Nombre de chunks indexes.
-        collection: Nom de la collection.
-        status: Statut de l'indexation.
-    """
-
-    document_id: str
-    chunks_indexed: int
-    collection: str
-    status: str
 
 
 class DeleteResult(BaseModel):
@@ -173,41 +45,6 @@ class DeleteResult(BaseModel):
     document_id: str
     chunks_deleted: int
     status: str
-
-
-class DocumentInfo(BaseModel):
-    """Information complete sur un document.
-
-    Attributes:
-        document_id: Identifiant unique.
-        filename: Nom du fichier.
-        file_hash: Hash SHA-256.
-        file_size_bytes: Taille en octets.
-    """
-
-    document_id: str
-    filename: str
-    file_hash: str
-    file_size_bytes: int
-
-    # Metadata PDF
-    title: str | None
-    author: str | None
-    subject: str | None
-    creation_date: datetime | None
-
-    # Stats
-    total_pages: int
-    total_images: int
-    total_tables: int
-    total_chunks: int
-
-    # Timestamps
-    ingested_at: datetime
-    processed_at: datetime | None
-
-    # Pages detail
-    pages_summary: list[dict[str, Any]]
 
 
 class HealthResponse(BaseModel):
@@ -226,58 +63,7 @@ class HealthResponse(BaseModel):
     mistral_status: str
 
 
-class ErrorResponse(BaseModel):
-    """Reponse d'erreur standardisee.
-
-    Attributes:
-        error: Code d'erreur.
-        detail: Message d'erreur detaille.
-        code: Code technique de l'erreur.
-    """
-
-    error: str
-    detail: str | None
-    code: str
-
-
 # === MCP Tool Schemas ===
-
-
-class ExtractPDFParams(BaseModel):
-    """Parametres du tool MCP index_document (extraction + indexation).
-
-    Attributes:
-        file_path: Chemin absolu vers le fichier PDF.
-        force_ocr: Forcer OCR meme si le PDF contient du texte.
-        table_format: Format des tableaux extraits.
-    """
-
-    file_path: Annotated[
-        str, Field(description="Chemin absolu vers le PDF. Ex: /data/docs/rapport.pdf")
-    ]
-    force_ocr: bool = Field(
-        default=False,
-        description="Forcer OCR meme si le PDF contient du texte",
-    )
-    table_format: str = Field(
-        default="markdown",
-        description="Format des tableaux extraits: markdown ou html",
-    )
-
-
-class IndexDocumentParams(BaseModel):
-    """Parametres du tool MCP index_document.
-
-    Attributes:
-        document_id: ID du document a indexer.
-        collection_name: Nom de la collection Qdrant.
-    """
-
-    document_id: Annotated[str, Field(description="ID du document a indexer")]
-    collection_name: str = Field(
-        default="documents",
-        description="Nom de la collection Qdrant",
-    )
 
 
 class SearchDocumentsParams(BaseModel):
@@ -376,31 +162,6 @@ class UnifiedIndexDocumentParams(BaseModel):
         default="markdown",
         description="Format des tableaux extraits: markdown, html ou json",
     )
-
-
-class UnifiedIndexDocumentResult(BaseModel):
-    """Résultat de l'indexation d'un document unifié.
-
-    Attributes:
-        document_id: Identifiant unique du document indexé.
-        document_type: Type de document (pdf, excel, word).
-        filename: Nom du fichier.
-        chunks_stored: Nombre de chunks indexés.
-        has_tables: Document contient des tableaux.
-        has_formulas: Document contient des formules (Excel).
-        has_images: Document contient des images.
-        sheet_names: Noms des feuilles (Excel uniquement).
-    """
-
-    document_id: str
-    document_type: str
-    filename: str
-    chunks_stored: int
-    has_tables: bool = False
-    has_formulas: bool = False
-    has_images: bool = False
-    sheet_names: list[str] | None = None
-    processing_time_seconds: float | None = None
 
 
 class GetExcelFormulasParams(BaseModel):
@@ -632,7 +393,7 @@ class InspectGeneratedFileParams(BaseModel):
     @classmethod
     def validate_filename(cls, v: str) -> str:
         """Valide que le nom de fichier ne contient pas de traversal."""
-        if ".." in v or "/" in v or "\\" in v:
+        if not validate_filename_safety(v):
             msg = "Le nom de fichier ne doit pas contenir '..' , '/' ou '\\'"
             raise ValueError(msg)
         return v

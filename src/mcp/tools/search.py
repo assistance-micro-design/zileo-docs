@@ -145,7 +145,6 @@ class SearchDocumentsTool(VectorStoreMCPTool):
 
         Raises:
             EmptyQueryError: Si la requete est vide.
-            NoResultsError: Si aucun resultat n'est trouve.
         """
         # Valider les parametres
         params = SearchDocumentsParams(**arguments)

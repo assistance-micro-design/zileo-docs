@@ -47,7 +47,7 @@ class EditExcelTool(BaseMCPTool):
 
     async def _do_initialize(self) -> None:
         """Initialise le tool: genere input_schema et cree OUTPUT_PATH."""
-        self._editor._generator.ensure_output_dir()
+        self._editor.ensure_output_dir()
         type(self).input_schema = EditExcelParams.model_json_schema()
 
     async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
