@@ -12,7 +12,7 @@ class TestListAvailableDocumentsParams:
     """Tests pour la validation des champs source et type_filter."""
 
     def test_source_valid_values(self) -> None:
-        for source in ("documents", "generated", "templates", "images"):
+        for source in ("documents", "generated"):
             params = ListAvailableDocumentsParams(source=source)
             assert params.source == source
 
@@ -25,7 +25,7 @@ class TestListAvailableDocumentsParams:
             ListAvailableDocumentsParams(source="invalid")
 
     def test_type_filter_valid_values(self) -> None:
-        for tf in ("all", "pdf", "excel", "word", "presentation", "template", "image"):
+        for tf in ("all", "pdf", "excel", "word"):
             params = ListAvailableDocumentsParams(type_filter=tf)
             assert params.type_filter == tf
 

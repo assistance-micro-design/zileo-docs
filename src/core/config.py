@@ -89,15 +89,6 @@ class Settings(BaseSettings):
         default="/app/documents",
         description="Chemin vers le dossier contenant les documents disponibles (PDF, Excel, Word)",
     )
-    TEMPLATES_PPTX_PATH: str = Field(
-        default="/app/output/templatesPPTX",
-        description="Chemin vers le dossier des templates PowerPoint (.pptx)",
-    )
-    IMAGES_POWERPOINT_PATH: str = Field(
-        default="/app/output/imagesPowerPoint",
-        description="Chemin vers le dossier des images pour les presentations PowerPoint",
-    )
-
     # === Output ===
     OUTPUT_PATH: str = Field(
         default="/app/output",

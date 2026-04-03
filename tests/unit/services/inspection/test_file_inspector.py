@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from openpyxl import Workbook
-from pptx import Presentation
 
 from src.services.inspection.file_inspector import FileInspector
 
@@ -35,47 +34,11 @@ def sample_xlsx(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def sample_pptx(tmp_path: Path) -> Path:
-    """Cree un fichier PowerPoint de test."""
-    prs = Presentation()
-
-    # Slide 0: titre
-    layout = prs.slide_layouts[0]
-    slide = prs.slides.add_slide(layout)
-    slide.shapes.title.text = "Mon Titre"
-    slide.placeholders[1].text = "Mon Sous-titre"
-
-    # Slide 1: contenu avec puces
-    layout2 = prs.slide_layouts[1]
-    slide2 = prs.slides.add_slide(layout2)
-    slide2.shapes.title.text = "Sommaire"
-    body = slide2.placeholders[1]
-    tf = body.text_frame
-    tf.text = "Point 1"
-    p = tf.add_paragraph()
-    p.text = "Sous-point"
-    p.level = 1
-
-    path = tmp_path / "presentation.pptx"
-    prs.save(str(path))
-    return path
-
-
-@pytest.fixture
 def empty_xlsx(tmp_path: Path) -> Path:
     """Cree un fichier Excel vide."""
     wb = Workbook()
     path = tmp_path / "empty.xlsx"
     wb.save(path)
-    return path
-
-
-@pytest.fixture
-def empty_pptx(tmp_path: Path) -> Path:
-    """Cree un fichier PowerPoint vide (sans slides)."""
-    prs = Presentation()
-    path = tmp_path / "empty.pptx"
-    prs.save(str(path))
     return path
 
 
@@ -182,91 +145,6 @@ class TestInspectExcel:
         assert result["sheets"][0]["freeze_panes"] == "A2"
 
 
-class TestInspectPptx:
-    """Tests pour l'inspection de fichiers PowerPoint."""
-
-    @pytest.mark.asyncio
-    async def test_inspect_pptx_returns_slides_structure(
-        self, inspector: FileInspector, sample_pptx: Path
-    ) -> None:
-        result = await inspector.inspect(sample_pptx.name)
-
-        assert result["type"] == "presentation"
-        assert result["total_slides"] == 2
-        assert len(result["slides"]) == 2
-
-    @pytest.mark.asyncio
-    async def test_inspect_pptx_title_extracted(
-        self, inspector: FileInspector, sample_pptx: Path
-    ) -> None:
-        result = await inspector.inspect(sample_pptx.name)
-
-        assert result["slides"][0]["title"] == "Mon Titre"
-
-    @pytest.mark.asyncio
-    async def test_inspect_pptx_subtitle_extracted(
-        self, inspector: FileInspector, sample_pptx: Path
-    ) -> None:
-        result = await inspector.inspect(sample_pptx.name)
-
-        assert result["slides"][0]["subtitle"] == "Mon Sous-titre"
-
-    @pytest.mark.asyncio
-    async def test_inspect_pptx_bullets_format_matches_update_bullets(
-        self, inspector: FileInspector, sample_pptx: Path
-    ) -> None:
-        result = await inspector.inspect(sample_pptx.name)
-
-        bullets = result["slides"][1]["bullets"]
-        assert bullets is not None
-        assert len(bullets) >= 2
-        assert bullets[0]["text"] == "Point 1"
-        assert bullets[0]["level"] == 0
-        assert bullets[1]["text"] == "Sous-point"
-        assert bullets[1]["level"] == 1
-
-    @pytest.mark.asyncio
-    async def test_inspect_pptx_slide_index_matches_edit_ops(
-        self, inspector: FileInspector, sample_pptx: Path
-    ) -> None:
-        result = await inspector.inspect(sample_pptx.name)
-
-        assert result["slides"][0]["slide_index"] == 0
-        assert result["slides"][1]["slide_index"] == 1
-
-    @pytest.mark.asyncio
-    async def test_inspect_pptx_empty_presentation(
-        self, inspector: FileInspector, empty_pptx: Path
-    ) -> None:
-        result = await inspector.inspect(empty_pptx.name)
-
-        assert result["total_slides"] == 0
-        assert result["slides"] == []
-
-    @pytest.mark.asyncio
-    async def test_inspect_pptx_editable_with_field(
-        self, inspector: FileInspector, sample_pptx: Path
-    ) -> None:
-        result = await inspector.inspect(sample_pptx.name)
-
-        assert result["editable_with"] == "edit_presentation"
-
-    @pytest.mark.asyncio
-    async def test_inspect_pptx_notes_extracted(self, tmp_path: Path) -> None:
-        prs = Presentation()
-        slide = prs.slides.add_slide(prs.slide_layouts[0])
-        slide.shapes.title.text = "Titre"
-        notes_slide = slide.notes_slide
-        notes_slide.notes_text_frame.text = "Notes du presentateur"
-        path = tmp_path / "with_notes.pptx"
-        prs.save(str(path))
-
-        inspector = FileInspector(output_path=tmp_path)
-        result = await inspector.inspect("with_notes.pptx")
-
-        assert result["slides"][0]["notes"] == "Notes du presentateur"
-
-
 class TestInspectErrors:
     """Tests pour les cas d'erreur."""
 
@@ -295,14 +173,6 @@ class TestInspectErrors:
         (tmp_path / "corrupt.xlsx").write_text("not a real xlsx")
 
         result = await inspector.inspect("corrupt.xlsx")
-
-        assert "error" in result
-
-    @pytest.mark.asyncio
-    async def test_corrupted_pptx(self, inspector: FileInspector, tmp_path: Path) -> None:
-        (tmp_path / "corrupt.pptx").write_text("not a real pptx")
-
-        result = await inspector.inspect("corrupt.pptx")
 
         assert "error" in result
 

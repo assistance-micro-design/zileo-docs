@@ -11,8 +11,6 @@ from pydantic import BaseModel, Field, field_validator
 
 from src.models.excel_edit import EditOp
 from src.models.excel_generation import SheetDef
-from src.models.presentation_edit import PresentationEditOp
-from src.models.presentation_generation import SlideDef
 
 
 if TYPE_CHECKING:
@@ -560,162 +558,6 @@ class EditExcelResult(BaseModel):
     file_size_bytes: int
 
 
-class CreatePresentationParams(BaseModel):
-    """Parametres du tool MCP create_presentation.
-
-    Attributes:
-        filename: Nom du fichier pptx a creer.
-        slides: Definitions des slides.
-        author: Auteur de la presentation (metadonnee).
-        template: Nom du fichier template .pptx (optionnel).
-    """
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "filename": "presentation.pptx",
-                    "slides": [
-                        {
-                            "layout": "title_slide",
-                            "title": "Ma Presentation",
-                            "subtitle": "Par l'equipe",
-                        },
-                        {
-                            "layout": "content_bullets",
-                            "title": "Points cles",
-                            "bullets": [
-                                {"text": "Premier point"},
-                                {"text": "Deuxieme point"},
-                            ],
-                        },
-                    ],
-                }
-            ]
-        }
-    }
-
-    filename: Annotated[
-        str,
-        Field(
-            min_length=1,
-            max_length=255,
-            pattern=r"^[\w\-. ()]+\.pptx$",
-            description="Nom du fichier. Doit se terminer par .pptx",
-        ),
-    ]
-    slides: Annotated[list[SlideDef], Field(min_length=1, max_length=100)]
-    author: Annotated[str | None, Field(default=None, max_length=255)] = None
-    template: Annotated[
-        str | None,
-        Field(
-            default=None,
-            max_length=255,
-            description="Nom du fichier template .pptx dans le dossier templates",
-        ),
-    ] = None
-    template_slide_map: Annotated[
-        list[int] | None,
-        Field(
-            default=None,
-            max_length=100,
-            description=(
-                "Map each slide to a template slide index to clone its design. "
-                "Length must match slides array. Use inspect_template to see available slides. "
-                "Example: [0, 4, 3, 5] clones template slides 0,4,3,5 for slides 0,1,2,3."
-            ),
-        ),
-    ] = None
-
-
-class CreatePresentationResult(BaseModel):
-    """Resultat de la creation d'une presentation PowerPoint.
-
-    Attributes:
-        file_path: Chemin absolu du fichier cree.
-        filename: Nom du fichier.
-        slides_created: Nombre de slides crees.
-        total_images: Nombre total d'images inserees.
-        total_charts: Nombre total de graphiques.
-        file_size_bytes: Taille du fichier en octets.
-        overwritten: True si un fichier existant a ete ecrase.
-    """
-
-    file_path: str
-    filename: str
-    slides_created: int
-    total_images: int
-    total_charts: int
-    file_size_bytes: int
-    overwritten: bool = False
-
-
-class EditPresentationParams(BaseModel):
-    """Parametres du tool MCP edit_presentation.
-
-    Attributes:
-        filename: Nom du fichier pptx existant dans OUTPUT_PATH.
-        operations: Liste ordonnee d'operations a appliquer.
-    """
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "filename": "presentation.pptx",
-                    "operations": [
-                        {
-                            "op": "update_title",
-                            "slide_index": 0,
-                            "title": "Nouveau titre",
-                        },
-                        {
-                            "op": "add_slide",
-                            "slide": {
-                                "layout": "content_bullets",
-                                "title": "Nouveau slide",
-                                "bullets": [{"text": "Point"}],
-                            },
-                        },
-                    ],
-                }
-            ]
-        }
-    }
-
-    filename: Annotated[
-        str,
-        Field(
-            min_length=1,
-            max_length=255,
-            pattern=r"^[\w\-. ()]+\.pptx$",
-            description="Nom du fichier existant dans OUTPUT_PATH. Doit se terminer par .pptx",
-        ),
-    ]
-    operations: Annotated[
-        list[PresentationEditOp],
-        Field(min_length=1, max_length=100, description="Operations a appliquer (en ordre)"),
-    ]
-
-
-class EditPresentationResult(BaseModel):
-    """Resultat de l'edition d'une presentation PowerPoint.
-
-    Attributes:
-        file_path: Chemin absolu du fichier edite.
-        filename: Nom du fichier.
-        operations_applied: Nombre d'operations appliquees avec succes.
-        operations_skipped: Nombre d'operations ignorees (degradation gracieuse).
-        file_size_bytes: Taille du fichier en octets apres edition.
-    """
-
-    file_path: str
-    filename: str
-    operations_applied: int
-    operations_skipped: int
-    file_size_bytes: int
-
-
 class ListAvailableDocumentsParams(BaseModel):
     """Paramètres du tool MCP list_available_documents.
 
@@ -732,7 +574,7 @@ class ListAvailableDocumentsParams(BaseModel):
     ] = "documents"
     type_filter: str = Field(
         default="all",
-        description="Filtrer par type: pdf, excel, word, presentation, template, image, all",
+        description="Filtrer par type: pdf, excel, word, all",
     )
     subdirectory: str = Field(
         default="",
@@ -745,16 +587,14 @@ class ListAvailableDocumentsParams(BaseModel):
 
     _VALID_TYPES_BY_SOURCE: dict[str, set[str]] = {
         "documents": {"all", "pdf", "excel", "word"},
-        "generated": {"all", "excel", "presentation"},
-        "templates": {"all", "template"},
-        "images": {"all", "image"},
+        "generated": {"all", "excel"},
     }
 
     @field_validator("source")
     @classmethod
     def validate_source(cls, v: str) -> str:
         """Valide que la source est une valeur connue."""
-        valid = {"documents", "generated", "templates", "images"}
+        valid = {"documents", "generated"}
         if v not in valid:
             msg = f"source invalide: '{v}'. Valeurs possibles: {', '.join(sorted(valid))}"
             raise ValueError(msg)
@@ -764,7 +604,7 @@ class ListAvailableDocumentsParams(BaseModel):
     @classmethod
     def validate_type_filter(cls, v: str) -> str:
         """Valide que le type_filter est une valeur connue."""
-        all_valid = {"all", "pdf", "excel", "word", "presentation", "template", "image"}
+        all_valid = {"all", "pdf", "excel", "word"}
         if v not in all_valid:
             msg = f"type_filter invalide: '{v}'. Valeurs possibles: {', '.join(sorted(all_valid))}"
             raise ValueError(msg)
@@ -796,20 +636,3 @@ class InspectGeneratedFileParams(BaseModel):
             msg = "Le nom de fichier ne doit pas contenir '..' , '/' ou '\\'"
             raise ValueError(msg)
         return v
-
-
-class InspectTemplateParams(BaseModel):
-    """Parametres du tool MCP inspect_template.
-
-    Attributes:
-        template: Nom du fichier template .pptx dans TEMPLATES_PPTX_PATH.
-    """
-
-    template: Annotated[
-        str,
-        Field(
-            min_length=1,
-            max_length=255,
-            description="Nom du fichier template .pptx dans TEMPLATES_PPTX_PATH",
-        ),
-    ]

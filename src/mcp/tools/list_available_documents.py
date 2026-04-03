@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""Tool MCP pour lister les fichiers disponibles (documents, generated, templates, images)."""
+"""Tool MCP pour lister les fichiers disponibles (documents, generated)."""
 
 from __future__ import annotations
 
@@ -25,8 +25,7 @@ class _SourceConfig(NamedTuple):
 class ListAvailableDocumentsTool(BaseMCPTool):
     """Liste les fichiers disponibles dans le projet.
 
-    Supporte 4 sources: documents (indexation), generated (fichiers crees),
-    templates (PowerPoint), images (pour slides).
+    Supporte 2 sources: documents (indexation), generated (fichiers crees).
 
     Attributes:
         name: Nom du tool MCP.
@@ -38,9 +37,7 @@ class ListAvailableDocumentsTool(BaseMCPTool):
     description: ClassVar[str] = (
         "Liste les fichiers disponibles dans le projet. "
         "source='documents' (defaut): PDF/Excel/Word pour indexation via index_document. "
-        "source='generated': fichiers Excel/PowerPoint crees par create_excel_document/create_presentation. "
-        "source='templates': templates PowerPoint (.pptx) pour create_presentation (param template). "
-        "source='images': images disponibles pour les slides PowerPoint (param image.filename). "
+        "source='generated': fichiers Excel crees par create_excel_document. "
         "Filtrable par type et sous-dossier."
     )
 
@@ -52,28 +49,11 @@ class ListAvailableDocumentsTool(BaseMCPTool):
     }
     GENERATED_EXTENSIONS: ClassVar[dict[str, str]] = {
         ".xlsx": "excel",
-        ".pptx": "presentation",
-    }
-    TEMPLATE_EXTENSIONS: ClassVar[dict[str, str]] = {
-        ".pptx": "template",
-    }
-    IMAGE_EXTENSIONS: ClassVar[dict[str, str]] = {
-        ".png": "image",
-        ".jpg": "image",
-        ".jpeg": "image",
-        ".svg": "image",
-        ".gif": "image",
-        ".bmp": "image",
-        ".webp": "image",
     }
 
     _SOURCE_CONFIGS: ClassVar[dict[str, _SourceConfig]] = {
         "documents": _SourceConfig("_documents_path", SUPPORTED_EXTENSIONS, set()),
-        "generated": _SourceConfig(
-            "_output_path", GENERATED_EXTENSIONS, {"templatesPPTX", "imagesPowerPoint"}
-        ),
-        "templates": _SourceConfig("_templates_path", TEMPLATE_EXTENSIONS, set()),
-        "images": _SourceConfig("_images_path", IMAGE_EXTENSIONS, set()),
+        "generated": _SourceConfig("_output_path", GENERATED_EXTENSIONS, set()),
     }
 
     input_schema: ClassVar[dict[str, Any]] = {
@@ -81,19 +61,17 @@ class ListAvailableDocumentsTool(BaseMCPTool):
         "properties": {
             "source": {
                 "type": "string",
-                "enum": ["documents", "generated", "templates", "images"],
+                "enum": ["documents", "generated"],
                 "description": (
                     "Quelle source lister. "
                     "'documents': fichiers PDF/Excel/Word a indexer (defaut). "
-                    "'generated': fichiers crees par create_excel_document ou create_presentation. "
-                    "'templates': templates PowerPoint pour create_presentation (param template). "
-                    "'images': images pour slides PowerPoint (param image.filename)."
+                    "'generated': fichiers Excel crees par create_excel_document."
                 ),
                 "default": "documents",
             },
             "type_filter": {
                 "type": "string",
-                "enum": ["pdf", "excel", "word", "presentation", "template", "image", "all"],
+                "enum": ["pdf", "excel", "word", "all"],
                 "description": "Filtrer par type de document (defaut: all)",
                 "default": "all",
             },
@@ -116,8 +94,6 @@ class ListAvailableDocumentsTool(BaseMCPTool):
         super().__init__()
         self._documents_path = Path(settings.DOCUMENTS_PATH)
         self._output_path = Path(settings.OUTPUT_PATH)
-        self._templates_path = Path(settings.TEMPLATES_PPTX_PATH)
-        self._images_path = Path(settings.IMAGES_POWERPOINT_PATH)
 
     async def _do_initialize(self) -> None:
         """Pas d'initialisation requise pour ce tool."""
@@ -258,13 +234,7 @@ class ListAvailableDocumentsTool(BaseMCPTool):
         }
 
         # Champs contextuels
-        if source == "generated":
-            editable_map = {"excel": "edit_excel_document", "presentation": "edit_presentation"}
-            if doc_type in editable_map:
-                entry["editable_with"] = editable_map[doc_type]
-        elif source == "templates":
-            entry["usable_in"] = "create_presentation (param: template)"
-        elif source == "images":
-            entry["usable_in"] = "create_presentation / edit_presentation (param: image.filename)"
+        if source == "generated" and doc_type == "excel":
+            entry["editable_with"] = "edit_excel_document"
 
         return entry

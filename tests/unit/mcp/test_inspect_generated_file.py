@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from openpyxl import Workbook
-from pptx import Presentation
 
 from src.mcp.tools.inspect_generated_file import InspectGeneratedFileTool
 
@@ -31,17 +30,6 @@ def xlsx_file(tmp_path: Path) -> Path:
     ws.append(["Alice", 100])
     path = tmp_path / "test.xlsx"
     wb.save(path)
-    return path
-
-
-@pytest.fixture
-def pptx_file(tmp_path: Path) -> Path:
-    """Cree un fichier PowerPoint de test."""
-    prs = Presentation()
-    slide = prs.slides.add_slide(prs.slide_layouts[0])
-    slide.shapes.title.text = "Test Title"
-    path = tmp_path / "test.pptx"
-    prs.save(str(path))
     return path
 
 
@@ -73,28 +61,6 @@ class TestInspectXlsx:
         result = await tool.execute({"filename": xlsx_file.name})
 
         assert result["editable_with"] == "edit_excel_document"
-
-
-class TestInspectPptx:
-    """Tests pour l'inspection de fichiers PowerPoint via le tool."""
-
-    @pytest.mark.asyncio
-    async def test_inspect_pptx_returns_structure(
-        self, tool: InspectGeneratedFileTool, pptx_file: Path
-    ) -> None:
-        result = await tool.execute({"filename": pptx_file.name})
-
-        assert result["type"] == "presentation"
-        assert "slides" in result
-        assert result["filename"] == pptx_file.name
-
-    @pytest.mark.asyncio
-    async def test_editable_with_field_present_pptx(
-        self, tool: InspectGeneratedFileTool, pptx_file: Path
-    ) -> None:
-        result = await tool.execute({"filename": pptx_file.name})
-
-        assert result["editable_with"] == "edit_presentation"
 
 
 class TestToolErrors:
@@ -130,41 +96,3 @@ class TestToolErrors:
         result = await tool.execute({"filename": "corrupt.xlsx"})
 
         assert "error" in result
-
-    @pytest.mark.asyncio
-    async def test_corrupted_pptx_returns_error(
-        self, tool: InspectGeneratedFileTool, tmp_path: Path
-    ) -> None:
-        (tmp_path / "corrupt.pptx").write_text("not real")
-
-        result = await tool.execute({"filename": "corrupt.pptx"})
-
-        assert "error" in result
-
-
-class TestPptxTitleDetection:
-    """Tests pour la coherence de detection titre avec PresentationEditor."""
-
-    @pytest.mark.asyncio
-    async def test_pptx_title_detection_matches_editor(self, tmp_path: Path) -> None:
-        from src.services.presentation.editor import PresentationEditor
-
-        prs = Presentation()
-        slide = prs.slides.add_slide(prs.slide_layouts[0])
-        slide.shapes.title.text = "Titre Coherent"
-        path = tmp_path / "coherent.pptx"
-        prs.save(str(path))
-
-        # Inspect
-        tool = InspectGeneratedFileTool()
-        tool._output_path = tmp_path
-        tool._inspector._output_path = tmp_path
-        tool._initialized = True
-        result = await tool.execute({"filename": "coherent.pptx"})
-
-        # Editor detection
-        editor = PresentationEditor(output_path=tmp_path)
-        prs2 = Presentation(str(path))
-        title_shape = editor._find_title_shape(prs2.slides[0])
-
-        assert result["slides"][0]["title"] == title_shape.text_frame.text

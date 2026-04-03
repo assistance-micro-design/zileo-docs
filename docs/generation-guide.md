@@ -1,6 +1,6 @@
-# Guide de generation et edition — Excel et PowerPoint
+# Guide de generation et edition — Excel
 
-Guide complet pour utiliser les outils MCP de creation et edition de fichiers Excel (.xlsx) et PowerPoint (.pptx). Destine au LLM qui appelle les tools, avec toutes les options, particularites et exemples.
+Guide complet pour utiliser les outils MCP de creation et edition de fichiers Excel (.xlsx). Destine au LLM qui appelle les tools, avec toutes les options, particularites et exemples.
 
 ---
 
@@ -8,8 +8,6 @@ Guide complet pour utiliser les outils MCP de creation et edition de fichiers Ex
 
 - [Excel — Creation](#excel--creation)
 - [Excel — Edition](#excel--edition)
-- [PowerPoint — Creation](#powerpoint--creation)
-- [PowerPoint — Edition](#powerpoint--edition)
 - [Inspection de fichiers](#inspection-de-fichiers)
 - [Workflow recommande](#workflow-recommande)
 - [Reference des couleurs et formats](#reference-des-couleurs-et-formats)
@@ -533,546 +531,13 @@ Seuls les champs fournis sont modifies. Les autres restent inchanges.
 
 ---
 
-## PowerPoint — Creation
-
-### Tool : `create_presentation`
-
-Cree un fichier `.pptx` dans `OUTPUT_PATH`.
-
-### Parametres
-
-```json
-{
-  "filename": "presentation.pptx",
-  "author": "Zileo",
-  "template": "template-corporate.pptx",
-  "slides": [ ... ]
-}
-```
-
-| Parametre | Type | Requis | Description |
-|-----------|------|--------|-------------|
-| `filename` | string | Oui | Doit finir par `.pptx` |
-| `author` | string | Non | Max 255 caracteres |
-| `template` | string | Non | Fichier `.pptx` dans `TEMPLATES_PPTX_PATH` |
-| `slides` | array[SlideDef] | Oui | 1 a 100 slides |
-| `template_slide_map` | array[int] | Non | Clone les slides du template par index (meme longueur que `slides`) |
-
-> **Template simple** : Si `template` est fourni sans `template_slide_map`, les layouts natifs du template sont utilises (titres, placeholders). Utile pour les templates Office standard.
->
-> **Template riche (clone)** : Si `template_slide_map` est fourni, chaque slide clone un slide existant du template, preservant tout le design (fonds, images, formes, polices). Utiliser `inspect_template` pour voir les slides disponibles et choisir les bons index.
-
-### Workflow avec template riche
-
-1. **Lister les templates** : `list_available_documents(source="templates")`
-2. **Inspecter le template** : `inspect_template(template="mon-template.pptx")` — retourne les slides avec leurs text shapes (texte, font, taille, couleur, position), images, decorations, groupes et notes
-3. **Choisir les slides de reference** : identifier quel slide du template cloner pour chaque nouveau slide
-4. **Creer la presentation** : utiliser `template_slide_map` pour mapper chaque slide a un slide du template
-5. **Adapter le texte** : respecter le nombre de mots et la structure du slide de reference (title = plus grand shape, body = shapes suivants par taille decroissante)
-
-```json
-{
-  "filename": "rapport.pptx",
-  "template": "StocksTradingBusinessPlan.pptx",
-  "template_slide_map": [0, 5, 3, 14],
-  "slides": [
-    {"layout": "title_slide", "title": "MON TITRE", "subtitle": "Sous-titre"},
-    {"layout": "content_bullets", "title": "POINTS CLES", "bullets": [...]},
-    {"layout": "section_header", "title": "SECTION 1", "subtitle": "Description"},
-    {"layout": "closing", "title": "MERCI", "subtitle": "contact@email.com"}
-  ]
-}
-```
-
-> **Important** : lors du clonage, le texte est remplace dans les shapes par ordre de taille (area). Le plus grand shape recoit le titre, les suivants recoivent les body texts dans l'ordre. Les shapes excessifs sont vides. Adapter le nombre et la longueur des textes au slide de reference.
-
-### Les 8 layouts de slides
-
-Chaque slide a un `layout` qui determine sa structure. Tous les layouts supportent `notes` (notes du presentateur, max 5000 caracteres).
-
----
-
-#### 1. `title_slide` — Slide de titre
-
-La slide d'ouverture de la presentation.
-
-```json
-{
-  "layout": "title_slide",
-  "title": "Rapport Annuel 2026",
-  "subtitle": "Zileo — Division Analytics",
-  "title_style": {"bold": true, "font_size": 40, "font_color": "2F5496"},
-  "notes": "Introduction du rapport. Duree: 2 min."
-}
-```
-
-| Champ | Type | Requis | Description |
-|-------|------|--------|-------------|
-| `title` | string | Oui | 1-200 caracteres |
-| `subtitle` | string | Non | Texte sous le titre |
-| `title_style` | TextStyle | Non | Style du titre |
-| `notes` | string | Non | Notes du presentateur |
-
----
-
-#### 2. `content_bullets` — Contenu avec puces
-
-Le layout le plus courant pour presenter du contenu.
-
-```json
-{
-  "layout": "content_bullets",
-  "title": "Points cles",
-  "bullets": [
-    {"text": "Croissance de 25% du CA", "level": 0, "bold": true},
-    {"text": "Tirée par le segment Enterprise", "level": 1},
-    {"text": "Expansion sur 3 nouveaux marches", "level": 0, "bold": true},
-    {"text": "Allemagne, Italie, Espagne", "level": 1},
-    {"text": "Marge operationnelle a 18%", "level": 0}
-  ]
-}
-```
-
-**BulletItem** :
-
-| Champ | Type | Defaut | Description |
-|-------|------|--------|-------------|
-| `text` | string | — | Texte de la puce (1-500 chars) |
-| `level` | int | 0 | Niveau d'indentation (0-3) |
-| `bold` | bool | false | Texte en gras |
-
-- Level 0 : puce principale (taille 18pt)
-- Level 1 : sous-puce (taille 16pt)
-- Level 2 : sous-sous-puce (taille 14pt)
-- Level 3 : detail (taille 12pt)
-
-Max 20 puces par slide.
-
----
-
-#### 3. `content_with_image` — Contenu + image
-
-Puces a gauche, image a droite.
-
-```json
-{
-  "layout": "content_with_image",
-  "title": "Notre equipe",
-  "bullets": [
-    {"text": "120 collaborateurs"},
-    {"text": "4 bureaux en Europe"},
-    {"text": "15 nationalites"}
-  ],
-  "image": {
-    "filename": "equipe-photo.jpg",
-    "width_cm": 12,
-    "height_cm": 9
-  }
-}
-```
-
-**ImageDef** :
-
-| Champ | Type | Requis | Description |
-|-------|------|--------|-------------|
-| `filename` | string | Oui | Nom du fichier dans `IMAGES_POWERPOINT_PATH` |
-| `width_cm` | float | Non | Largeur en cm (1-33.87). Si omis, proportionnel |
-| `height_cm` | float | Non | Hauteur en cm (1-19.05). Si omis, proportionnel |
-
-Formats d'image supportes : **PNG**, **JPG/JPEG**, **GIF**, **BMP**, **SVG**.
-
-Max 10 puces pour ce layout (espace reduit par l'image).
-
----
-
-#### 4. `section_header` — Separateur de section
-
-```json
-{
-  "layout": "section_header",
-  "title": "Partie 2 : Resultats financiers",
-  "subtitle": "Exercice 2025-2026"
-}
-```
-
-Texte centre. Utilisez pour structurer la presentation en parties.
-
----
-
-#### 5. `two_columns` — Deux colonnes
-
-```json
-{
-  "layout": "two_columns",
-  "title": "Comparaison",
-  "left_bullets": [
-    {"text": "Avant", "bold": true},
-    {"text": "Process manuels"},
-    {"text": "Delai 2 semaines"},
-    {"text": "Taux erreur 5%"}
-  ],
-  "right_bullets": [
-    {"text": "Apres", "bold": true},
-    {"text": "Automatisation complete"},
-    {"text": "Delai 2 jours"},
-    {"text": "Taux erreur 0.1%"}
-  ]
-}
-```
-
-Max 10 puces par colonne.
-
----
-
-#### 6. `image_full` — Image plein ecran
-
-```json
-{
-  "layout": "image_full",
-  "image": {"filename": "dashboard-screenshot.png"},
-  "title": "Dashboard en temps reel",
-  "caption": "Capture du 5 mars 2026"
-}
-```
-
-| Champ | Type | Requis | Description |
-|-------|------|--------|-------------|
-| `image` | ImageDef | Oui | L'image occupe toute la slide (20cm) |
-| `title` | string | Non | Titre optionnel en haut |
-| `caption` | string | Non | Legende en bas (italique, gris) |
-
----
-
-#### 7. `chart_slide` — Graphique
-
-```json
-{
-  "layout": "chart_slide",
-  "title": "Evolution du CA",
-  "chart": {
-    "chart_type": "line",
-    "title": "CA mensuel 2026",
-    "categories": ["Jan", "Fev", "Mar", "Avr", "Mai", "Jun"],
-    "series": [
-      {
-        "name": "Reel",
-        "values": [120, 135, 150, 148, 162, 175]
-      },
-      {
-        "name": "Budget",
-        "values": [110, 120, 130, 140, 150, 160]
-      }
-    ]
-  }
-}
-```
-
-**PresentationChartDef** :
-
-| Champ | Type | Requis | Description |
-|-------|------|--------|-------------|
-| `chart_type` | string | Oui | Type de graphique (voir table) |
-| `title` | string | Non | Titre affiche sur le graphique |
-| `categories` | list[string] | Oui | Labels axe X (1-50) |
-| `series` | list[ChartSeriesDef] | Oui | Series de donnees (1-10) |
-
-**ChartSeriesDef** : `name` (string) + `values` (list[int|float], 1-50 valeurs).
-
-#### Types de graphiques PowerPoint
-
-| Type | Description | Usage typique |
-|------|-------------|---------------|
-| `bar` | Barres horizontales | Comparaison de categories |
-| `column` | Barres verticales | Tendances par periode |
-| `line` | Courbe | Evolution temporelle |
-| `pie` | Camembert | Repartition (1 seule serie) |
-| `area` | Aire | Evolution avec volume |
-| `scatter` | Nuage de points | Correlation |
-| `doughnut` | Donut | Repartition avec centre vide |
-
-> **Difference avec Excel** : Les graphiques PowerPoint sont integres directement avec les donnees (pas de reference a une plage de cellules). Le type `doughnut` est disponible en PowerPoint mais pas en Excel.
-
----
-
-#### 8. `closing` — Slide de cloture
-
-```json
-{
-  "layout": "closing",
-  "title": "Merci",
-  "subtitle": "Questions ?",
-  "bullets": [
-    {"text": "contact@zileo.fr"},
-    {"text": "www.zileo.fr"}
-  ]
-}
-```
-
-Titre centre en grand. Subtitle et bullets optionnels.
-
----
-
-### Style de texte (TextStyle)
-
-Applicable sur les titres de toutes les slides.
-
-```json
-{
-  "bold": true,
-  "italic": false,
-  "font_size": 36,
-  "font_color": "2F5496"
-}
-```
-
-| Champ | Type | Defaut | Limites |
-|-------|------|--------|---------|
-| `bold` | bool | false | — |
-| `italic` | bool | false | — |
-| `font_size` | int | None | 8-96 pt |
-| `font_color` | string | None | Hex 6 chars sans `#` |
-
----
-
-### Exemple complet de creation PowerPoint
-
-```json
-{
-  "filename": "revue-trimestrielle-q1.pptx",
-  "author": "Zileo Analytics",
-  "slides": [
-    {
-      "layout": "title_slide",
-      "title": "Revue Trimestrielle Q1 2026",
-      "subtitle": "Zileo — Direction Commerciale",
-      "title_style": {"bold": true, "font_size": 40, "font_color": "1F4E79"}
-    },
-    {
-      "layout": "section_header",
-      "title": "1. Faits marquants"
-    },
-    {
-      "layout": "content_bullets",
-      "title": "Resultats cles",
-      "bullets": [
-        {"text": "CA : 2.4M EUR (+25%)", "level": 0, "bold": true},
-        {"text": "Objectif depasse de 15%", "level": 1},
-        {"text": "Nouveaux clients : 47", "level": 0, "bold": true},
-        {"text": "Dont 12 grands comptes", "level": 1},
-        {"text": "NPS : 72 (+8 pts)", "level": 0}
-      ],
-      "notes": "Insister sur la surperformance vs budget. Mentionner le deal Acme Corp."
-    },
-    {
-      "layout": "chart_slide",
-      "title": "Evolution du CA",
-      "chart": {
-        "chart_type": "column",
-        "title": "CA mensuel (k EUR)",
-        "categories": ["Janvier", "Fevrier", "Mars"],
-        "series": [
-          {"name": "2025", "values": [650, 720, 780]},
-          {"name": "2026", "values": [780, 810, 850]}
-        ]
-      }
-    },
-    {
-      "layout": "two_columns",
-      "title": "Points forts / Points d'attention",
-      "left_bullets": [
-        {"text": "Points forts", "bold": true},
-        {"text": "Pipeline record"},
-        {"text": "Equipe stabilisee"},
-        {"text": "Produit bien recu"}
-      ],
-      "right_bullets": [
-        {"text": "Attention", "bold": true},
-        {"text": "Delais de livraison"},
-        {"text": "Turnover support"},
-        {"text": "Marche allemand lent"}
-      ]
-    },
-    {
-      "layout": "content_with_image",
-      "title": "Nouveau dashboard client",
-      "bullets": [
-        {"text": "Temps reel"},
-        {"text": "Self-service"},
-        {"text": "Deploye chez 80% des clients"}
-      ],
-      "image": {"filename": "dashboard.png", "width_cm": 14}
-    },
-    {
-      "layout": "closing",
-      "title": "Merci",
-      "subtitle": "Questions et discussion",
-      "bullets": [
-        {"text": "Prochaine revue : Juillet 2026"}
-      ]
-    }
-  ]
-}
-```
-
----
-
-## PowerPoint — Edition
-
-### Tool : `edit_presentation`
-
-Edite un fichier `.pptx` existant dans `OUTPUT_PATH`.
-
-### Parametres
-
-```json
-{
-  "filename": "revue-trimestrielle-q1.pptx",
-  "operations": [ ... ]
-}
-```
-
-| Parametre | Type | Limites |
-|-----------|------|---------|
-| `filename` | string | Fichier existant dans OUTPUT_PATH |
-| `operations` | array[PresentationEditOp] | 1 a 100 operations |
-
-Les operations sont appliquees en sequence. Les indices de slides sont **0-indexed** (premiere slide = 0).
-
-### Les 11 operations
-
-#### 1. `update_title` — Modifier un titre
-
-```json
-{
-  "op": "update_title",
-  "slide_index": 0,
-  "title": "Revue Trimestrielle Q1-Q2 2026",
-  "style": {"bold": true, "font_color": "1F4E79"}
-}
-```
-
-> Si la slide n'a pas de shape titre, un textbox est cree automatiquement.
-
-#### 2. `update_subtitle` — Modifier un sous-titre
-
-```json
-{"op": "update_subtitle", "slide_index": 0, "subtitle": "Mise a jour Avril 2026"}
-```
-
-#### 3. `update_bullets` — Modifier les puces
-
-```json
-{
-  "op": "update_bullets",
-  "slide_index": 2,
-  "bullets": [
-    {"text": "CA : 5.1M EUR (+28%)", "level": 0, "bold": true},
-    {"text": "Objectif depasse de 18%", "level": 1},
-    {"text": "Nouveaux clients : 94", "level": 0, "bold": true}
-  ]
-}
-```
-
-> Remplace **toutes** les puces existantes.
-
-#### 4. `add_slide` — Ajouter une slide
-
-```json
-{
-  "op": "add_slide",
-  "at_index": 3,
-  "slide": {
-    "layout": "content_bullets",
-    "title": "Nouvelle slide inseree",
-    "bullets": [{"text": "Contenu a completer"}]
-  }
-}
-```
-
-- `at_index` : position d'insertion (0-indexed). Omis = ajoute a la fin.
-- `slide` : meme format que pour la creation (les 8 layouts sont disponibles).
-
-#### 5. `delete_slide` — Supprimer une slide
-
-```json
-{"op": "delete_slide", "slide_index": 5}
-```
-
-> Attention : les indices changent apres suppression. Si vous supprimez plusieurs slides, procedez du plus grand indice au plus petit.
-
-#### 6. `reorder_slide` — Deplacer une slide
-
-```json
-{"op": "reorder_slide", "from_index": 4, "to_index": 1}
-```
-
-- `from_index` et `to_index` doivent etre differents.
-
-#### 7. `replace_image` — Remplacer une image
-
-```json
-{
-  "op": "replace_image",
-  "slide_index": 5,
-  "image": {"filename": "dashboard-v2.png", "width_cm": 14}
-}
-```
-
-> Remplace la **premiere** image trouvee sur la slide.
-
-#### 8. `add_image` — Ajouter une image
-
-```json
-{
-  "op": "add_image",
-  "slide_index": 2,
-  "image": {"filename": "logo.png", "width_cm": 5, "height_cm": 3}
-}
-```
-
-#### 9. `update_notes` — Modifier les notes
-
-```json
-{"op": "update_notes", "slide_index": 2, "notes": "Parler du deal Acme. Max 3 min."}
-```
-
-Notes du presentateur (1-5000 caracteres).
-
-#### 10. `update_chart` — Modifier un graphique
-
-```json
-{
-  "op": "update_chart",
-  "slide_index": 3,
-  "chart": {
-    "chart_type": "column",
-    "title": "CA mensuel (k EUR) — Mise a jour",
-    "categories": ["Jan", "Fev", "Mar", "Avr"],
-    "series": [
-      {"name": "2025", "values": [650, 720, 780, 800]},
-      {"name": "2026", "values": [780, 810, 850, 890]}
-    ]
-  }
-}
-```
-
-> Remplace le **premier** graphique trouve sur la slide par un nouveau.
-
-#### 11. `set_background` — Couleur de fond
-
-```json
-{"op": "set_background", "slide_index": 0, "color": "1F4E79"}
-```
-
-Couleur unie. Hex 6 caracteres sans `#`.
-
 ---
 
 ## Inspection de fichiers
 
 ### Tool : `inspect_generated_file`
 
-Inspecte la structure d'un fichier Excel ou PowerPoint pour preparer une edition.
+Inspecte la structure d'un fichier Excel pour preparer une edition.
 
 ```json
 {
@@ -1083,18 +548,14 @@ Inspecte la structure d'un fichier Excel ou PowerPoint pour preparer une edition
 
 | Parametre | Type | Defaut | Description |
 |-----------|------|--------|-------------|
-| `filename` | string | — | Fichier dans OUTPUT_PATH (.xlsx ou .pptx) |
+| `filename` | string | — | Fichier dans OUTPUT_PATH (.xlsx) |
 | `max_rows_per_sheet` | int | 10 | Lignes echantillon par feuille (1-100) |
 
 ### Retour pour Excel
 
 - Liste des feuilles avec colonnes, donnees echantillon, graphiques, validations, proprietes
 
-### Retour pour PowerPoint
-
-- Liste des slides avec titre, sous-titre, puces, images, graphiques, notes
-
-> Utilisez `inspect_generated_file` avant `edit_excel_document` ou `edit_presentation` pour connaitre la structure actuelle du fichier.
+> Utilisez `inspect_generated_file` avant `edit_excel_document` pour connaitre la structure actuelle du fichier.
 
 ---
 
@@ -1103,19 +564,19 @@ Inspecte la structure d'un fichier Excel ou PowerPoint pour preparer une edition
 ### Creation simple
 
 ```
-1. create_excel_document / create_presentation
+1. create_excel_document
 2. inspect_generated_file  (verifier le resultat)
-3. edit_excel_document / edit_presentation  (ajuster si necessaire)
+3. edit_excel_document  (ajuster si necessaire)
 ```
 
 ### Creation iterative
 
 ```
-1. create_presentation  (structure initiale)
+1. create_excel_document  (structure initiale)
 2. inspect_generated_file
-3. edit_presentation  (corrections)
+3. edit_excel_document  (corrections)
 4. inspect_generated_file  (re-verifier)
-5. edit_presentation  (finitions)
+5. edit_excel_document  (finitions)
 ```
 
 ### Consultation avant edition
@@ -1123,7 +584,7 @@ Inspecte la structure d'un fichier Excel ou PowerPoint pour preparer une edition
 ```
 1. list_available_documents(source="generated")  (trouver le fichier)
 2. inspect_generated_file  (voir la structure)
-3. edit_excel_document / edit_presentation  (editer en connaissance de cause)
+3. edit_excel_document  (editer en connaissance de cause)
 ```
 
 ---
@@ -1174,12 +635,7 @@ Toutes les couleurs sont en hexadecimal 6 caracteres **sans** le `#`.
 | Feuilles par fichier Excel | 50 |
 | Lignes par feuille | 10 000 |
 | Colonnes par ligne | 500 |
-| Slides par presentation | 100 |
 | Operations par edition | 100 |
-| Puces par slide | 20 |
-| Series par graphique (PPTX) | 10 |
-| Valeurs par serie (PPTX) | 50 |
-| Categories par graphique (PPTX) | 50 |
 
 ### Securite
 
@@ -1188,8 +644,6 @@ Toutes les couleurs sont en hexadecimal 6 caracteres **sans** le `#`.
 | Formula injection | Les formules DDE, CMD, SYSTEM, EXEC, CALL sont bloquees |
 | Path traversal | `..`, `/`, `\` sont interdits dans les noms de fichiers |
 | Author constraint | Max 255 caracteres |
-| Image isolation | Seules les images dans `IMAGES_POWERPOINT_PATH` sont accessibles |
-| Template isolation | Seuls les templates dans `TEMPLATES_PPTX_PATH` sont accessibles |
 | File size check | Le fichier genere est verifie apres ecriture |
 
 ### Comportement en cas d'erreur
@@ -1197,9 +651,7 @@ Toutes les couleurs sont en hexadecimal 6 caracteres **sans** le `#`.
 | Type | Comportement |
 |------|-------------|
 | Fichier non trouve | Erreur bloquante avec suggestion |
-| Feuille/slide inexistante | Erreur bloquante avec liste des feuilles/slides |
+| Feuille inexistante | Erreur bloquante avec liste des feuilles |
 | Graphique invalide | **Non bloquant** — compte comme `skipped`, les autres operations continuent |
 | Formule dangereuse | Erreur bloquante |
 | Taille depassee | Erreur bloquante apres generation |
-| Template non trouve | Erreur bloquante avec liste des templates disponibles |
-| Image non trouvee | Erreur bloquante avec liste des images disponibles |

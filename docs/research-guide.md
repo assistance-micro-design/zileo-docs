@@ -30,8 +30,8 @@ Avant toute operation, lister les fichiers disponibles pour savoir ce qui peut e
 
 | Parametre | Type | Defaut | Description |
 |-----------|------|--------|-------------|
-| `source` | string | `documents` | `documents` (PDF/Excel/Word), `generated` (fichiers crees), `templates`, `images` |
-| `type_filter` | string | `all` | `pdf`, `excel`, `word`, `presentation`, `all` |
+| `source` | string | `documents` | `documents` (PDF/Excel/Word), `generated` (fichiers crees) |
+| `type_filter` | string | `all` | `pdf`, `excel`, `word`, `all` |
 | `subdirectory` | string | None | Sous-dossier relatif |
 | `recursive` | bool | true | Explorer les sous-dossiers |
 
@@ -525,7 +525,6 @@ Etape 1 : Analyse avec les tools de recherche (ce guide)
 
 Etape 2 : Creer un livrable avec les tools de generation
   → create_excel_document pour un rapport chiffre
-  → create_presentation pour une synthese visuelle
 
 Voir generation-guide.md pour les details de creation.
 ```
@@ -634,9 +633,7 @@ Strategie : recherche semantique uniquement + drill-down progressif
 | Source | Contenu | Usage |
 |--------|---------|-------|
 | `documents` | PDF, Excel, Word dans le dossier source | Fichiers a indexer |
-| `generated` | Excel, PowerPoint crees par les tools | Fichiers generes |
-| `templates` | Templates PowerPoint | Pour create_presentation |
-| `images` | Images pour slides | Pour content_with_image |
+| `generated` | Excel crees par les tools | Fichiers generes |
 
 ### Types de documents supportes
 

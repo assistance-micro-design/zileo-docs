@@ -1,1 +1,1 @@
-"""Service d'inspection de fichiers generes (Excel, PowerPoint)."""
+"""Service d'inspection de fichiers Excel generes."""

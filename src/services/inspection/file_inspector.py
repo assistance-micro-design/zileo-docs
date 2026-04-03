@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""Service d'inspection de fichiers Excel et PowerPoint generes."""
+"""Service d'inspection de fichiers Excel generes."""
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -17,11 +16,11 @@ logger = logging.getLogger(__name__)
 
 _MAX_FORMULAS = 50
 
-_SUPPORTED_EXTENSIONS = {".xlsx", ".pptx"}
+_SUPPORTED_EXTENSIONS = {".xlsx"}
 
 
 class FileInspector:
-    """Inspecte la structure de fichiers Excel et PowerPoint generes.
+    """Inspecte la structure de fichiers Excel generes.
 
     Retourne la structure dans le vocabulaire des tools d'edition
     pour que le LLM puisse construire directement ses operations.
@@ -42,7 +41,7 @@ class FileInspector:
         """Inspecte un fichier et retourne sa structure.
 
         Args:
-            filename: Nom du fichier (.xlsx ou .pptx).
+            filename: Nom du fichier (.xlsx).
             max_rows: Nombre max de lignes a afficher par feuille Excel.
 
         Returns:
@@ -62,21 +61,15 @@ class FileInspector:
         ext = file_path.suffix.lower()
         if ext not in _SUPPORTED_EXTENSIONS:
             return {
-                "error": f"Extension non supportee: {ext}. Seuls .xlsx et .pptx sont acceptes.",
+                "error": f"Extension non supportee: {ext}. Seul .xlsx est accepte.",
                 "filename": filename,
             }
 
-        if ext == ".xlsx":
-            return await self._inspect_excel(file_path, max_rows)
-        return await self._inspect_pptx(file_path)
+        return await self._inspect_excel(file_path, max_rows)
 
     async def _inspect_excel(self, file_path: Path, max_rows: int) -> dict[str, Any]:
         """Inspecte un .xlsx via openpyxl (asyncio.to_thread)."""
         return await asyncio.to_thread(self._inspect_excel_sync, file_path, max_rows)
-
-    async def _inspect_pptx(self, file_path: Path) -> dict[str, Any]:
-        """Inspecte un .pptx via python-pptx (asyncio.to_thread)."""
-        return await asyncio.to_thread(self._inspect_pptx_sync, file_path)
 
     def _inspect_excel_sync(self, file_path: Path, max_rows: int) -> dict[str, Any]:
         """Inspection synchrone d'un fichier Excel."""
@@ -245,144 +238,3 @@ class FileInspector:
                         }
                     )
         return formulas, total_formulas
-
-    def _inspect_pptx_sync(self, file_path: Path) -> dict[str, Any]:
-        """Inspection synchrone d'un fichier PowerPoint."""
-        from pptx import Presentation  # noqa: PLC0415
-        from pptx.enum.shapes import MSO_SHAPE_TYPE  # noqa: PLC0415
-        from pptx.util import Emu  # noqa: PLC0415
-
-        from src.services.presentation.shape_finders import (  # noqa: PLC0415
-            find_bullets_shape,
-            find_subtitle_shape,
-            find_title_shape,
-        )
-
-        try:
-            prs = Presentation(str(file_path))
-        except Exception as exc:
-            return {"error": f"Fichier illisible: {exc}", "filename": file_path.name}
-
-        finders = (find_title_shape, find_subtitle_shape, find_bullets_shape)
-
-        slides_info = []
-        for idx, slide in enumerate(prs.slides):
-            slide_info = self._extract_slide_info(idx, slide, finders, MSO_SHAPE_TYPE, Emu)
-            slides_info.append(slide_info)
-
-        return {
-            "filename": file_path.name,
-            "type": "presentation",
-            "file_size_bytes": file_path.stat().st_size,
-            "editable_with": "edit_presentation",
-            "total_slides": len(slides_info),
-            "slides": slides_info,
-        }
-
-    def _extract_slide_info(
-        self,
-        idx: int,
-        slide: Any,
-        finders: tuple[Any, Any, Any],
-        mso_shape_type: Any,
-        emu_cls: Any,
-    ) -> dict[str, Any]:
-        """Extrait les informations d'un slide PowerPoint.
-
-        Args:
-            idx: Index du slide (0-based).
-            slide: Objet Slide python-pptx.
-            finders: Tuple (find_title_shape, find_subtitle_shape, find_bullets_shape).
-            mso_shape_type: Enum MSO_SHAPE_TYPE.
-            emu_cls: Classe Emu pour conversion d'unites.
-
-        Returns:
-            Dictionnaire avec les informations du slide.
-        """
-        fn_title, fn_subtitle, fn_bullets = finders
-        slide_info: dict[str, Any] = {
-            "slide_index": idx,
-            "layout": slide.slide_layout.name if slide.slide_layout else None,
-        }
-
-        title_shape = fn_title(slide)
-        slide_info["title"] = title_shape.text_frame.text if title_shape else None
-
-        subtitle_shape = fn_subtitle(slide)
-        slide_info["subtitle"] = subtitle_shape.text_frame.text if subtitle_shape else None
-
-        bullets_shape = fn_bullets(slide)
-        bullets: list[dict[str, Any]] | None = None
-        if bullets_shape and bullets_shape.has_text_frame:
-            items = [
-                {"text": para.text, "level": para.level or 0}
-                for para in bullets_shape.text_frame.paragraphs
-                if para.text.strip()
-            ]
-            bullets = items if items else None
-        slide_info["bullets"] = bullets
-
-        slide_info["images"] = self._extract_images(slide, mso_shape_type, emu_cls)
-        slide_info["charts"] = self._extract_charts(slide)
-        slide_info["notes"] = self._extract_notes(slide)
-        slide_info["background_color"] = self._extract_background(slide)
-
-        return slide_info
-
-    def _extract_images(
-        self, slide: Any, mso_shape_type: Any, emu_cls: Any
-    ) -> list[dict[str, Any]]:
-        """Extrait les informations des images d'un slide."""
-        images = []
-        for shape in slide.shapes:
-            if shape.shape_type != mso_shape_type.PICTURE:
-                continue
-            images.append(
-                {
-                    "shape_name": shape.name,
-                    "content_type": (shape.image.content_type if hasattr(shape, "image") else None),
-                    "width_cm": round(emu_cls(shape.width).cm, 1) if shape.width else None,
-                    "height_cm": round(emu_cls(shape.height).cm, 1) if shape.height else None,
-                    "left_cm": round(emu_cls(shape.left).cm, 1) if shape.left else None,
-                    "top_cm": round(emu_cls(shape.top).cm, 1) if shape.top else None,
-                }
-            )
-        return images
-
-    def _extract_charts(self, slide: Any) -> list[dict[str, Any]]:
-        """Extrait les informations des graphiques d'un slide."""
-        charts = []
-        for shape in slide.shapes:
-            if not shape.has_chart:
-                continue
-            chart_title = None
-            if shape.chart.has_title:
-                chart_title = shape.chart.chart_title.text_frame.text
-            charts.append(
-                {
-                    "type": str(shape.chart.chart_type) if shape.chart.chart_type else None,
-                    "title": chart_title,
-                }
-            )
-        return charts
-
-    def _extract_notes(self, slide: Any) -> str | None:
-        """Extrait les notes du presentateur d'un slide."""
-        if not slide.has_notes_slide:
-            return None
-        if not slide.notes_slide.notes_text_frame:
-            return None
-        notes_text: str = slide.notes_slide.notes_text_frame.text
-        if not notes_text.strip():
-            return None
-        return notes_text
-
-    def _extract_background(self, slide: Any) -> str | None:
-        """Extrait la couleur de fond d'un slide."""
-        bg = slide.background
-        if not (bg and bg.fill and bg.fill.type is not None):
-            return None
-        with contextlib.suppress(AttributeError, TypeError):
-            if bg.fill.fore_color:
-                return str(bg.fill.fore_color.rgb)
-        return None

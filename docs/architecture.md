@@ -131,8 +131,6 @@ class BaseMCPTool(ABC):
 | `read_document_content` | `VectorStoreMCPTool` | VectorStore |
 | `create_excel_document` | `BaseMCPTool` | Aucune (ExcelGenerator interne) |
 | `edit_excel_document` | `BaseMCPTool` | Aucune (ExcelEditor interne) |
-| `create_presentation` | `BaseMCPTool` | Aucune (PresentationGenerator interne) |
-| `edit_presentation` | `BaseMCPTool` | Aucune (PresentationEditor interne) |
 | `inspect_generated_file` | `BaseMCPTool` | Aucune (FileInspector interne) |
 
 ### Securite
@@ -161,7 +159,6 @@ MCPZileoError
   +-- EmbeddingError (EmbeddingAPIError)
   +-- VectorStoreError (VectorStoreConnectionError, CollectionNotFoundError, DocumentNotFoundError)
   +-- ExcelGenerationError (ExcelOutputTooLargeError, ExcelChartError, ExcelFileNotFoundError, ExcelSheetNotFoundError)
-  +-- PresentationGenerationError (PresentationOutputTooLargeError, PresentationChartError, PresentationImageNotFoundError, PresentationTemplateNotFoundError, PresentationFileNotFoundError, PresentationSlideNotFoundError)
   +-- ValidationError (EmptyQueryError)
   +-- NoResultsError
 ```
@@ -198,9 +195,7 @@ src/
 |       +-- read_document_content.py
 |       +-- create_excel.py      # Cree un fichier Excel
 |       +-- edit_excel.py        # Edite un fichier Excel existant
-|       +-- create_presentation.py  # Cree un fichier PowerPoint
-|       +-- edit_presentation.py    # Edite un fichier PowerPoint existant
-|       +-- inspect_generated_file.py # Inspecte structure Excel/PowerPoint
+|       +-- inspect_generated_file.py # Inspecte structure Excel
 +-- services/
 |   +-- pipeline/orchestrator.py  # PDFPipelineOrchestrator
 |   +-- pdf/
@@ -214,12 +209,8 @@ src/
 |   +-- excel/extractor.py       # ExcelExtractor (lecture/indexation)
 |   +-- excel/generator.py      # ExcelGenerator (creation .xlsx)
 |   +-- excel/editor.py         # ExcelEditor (edition .xlsx existant)
-|   +-- presentation/
-|   |   +-- generator.py        # PresentationGenerator (creation .pptx)
-|   |   +-- editor.py           # PresentationEditor (edition .pptx existant)
-|   |   +-- shape_finders.py    # Helpers partages (detection titre/sous-titre/puces)
 |   +-- inspection/
-|   |   +-- file_inspector.py   # FileInspector (inspection Excel/PowerPoint)
+|   |   +-- file_inspector.py   # FileInspector (inspection Excel)
 |   +-- word/extractor.py        # WordExtractor
 +-- models/
     +-- document.py    # DocumentMetadata, PageAnalysis, PageType
@@ -229,8 +220,6 @@ src/
     +-- excel.py            # ExcelDocument, ExcelSheet, ExcelCell, ExcelFormula
     +-- excel_generation.py # SheetDef, ChartDef, CellStyleDef, DataValidationDef
     +-- excel_edit.py       # EditOp (discriminated union de 13 operations)
-    +-- presentation_generation.py # SlideDef (discriminated union de 8 layouts)
-    +-- presentation_edit.py # PresentationEditOp (discriminated union de 11 operations)
     +-- word.py             # WordDocument, WordParagraph, WordTable, ContentBlock
     +-- search.py           # SearchQuery, SearchFilters, SearchResponse
     +-- api.py              # Pydantic models pour parametres MCP et reponses REST

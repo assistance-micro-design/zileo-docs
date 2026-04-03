@@ -61,7 +61,7 @@ Si d'autres serveurs MCP sont deja configures, ajouter `zileo-rag` dans l'objet 
 ### Verification
 
 1. Redemarrer Claude Desktop
-2. Dans une nouvelle conversation, les 13 outils MCP apparaissent dans l'icone d'outils
+2. Dans une nouvelle conversation, les 11 outils MCP apparaissent dans l'icone d'outils
 3. Tester avec un prompt : *"Liste les documents disponibles"* — Claude appellera `list_available_documents`
 
 ### Depannage Claude Desktop
@@ -143,7 +143,7 @@ Remplacer `192.168.1.X` par l'IP de la machine qui heberge MCP Zileo RAG.
 ### Verification
 
 1. Recharger la configuration Zileo Chat
-2. Les 13 outils MCP doivent apparaitre
+2. Les 11 outils MCP doivent apparaitre
 3. Tester : *"Indexe le fichier rapport.pdf"* — Zileo Chat appellera `index_document`
 
 ---
@@ -162,7 +162,7 @@ Tout client compatible MCP peut se connecter au serveur. La configuration minima
 |---------|-------------|
 | `initialize` | Handshake initial, retourne les capabilities du serveur |
 | `notifications/initialized` | Notification post-handshake (pas de reponse) |
-| `tools/list` | Liste les 13 outils avec leurs schemas |
+| `tools/list` | Liste les 11 outils avec leurs schemas |
 | `tools/call` | Execute un outil avec les arguments fournis |
 
 ### Exemple de requete manuelle
@@ -209,7 +209,7 @@ curl -X POST http://localhost:8000/mcp \
 
 ## Outils disponibles
 
-Une fois connecte, le client MCP a acces aux 13 outils suivants :
+Une fois connecte, le client MCP a acces aux 11 outils suivants :
 
 ### Indexation et recherche
 
@@ -229,14 +229,12 @@ Une fois connecte, le client MCP a acces aux 13 outils suivants :
 |-------|-------------|
 | `create_excel_document` | Creer un fichier Excel (.xlsx) |
 | `edit_excel_document` | Editer un Excel existant (13 operations) |
-| `create_presentation` | Creer un PowerPoint (.pptx, 8 layouts) |
-| `edit_presentation` | Editer un PowerPoint existant (11 operations) |
 
 ### Utilitaires
 
 | Outil | Description |
 |-------|-------------|
-| `list_available_documents` | Lister les fichiers (4 sources) |
+| `list_available_documents` | Lister les fichiers (2 sources) |
 | `inspect_generated_file` | Inspecter la structure d'un fichier genere |
 
 ---

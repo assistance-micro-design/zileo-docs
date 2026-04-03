@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""Tool MCP pour inspecter la structure d'un fichier Excel ou PowerPoint genere."""
+"""Tool MCP pour inspecter la structure d'un fichier Excel genere."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class InspectGeneratedFileTool(BaseMCPTool):
-    """Inspecte la structure d'un fichier Excel ou PowerPoint genere.
+    """Inspecte la structure d'un fichier Excel genere.
 
     Retourne la structure dans le format des tools d'edition
     pour permettre au LLM de construire directement ses operations.
@@ -31,11 +31,10 @@ class InspectGeneratedFileTool(BaseMCPTool):
 
     name: ClassVar[str] = "inspect_generated_file"
     description: ClassVar[str] = (
-        "Inspecte la structure d'un fichier Excel ou PowerPoint cree par "
-        "create_excel_document ou create_presentation. "
-        "Retourne la structure dans le format des tools edit_excel_document / edit_presentation "
+        "Inspecte la structure d'un fichier Excel cree par create_excel_document. "
+        "Retourne la structure dans le format du tool edit_excel_document "
         "pour permettre l'edition directe. "
-        "Utiliser AVANT edit_excel_document ou edit_presentation pour voir le contenu actuel."
+        "Utiliser AVANT edit_excel_document pour voir le contenu actuel."
     )
 
     input_schema: ClassVar[dict[str, Any]] = {
@@ -44,7 +43,7 @@ class InspectGeneratedFileTool(BaseMCPTool):
             "filename": {
                 "type": "string",
                 "description": (
-                    "Nom du fichier a inspecter (.xlsx ou .pptx). "
+                    "Nom du fichier a inspecter (.xlsx). "
                     "Doit exister dans OUTPUT_PATH. "
                     "Utiliser list_available_documents(source='generated') pour voir les fichiers disponibles."
                 ),
