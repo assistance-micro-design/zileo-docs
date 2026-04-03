@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.core.file_validation import validate_file_magic, validate_filename_safety
+from src.core.file_validation import (
+    compute_file_hash,
+    validate_file_magic,
+    validate_filename_safety,
+)
 
 
 class TestValidateFilenameSafety:
@@ -48,3 +52,28 @@ class TestValidateFileMagic:
         txt = tmp_path / "test.txt"
         txt.write_bytes(b"just text")
         assert validate_file_magic(txt) is True
+
+
+class TestComputeFileHash:
+    """Tests pour compute_file_hash."""
+
+    def test_returns_sha256_hex(self, tmp_path: Path) -> None:
+        f = tmp_path / "test.txt"
+        f.write_bytes(b"hello world")
+        h = compute_file_hash(f)
+        assert len(h) == 64  # SHA-256 hex = 64 chars
+        assert h.isalnum()
+
+    def test_same_content_same_hash(self, tmp_path: Path) -> None:
+        f1 = tmp_path / "a.txt"
+        f2 = tmp_path / "b.txt"
+        f1.write_bytes(b"identical")
+        f2.write_bytes(b"identical")
+        assert compute_file_hash(f1) == compute_file_hash(f2)
+
+    def test_different_content_different_hash(self, tmp_path: Path) -> None:
+        f1 = tmp_path / "a.txt"
+        f2 = tmp_path / "b.txt"
+        f1.write_bytes(b"content A")
+        f2.write_bytes(b"content B")
+        assert compute_file_hash(f1) != compute_file_hash(f2)

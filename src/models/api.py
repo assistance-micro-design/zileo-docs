@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -85,6 +85,13 @@ class SearchDocumentsParams(BaseModel):
         default=None,
         description="Filtres optionnels",
     )
+    search_mode: Annotated[
+        Literal["hybrid", "semantic"],
+        Field(
+            default="hybrid",
+            description="Mode: 'hybrid' (vecteur+full-text) ou 'semantic' (vecteur seul)",
+        ),
+    ]
 
 
 class GetDocumentParams(BaseModel):
@@ -345,11 +352,6 @@ class ListAvailableDocumentsParams(BaseModel):
         default=True,
         description="Explorer récursivement les sous-dossiers",
     )
-
-    _VALID_TYPES_BY_SOURCE: dict[str, set[str]] = {
-        "documents": {"all", "pdf", "excel", "word"},
-        "generated": {"all", "excel"},
-    }
 
     @field_validator("source")
     @classmethod

@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""Validation de fichiers par magic numbers et extension."""
+"""Validation de fichiers par magic numbers, extension et hash."""
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 
@@ -44,3 +45,19 @@ def validate_file_magic(file_path: Path) -> bool:
         header = f.read(4)
 
     return any(header.startswith(magic) for magic in expected_magics)
+
+
+def compute_file_hash(file_path: Path) -> str:
+    """Calcule le SHA-256 d'un fichier.
+
+    Args:
+        file_path: Chemin vers le fichier.
+
+    Returns:
+        Hash SHA-256 hexadecimal du fichier.
+    """
+    sha256 = hashlib.sha256()
+    with file_path.open("rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()

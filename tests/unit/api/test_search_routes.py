@@ -51,6 +51,7 @@ def app(mock_embedder, mock_vector_store, search_results):
     from src.api.dependencies import get_embedder, get_vector_store
 
     mock_vector_store.search = AsyncMock(return_value=search_results)
+    mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
     app.dependency_overrides[get_embedder] = lambda: mock_embedder
     app.dependency_overrides[get_vector_store] = lambda: mock_vector_store
     return app

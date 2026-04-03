@@ -84,6 +84,37 @@ def tool_with_mocks(
     return tool
 
 
+class TestDependencyInjection:
+    """Tests pour l'injection de dependances dans IndexDocumentTool."""
+
+    def test_init_with_injected_dependencies(self) -> None:
+        """Les instances injectees sont utilisees (pas de creation interne)."""
+        mock_vs = MagicMock()
+        mock_emb = MagicMock()
+        tool = IndexDocumentTool(vector_store=mock_vs, embedder=mock_emb)
+
+        assert tool._vector_store is mock_vs
+        assert tool._embedder is mock_emb
+
+    def test_init_without_injection_creates_defaults(self) -> None:
+        """Sans injection, les instances sont creees en interne."""
+        tool = IndexDocumentTool()
+
+        assert tool._vector_store is not None
+        assert tool._embedder is not None
+        assert tool._pdf_orchestrator is not None
+        assert tool._router is not None
+
+    def test_injected_vector_store_used_for_dedup_check(self) -> None:
+        """La verification doublon utilise le vector_store injecte."""
+        mock_vs = MagicMock()
+        mock_emb = MagicMock()
+        tool = IndexDocumentTool(vector_store=mock_vs, embedder=mock_emb)
+
+        # Verifie que c'est bien l'instance injectee
+        assert tool._vector_store is mock_vs
+
+
 class TestIndexDocumentToolDescription:
     """Tests pour la description du tool."""
 
@@ -110,6 +141,7 @@ class TestDuplicateIndexationGuard:
                 "filename": "rapport.pdf",
                 "total_chunks": 42,
                 "ingested_at": "2026-01-15T10:30:00+00:00",
+                "file_hash": "samehash",
             }
         )
 
@@ -118,7 +150,11 @@ class TestDuplicateIndexationGuard:
             mock_path.return_value.name = "rapport.pdf"
             mock_path.return_value.suffix = ".pdf"
 
-            result = await tool_with_mocks.execute({"file_path": "/data/docs/rapport.pdf"})
+            with patch(
+                "src.mcp.tools.index_document.compute_file_hash",
+                return_value="samehash",
+            ):
+                result = await tool_with_mocks.execute({"file_path": "/data/docs/rapport.pdf"})
 
         assert result["already_indexed"] is True
         assert result["document_id"] == "existing-doc-id"
@@ -135,6 +171,7 @@ class TestDuplicateIndexationGuard:
                 "filename": "rapport.pdf",
                 "total_chunks": 42,
                 "ingested_at": "2026-01-15T10:30:00+00:00",
+                "file_hash": "samehash",
             }
         )
 
@@ -143,7 +180,11 @@ class TestDuplicateIndexationGuard:
             mock_path.return_value.name = "rapport.pdf"
             mock_path.return_value.suffix = ".pdf"
 
-            await tool_with_mocks.execute({"file_path": "/data/docs/rapport.pdf"})
+            with patch(
+                "src.mcp.tools.index_document.compute_file_hash",
+                return_value="samehash",
+            ):
+                await tool_with_mocks.execute({"file_path": "/data/docs/rapport.pdf"})
 
         # Le pipeline PDF ne doit PAS avoir ete appele
         tool_with_mocks._pdf_orchestrator.process_and_index.assert_not_called()
@@ -161,6 +202,7 @@ class TestDuplicateIndexationGuard:
                 "filename": "rapport.pdf",
                 "total_chunks": 42,
                 "ingested_at": "2026-01-15T10:30:00+00:00",
+                "file_hash": "samehash",
             }
         )
 
@@ -168,7 +210,11 @@ class TestDuplicateIndexationGuard:
             mock_path.return_value.exists.return_value = True
             mock_path.return_value.name = "rapport.pdf"
 
-            result = await tool_with_mocks.execute({"file_path": "/data/docs/rapport.pdf"})
+            with patch(
+                "src.mcp.tools.index_document.compute_file_hash",
+                return_value="samehash",
+            ):
+                result = await tool_with_mocks.execute({"file_path": "/data/docs/rapport.pdf"})
 
         assert "search_documents" in result["message"]
         assert "delete_document" in result["message"]
@@ -187,12 +233,117 @@ class TestDuplicateIndexationGuard:
             mock_path.return_value.suffix = ".pdf"
             mock_path.return_value.__str__ = lambda _self: "/data/docs/nouveau.pdf"
 
-            result = await tool_with_mocks.execute({"file_path": "/data/docs/nouveau.pdf"})
+            with patch(
+                "src.mcp.tools.index_document.compute_file_hash",
+                return_value="newhash",
+            ):
+                result = await tool_with_mocks.execute({"file_path": "/data/docs/nouveau.pdf"})
 
         assert "already_indexed" not in result
         assert "document_id" in result
         # Le pipeline PDF a bien ete appele
         tool_with_mocks._pdf_orchestrator.process_and_index.assert_called_once()
+
+
+class TestFileHashDeduplication:
+    """Tests pour la deduplication par hash fichier."""
+
+    @pytest.mark.asyncio
+    async def test_same_hash_blocks_reindexation(self, tool_with_mocks: IndexDocumentTool) -> None:
+        """Meme filename + meme hash = deja indexe (bloque)."""
+        tool_with_mocks._vector_store.find_document_by_filename = AsyncMock(
+            return_value={
+                "document_id": "existing-id",
+                "filename": "data.xlsx",
+                "total_chunks": 10,
+                "ingested_at": "2026-01-15T10:30:00+00:00",
+                "file_hash": "samehash123",
+            }
+        )
+
+        with patch("src.mcp.tools.index_document.Path") as mock_path:
+            mock_file = MagicMock()
+            mock_file.exists.return_value = True
+            mock_file.name = "data.xlsx"
+            mock_file.suffix = ".xlsx"
+            mock_file.resolve.return_value = MagicMock()
+            mock_file.resolve.return_value.is_relative_to.return_value = True
+            mock_path.return_value = mock_file
+
+            with (
+                patch("src.mcp.tools.index_document.validate_file_magic", return_value=True),
+                patch("src.mcp.tools.index_document.compute_file_hash", return_value="samehash123"),
+            ):
+                result = await tool_with_mocks.execute({"file_path": "/data/docs/data.xlsx"})
+
+        assert result["already_indexed"] is True
+
+    @pytest.mark.asyncio
+    async def test_different_hash_suggests_reindex(
+        self, tool_with_mocks: IndexDocumentTool
+    ) -> None:
+        """Meme filename + hash different = fichier modifie, propose reindexation."""
+        tool_with_mocks._vector_store.find_document_by_filename = AsyncMock(
+            return_value={
+                "document_id": "existing-id",
+                "filename": "data.xlsx",
+                "total_chunks": 10,
+                "ingested_at": "2026-01-15T10:30:00+00:00",
+                "file_hash": "oldhash111",
+            }
+        )
+
+        with patch("src.mcp.tools.index_document.Path") as mock_path:
+            mock_file = MagicMock()
+            mock_file.exists.return_value = True
+            mock_file.name = "data.xlsx"
+            mock_file.suffix = ".xlsx"
+            mock_file.resolve.return_value = MagicMock()
+            mock_file.resolve.return_value.is_relative_to.return_value = True
+            mock_path.return_value = mock_file
+
+            with (
+                patch("src.mcp.tools.index_document.validate_file_magic", return_value=True),
+                patch("src.mcp.tools.index_document.compute_file_hash", return_value="newhash222"),
+            ):
+                result = await tool_with_mocks.execute({"file_path": "/data/docs/data.xlsx"})
+
+        assert result["file_modified"] is True
+        assert result["document_id"] == "existing-id"
+        assert "delete_document" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_empty_stored_hash_falls_back_to_filename_dedup(
+        self, tool_with_mocks: IndexDocumentTool
+    ) -> None:
+        """Hash vide en base (ancien doc) = dedup par filename seulement."""
+        tool_with_mocks._vector_store.find_document_by_filename = AsyncMock(
+            return_value={
+                "document_id": "old-id",
+                "filename": "legacy.pdf",
+                "total_chunks": 5,
+                "ingested_at": "2025-01-01T00:00:00+00:00",
+                "file_hash": "",
+            }
+        )
+
+        with patch("src.mcp.tools.index_document.Path") as mock_path:
+            mock_file = MagicMock()
+            mock_file.exists.return_value = True
+            mock_file.name = "legacy.pdf"
+            mock_file.suffix = ".pdf"
+            mock_file.resolve.return_value = MagicMock()
+            mock_file.resolve.return_value.is_relative_to.return_value = True
+            mock_path.return_value = mock_file
+
+            with (
+                patch("src.mcp.tools.index_document.validate_file_magic", return_value=True),
+                patch("src.mcp.tools.index_document.compute_file_hash", return_value="somehash"),
+            ):
+                result = await tool_with_mocks.execute({"file_path": "/data/docs/legacy.pdf"})
+
+        # Hash vide = pas de comparaison possible, on bloque comme avant
+        assert result["already_indexed"] is True
 
 
 class TestPathTraversalProtection:

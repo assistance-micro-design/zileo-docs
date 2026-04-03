@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
+from src.core.file_validation import compute_file_hash
 from src.models.unified import DocumentType
 
 
@@ -208,9 +209,8 @@ class DocumentRouter:
             UnifiedDocument,
             UnifiedMetadata,
         )
-        from src.services.excel.extractor import ExcelExtractor  # noqa: PLC0415
 
-        extractor = ExcelExtractor()
+        extractor = self._extractors[DocumentType.EXCEL]
         excel_doc = await extractor.extract(path)
 
         # Convertir les tableaux
@@ -238,9 +238,11 @@ class DocumentRouter:
         ]
 
         # Métadonnées
+        file_hash = compute_file_hash(path)
         metadata = UnifiedMetadata(
             filename=excel_doc.filename,
             file_path=excel_doc.file_path,
+            file_hash=file_hash,
             document_type=DocumentType.EXCEL,
             original_format=f".{excel_doc.format}",
             page_count=len(excel_doc.sheets),
@@ -277,9 +279,8 @@ class DocumentRouter:
             UnifiedDocument,
             UnifiedMetadata,
         )
-        from src.services.word.extractor import WordExtractor  # noqa: PLC0415
 
-        extractor = WordExtractor()
+        extractor = self._extractors[DocumentType.WORD]
         word_doc = await extractor.extract(path)
 
         # Convertir les tableaux
@@ -307,9 +308,11 @@ class DocumentRouter:
         ]
 
         # Métadonnées
+        file_hash = compute_file_hash(path)
         metadata = UnifiedMetadata(
             filename=word_doc.filename,
             file_path=word_doc.file_path,
+            file_hash=file_hash,
             document_type=DocumentType.WORD,
             original_format=".docx",
             word_count=word_doc.word_count,

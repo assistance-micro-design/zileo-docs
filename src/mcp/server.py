@@ -165,7 +165,10 @@ class MCPServer:
         self._create_excel = CreateExcelTool()
         self._edit_excel = EditExcelTool()
         self._inspect_generated_file = InspectGeneratedFileTool()
-        self._index_document = IndexDocumentTool()
+        self._index_document = IndexDocumentTool(
+            vector_store=self._shared_vector_store,
+            embedder=self._shared_embedder,
+        )
         self._search_documents = SearchDocumentsTool(
             vector_store=self._shared_vector_store,
             embedder=self._shared_embedder,

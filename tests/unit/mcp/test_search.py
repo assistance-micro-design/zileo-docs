@@ -55,12 +55,13 @@ def tool_with_mock(
     mock_embedder: AsyncMock,
     search_results: list[dict[str, Any]],
 ) -> SearchDocumentsTool:
-    """Tool avec dependances mockees."""
+    """Tool avec dependances mockees (mode hybrid par defaut)."""
     tool = SearchDocumentsTool(
         vector_store=mock_vector_store,
         embedder=mock_embedder,
     )
     mock_vector_store.search = AsyncMock(return_value=search_results)
+    mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
     tool._initialized = True
     return tool
 
@@ -107,7 +108,7 @@ class TestSearchDocumentsExecution:
     ) -> None:
         await tool_with_mock.execute({"query": "test", "top_k": 10})
 
-        call_kwargs = mock_vector_store.search.call_args
+        call_kwargs = mock_vector_store.hybrid_search.call_args
         assert call_kwargs.kwargs["top_k"] == 10
 
     @pytest.mark.asyncio
@@ -118,7 +119,7 @@ class TestSearchDocumentsExecution:
     ) -> None:
         await tool_with_mock.execute({"query": "test", "filters": {"document_id": "doc-123"}})
 
-        call_kwargs = mock_vector_store.search.call_args
+        call_kwargs = mock_vector_store.hybrid_search.call_args
         assert call_kwargs.kwargs["filters"] == {"document_id": "doc-123"}
 
     @pytest.mark.asyncio
@@ -132,7 +133,7 @@ class TestSearchDocumentsExecution:
         tool_with_mock: SearchDocumentsTool,
         mock_vector_store: AsyncMock,
     ) -> None:
-        mock_vector_store.search = AsyncMock(return_value=[])
+        mock_vector_store.hybrid_search = AsyncMock(return_value=[])
 
         result = await tool_with_mock.execute({"query": "nothing matches"})
 
@@ -145,3 +146,75 @@ class TestSearchDocumentsExecution:
 
         score = result["results"][0]["score"]
         assert score == 0.92
+
+
+class TestSearchModeHybrid:
+    """Tests pour le mode de recherche hybride."""
+
+    @pytest.mark.asyncio
+    async def test_default_mode_is_hybrid(
+        self,
+        mock_vector_store: AsyncMock,
+        mock_embedder: AsyncMock,
+        search_results: list[dict[str, Any]],
+    ) -> None:
+        """Le mode par defaut est hybrid."""
+        tool = SearchDocumentsTool(
+            vector_store=mock_vector_store,
+            embedder=mock_embedder,
+        )
+        mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
+        tool._initialized = True
+
+        result = await tool.execute({"query": "test hybride"})
+
+        # hybrid_search doit etre appele, pas search
+        mock_vector_store.hybrid_search.assert_called_once()
+        assert result["total_results"] == 1
+
+    @pytest.mark.asyncio
+    async def test_semantic_mode_uses_dense_only(
+        self,
+        mock_vector_store: AsyncMock,
+        mock_embedder: AsyncMock,
+        search_results: list[dict[str, Any]],
+    ) -> None:
+        """Le mode semantic utilise uniquement la recherche dense."""
+        tool = SearchDocumentsTool(
+            vector_store=mock_vector_store,
+            embedder=mock_embedder,
+        )
+        mock_vector_store.search = AsyncMock(return_value=search_results)
+        tool._initialized = True
+
+        result = await tool.execute({"query": "test semantic", "search_mode": "semantic"})
+
+        # search classique doit etre appele, pas hybrid_search
+        mock_vector_store.search.assert_called_once()
+        assert result["total_results"] == 1
+
+    @pytest.mark.asyncio
+    async def test_hybrid_passes_query_text(
+        self,
+        mock_vector_store: AsyncMock,
+        mock_embedder: AsyncMock,
+        search_results: list[dict[str, Any]],
+    ) -> None:
+        """Le mode hybrid passe le texte de la requete a hybrid_search."""
+        tool = SearchDocumentsTool(
+            vector_store=mock_vector_store,
+            embedder=mock_embedder,
+        )
+        mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
+        tool._initialized = True
+
+        await tool.execute({"query": "facture 2024-0123"})
+
+        call_kwargs = mock_vector_store.hybrid_search.call_args.kwargs
+        assert call_kwargs["query_text"] == "facture 2024-0123"
+
+    def test_input_schema_has_search_mode(self) -> None:
+        """Le schema d'input expose search_mode."""
+        props = SearchDocumentsTool.input_schema["properties"]
+        assert "search_mode" in props
+        assert props["search_mode"]["default"] == "hybrid"

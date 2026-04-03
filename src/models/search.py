@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -42,6 +42,13 @@ class SearchQuery(BaseModel):
     top_k: Annotated[int, Field(default=5, ge=1, le=100)]
     score_threshold: Annotated[float, Field(default=0.7, ge=0.0, le=1.0)]
     filters: SearchFilters | None = None
+    search_mode: Annotated[
+        Literal["hybrid", "semantic"],
+        Field(
+            default="hybrid",
+            description="Mode: 'hybrid' (vecteur+full-text) ou 'semantic' (vecteur seul)",
+        ),
+    ]
 
 
 class SearchResultItem(BaseModel):

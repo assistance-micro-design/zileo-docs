@@ -59,13 +59,19 @@ async def search_documents(
         # Construire les filtres Qdrant
         filters = _build_filters(query.filters) if query.filters else None
 
-        # Rechercher dans Qdrant
-        results = await vector_store.search(
-            query_embedding=query_embedding,
-            top_k=query.top_k,
-            filters=filters,
-            score_threshold=query.score_threshold,
+        # Rechercher selon le mode
+        search_kwargs: dict[str, Any] = {
+            "query_embedding": query_embedding,
+            "top_k": query.top_k,
+            "filters": filters,
+            "score_threshold": query.score_threshold,
+        }
+        if query.search_mode != "semantic":
+            search_kwargs["query_text"] = query.query
+        search_fn = (
+            vector_store.search if query.search_mode == "semantic" else vector_store.hybrid_search
         )
+        results = await search_fn(**search_kwargs)
 
         # Convertir en modeles de reponse
         result_items = [
@@ -117,6 +123,7 @@ async def search_documents_get(
     content_type: str | None = Query(default=None, description="Filtrer par type"),
     has_table: bool | None = Query(default=None, description="Filtrer tableaux"),
     has_image: bool | None = Query(default=None, description="Filtrer images"),
+    search_mode: str = Query(default="hybrid", description="Mode: hybrid ou semantic"),
 ) -> SearchResponse:
     """Execute une recherche semantique via GET.
 
@@ -143,11 +150,13 @@ async def search_documents_get(
     )
 
     # Construire la requete
+    mode = search_mode if search_mode in ("hybrid", "semantic") else "hybrid"
     query = SearchQuery(
         query=q,
         top_k=top_k,
         score_threshold=score_threshold,
         filters=filters if any([document_id, content_type, has_table, has_image]) else None,
+        search_mode=mode,
     )
 
     return await search_documents(request, query, embedder, vector_store)  # type: ignore[no-any-return]

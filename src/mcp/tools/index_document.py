@@ -11,7 +11,7 @@ from typing import Any, ClassVar
 
 from src.core.config import settings
 from src.core.exceptions import SourceFileNotFoundError
-from src.core.file_validation import validate_file_magic
+from src.core.file_validation import compute_file_hash, validate_file_magic
 from src.mcp.tools.base import BaseMCPTool
 from src.models.api import UnifiedIndexDocumentParams
 from src.models.chunk import ChunkMetadata, DocumentChunk
@@ -48,7 +48,7 @@ class IndexDocumentTool(BaseMCPTool):
     name: ClassVar[str] = "index_document"
     description: ClassVar[str] = (
         "Indexe un document (PDF/Excel/Word) pour la recherche semantique. "
-        "Si deja indexe, retourne l'ID existant. "
+        "Si deja indexe, retourne l'ID existant. Si modifie, le signale. "
         "Retourne: document_id, type, chunks indexes."
     )
 
@@ -79,13 +79,22 @@ class IndexDocumentTool(BaseMCPTool):
         "required": ["file_path"],
     }
 
-    def __init__(self) -> None:
-        """Initialise le tool d'indexation."""
+    def __init__(
+        self,
+        vector_store: QdrantVectorStore | None = None,
+        embedder: MistralEmbedder | None = None,
+    ) -> None:
+        """Initialise le tool d'indexation.
+
+        Args:
+            vector_store: Instance partagee du vector store (injection).
+            embedder: Instance partagee de l'embedder (injection).
+        """
         super().__init__()
         self._pdf_orchestrator = PDFPipelineOrchestrator()
         self._router = DocumentRouter()
-        self._embedder = MistralEmbedder()
-        self._vector_store = QdrantVectorStore()
+        self._embedder = embedder or MistralEmbedder()
+        self._vector_store = vector_store or QdrantVectorStore()
 
     async def _do_initialize(self) -> None:
         """Initialise les services (vector store, router)."""
@@ -93,34 +102,15 @@ class IndexDocumentTool(BaseMCPTool):
         await self._router.initialize()
         await self._vector_store.initialize()
 
-    async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Execute l'indexation du document.
-
-        Args:
-            arguments: Parametres d'indexation:
-                - file_path: Chemin vers le document
-                - force_ocr: Forcer OCR (PDF uniquement)
-                - sheets: Feuilles a indexer (Excel uniquement)
-                - table_format: Format tableaux
+    def _validate_file(self, file_path: Path) -> dict[str, Any] | None:
+        """Valide le chemin, l'existence et le magic number du fichier.
 
         Returns:
-            Dictionnaire avec:
-                - document_id: ID unique du document
-                - document_type: Type (pdf/excel/word)
-                - filename: Nom du fichier
-                - chunks_stored: Nombre de chunks indexes
-                - has_tables/has_formulas/has_images: Drapeaux
-                - sheet_names: Noms des feuilles (Excel)
-                - processing_time_seconds: Temps de traitement
+            Dictionnaire d'erreur si invalide, None si valide.
 
         Raises:
             SourceFileNotFoundError: Si le fichier n'existe pas.
-            ValueError: Si le format n'est pas supporté.
         """
-        params = UnifiedIndexDocumentParams(**arguments)
-        file_path = Path(params.file_path)
-
-        # Validation anti-traversal
         documents_path = Path(settings.DOCUMENTS_PATH).resolve()
         resolved = file_path.resolve()
         if not resolved.is_relative_to(documents_path):
@@ -132,19 +122,54 @@ class IndexDocumentTool(BaseMCPTool):
         if not file_path.exists():
             raise SourceFileNotFoundError(str(file_path))
 
-        # Verification magic number
         if not validate_file_magic(file_path):
             return {
                 "error": f"Invalid file: magic number mismatch for {file_path.suffix}",
                 "file_path": str(file_path),
             }
 
-        # Verification doublon : le fichier est-il deja indexe ?
-        existing = await self._vector_store.find_document_by_filename(file_path.name)
-        if existing:
-            return self._build_already_indexed_response(existing, file_path.name)
+        return None
 
-        # Detecter le type de document
+    async def _check_duplicate(self, file_path: Path) -> dict[str, Any] | None:
+        """Verifie si le fichier est deja indexe, avec comparaison de hash.
+
+        Returns:
+            Dictionnaire de reponse si doublon detecte, None sinon.
+        """
+        current_hash = compute_file_hash(file_path)
+        existing = await self._vector_store.find_document_by_filename(file_path.name)
+        if not existing:
+            return None
+
+        stored_hash = existing.get("file_hash", "")
+        if stored_hash and stored_hash != current_hash:
+            return self._build_file_modified_response(existing, file_path.name)
+        return self._build_already_indexed_response(existing, file_path.name)
+
+    async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Execute l'indexation du document.
+
+        Args:
+            arguments: Parametres d'indexation (file_path, force_ocr, sheets, table_format).
+
+        Returns:
+            Resultat d'indexation ou reponse doublon/erreur.
+
+        Raises:
+            SourceFileNotFoundError: Si le fichier n'existe pas.
+            ValueError: Si le format n'est pas supporté.
+        """
+        params = UnifiedIndexDocumentParams(**arguments)
+        file_path = Path(params.file_path)
+
+        validation_error = self._validate_file(file_path)
+        if validation_error:
+            return validation_error
+
+        duplicate_response = await self._check_duplicate(file_path)
+        if duplicate_response:
+            return duplicate_response
+
         doc_type = self._router.detect_type(file_path)
 
         logger.info(
@@ -187,6 +212,28 @@ class IndexDocumentTool(BaseMCPTool):
                 "Ce document est deja indexe. "
                 "Utilisez le document_id pour search_documents. "
                 "Pour re-indexer, supprimez d'abord avec delete_document."
+            ),
+        }
+
+    def _build_file_modified_response(
+        self, existing: dict[str, Any], filename: str
+    ) -> dict[str, Any]:
+        """Construit la reponse quand le fichier a ete modifie depuis la derniere indexation."""
+        logger.info(
+            "Fichier modifie detecte: %s (document_id=%s)",
+            filename,
+            existing["document_id"],
+        )
+        return {
+            "file_modified": True,
+            "document_id": existing["document_id"],
+            "filename": filename,
+            "total_chunks": existing["total_chunks"],
+            "ingested_at": existing["ingested_at"],
+            "message": (
+                "Ce fichier a ete modifie depuis sa derniere indexation. "
+                "Pour re-indexer, supprimez d'abord avec delete_document "
+                f"(document_id: {existing['document_id']}), puis relancez index_document."
             ),
         }
 

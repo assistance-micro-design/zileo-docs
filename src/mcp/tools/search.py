@@ -38,9 +38,9 @@ class SearchDocumentsTool(VectorStoreMCPTool):
 
     name: ClassVar[str] = "search_documents"
     description: ClassVar[str] = (
-        "Recherche semantique dans les documents indexes (PDF/Excel/Word). "
+        "Recherche hybride (vecteur+full-text) dans les documents indexes. "
         "Retourne: passages pertinents avec score et metadonnees. "
-        "Filtres: document_type, has_formula, sheet_name."
+        "Modes: hybrid (defaut), semantic."
     )
 
     input_schema: ClassVar[dict[str, Any]] = {
@@ -63,6 +63,12 @@ class SearchDocumentsTool(VectorStoreMCPTool):
                 "default": 0.7,
                 "minimum": 0.0,
                 "maximum": 1.0,
+            },
+            "search_mode": {
+                "type": "string",
+                "description": "Mode de recherche: 'hybrid' (vecteur+full-text, defaut) ou 'semantic' (vecteur seul)",
+                "default": "hybrid",
+                "enum": ["hybrid", "semantic"],
             },
             "filters": {
                 "type": "object",
@@ -121,6 +127,27 @@ class SearchDocumentsTool(VectorStoreMCPTool):
         super().__init__(vector_store=vector_store)
         self._embedder = embedder or MistralEmbedder()
 
+    async def _execute_search(
+        self,
+        params: SearchDocumentsParams,
+        query_embedding: list[float],
+    ) -> list[dict[str, Any]]:
+        """Dispatch la recherche selon le mode (semantic ou hybrid)."""
+        if params.search_mode == "semantic":
+            return await self._vector_store.search(
+                query_embedding=query_embedding,
+                top_k=params.top_k,
+                filters=params.filters,
+                score_threshold=params.score_threshold,
+            )
+        return await self._vector_store.hybrid_search(
+            query_embedding=query_embedding,
+            query_text=params.query,
+            top_k=params.top_k,
+            filters=params.filters,
+            score_threshold=params.score_threshold,
+        )
+
     async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute la recherche semantique.
 
@@ -163,15 +190,10 @@ class SearchDocumentsTool(VectorStoreMCPTool):
         # Generer l'embedding de la requete
         query_embedding = await self._embedder.embed_query(params.query)
 
-        # Rechercher dans Qdrant
-        results = await self._vector_store.search(
-            query_embedding=query_embedding,
-            top_k=params.top_k,
-            filters=params.filters,
-            score_threshold=params.score_threshold,
-        )
+        # Rechercher selon le mode
+        results = await self._execute_search(params, query_embedding)
 
-        logger.info("Recherche terminee: %d resultats", len(results))
+        logger.info("Recherche terminee: %d resultats (mode=%s)", len(results), params.search_mode)
 
         # Construire la reponse
         return {

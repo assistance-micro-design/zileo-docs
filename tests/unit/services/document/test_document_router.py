@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from src.models.unified import DocumentType
@@ -47,6 +50,72 @@ class TestDocumentRouterIsSupported:
     def test_unsupported_txt(self) -> None:
         router = DocumentRouter()
         assert router.is_supported("file.txt") is False
+
+
+class TestDocumentRouterFileHash:
+    """Tests pour le calcul du file_hash dans extract."""
+
+    @pytest.mark.asyncio
+    async def test_extract_excel_sets_file_hash(self) -> None:
+        """L'extraction Excel doit calculer le SHA-256 du fichier."""
+        from src.models.unified import DocumentType
+
+        mock_excel_doc = MagicMock()
+        mock_excel_doc.filename = "data.xlsx"
+        mock_excel_doc.file_path = "/data/docs/data.xlsx"
+        mock_excel_doc.format = "xlsx"
+        mock_excel_doc.sheets = []
+        mock_excel_doc.get_all_formulas.return_value = []
+        mock_excel_doc.properties = {}
+        mock_excel_doc.to_markdown.return_value = "content"
+
+        mock_extractor = AsyncMock()
+        mock_extractor.extract = AsyncMock(return_value=mock_excel_doc)
+
+        router = DocumentRouter()
+        router._initialized = True
+        router._extractors[DocumentType.EXCEL] = mock_extractor
+
+        with patch(
+            "src.services.document.router.compute_file_hash",
+            return_value="abc123",
+        ):
+            mock_path = MagicMock(spec=Path)
+            mock_path.name = "data.xlsx"
+            result = await router._extract_excel(mock_path)
+
+        assert result.metadata.file_hash == "abc123"
+
+    @pytest.mark.asyncio
+    async def test_extract_word_sets_file_hash(self) -> None:
+        """L'extraction Word doit calculer le SHA-256 du fichier."""
+        from src.models.unified import DocumentType
+
+        mock_word_doc = MagicMock()
+        mock_word_doc.filename = "doc.docx"
+        mock_word_doc.file_path = "/data/docs/doc.docx"
+        mock_word_doc.tables = []
+        mock_word_doc.images = []
+        mock_word_doc.word_count = 100
+        mock_word_doc.metadata = {}
+        mock_word_doc.to_markdown.return_value = "content"
+
+        mock_extractor = AsyncMock()
+        mock_extractor.extract = AsyncMock(return_value=mock_word_doc)
+
+        router = DocumentRouter()
+        router._initialized = True
+        router._extractors[DocumentType.WORD] = mock_extractor
+
+        with patch(
+            "src.services.document.router.compute_file_hash",
+            return_value="def456",
+        ):
+            mock_path = MagicMock(spec=Path)
+            mock_path.name = "doc.docx"
+            result = await router._extract_word(mock_path)
+
+        assert result.metadata.file_hash == "def456"
 
 
 class TestDocumentRouterExtensions:

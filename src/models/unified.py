@@ -138,6 +138,7 @@ class UnifiedMetadata(BaseModel):
     filename: str
     file_path: str
     file_size_bytes: int = 0
+    file_hash: str = Field(default="", description="SHA-256 du fichier source")
 
     # Type et format
     document_type: DocumentType
@@ -172,6 +173,7 @@ class UnifiedMetadata(BaseModel):
             "document_id": self.document_id,
             "filename": self.filename,
             "file_path": self.file_path,
+            "file_hash": self.file_hash,
             "document_type": self.document_type.value,
             "original_format": self.original_format,
             "page_count": self.page_count,

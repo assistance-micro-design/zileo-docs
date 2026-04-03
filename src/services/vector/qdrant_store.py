@@ -48,6 +48,31 @@ _MATCH_FILTER_KEYS: tuple[str, ...] = (
 )
 _BOOL_FILTER_KEYS: tuple[str, ...] = ("has_table", "has_image", "has_equation")
 
+# Index Qdrant par type (pour _create_indexes)
+_KEYWORD_INDEXES: tuple[tuple[str, PayloadSchemaType], ...] = (
+    ("document_id", PayloadSchemaType.KEYWORD),
+    ("chunk_id", PayloadSchemaType.KEYWORD),
+    ("content_type", PayloadSchemaType.KEYWORD),
+    ("section_title", PayloadSchemaType.KEYWORD),
+    ("doc_filename", PayloadSchemaType.KEYWORD),
+)
+_INTEGER_INDEXES: tuple[tuple[str, PayloadSchemaType], ...] = (
+    ("start_page", PayloadSchemaType.INTEGER),
+    ("end_page", PayloadSchemaType.INTEGER),
+    ("token_count", PayloadSchemaType.INTEGER),
+)
+_BOOL_INDEXES: tuple[tuple[str, PayloadSchemaType], ...] = (
+    ("has_table", PayloadSchemaType.BOOL),
+    ("has_image", PayloadSchemaType.BOOL),
+    ("has_equation", PayloadSchemaType.BOOL),
+)
+_DATETIME_INDEXES: tuple[tuple[str, PayloadSchemaType], ...] = (
+    ("ingested_at", PayloadSchemaType.DATETIME),
+)
+_ALL_PAYLOAD_INDEXES: tuple[tuple[str, PayloadSchemaType], ...] = (
+    _KEYWORD_INDEXES + _INTEGER_INDEXES + _BOOL_INDEXES + _DATETIME_INDEXES
+)
+
 
 def _sanitize_text(text: str | None) -> str:
     """Nettoie le texte des caracteres Unicode problematiques.
@@ -170,58 +195,8 @@ class QdrantVectorStore:
         )
 
     async def _create_indexes(self) -> None:
-        """Cree les index pour filtrage performant.
-
-        Configure les index par cardinalite:
-        - Haute cardinalite: document_id, chunk_id
-        - Medium cardinalite: content_type, section_title, doc_filename
-        - Index numeriques: pages, token_count
-        - Index booleens: has_table, has_image, has_equation
-        - Index datetime: ingested_at
-        - Index full-text: content
-        """
-        # Index haute cardinalite (tres efficaces)
-        high_cardinality: list[tuple[str, PayloadSchemaType]] = [
-            ("document_id", PayloadSchemaType.KEYWORD),
-            ("chunk_id", PayloadSchemaType.KEYWORD),
-        ]
-
-        # Index medium cardinalite
-        medium_cardinality: list[tuple[str, PayloadSchemaType]] = [
-            ("content_type", PayloadSchemaType.KEYWORD),
-            ("section_title", PayloadSchemaType.KEYWORD),
-            ("doc_filename", PayloadSchemaType.KEYWORD),
-        ]
-
-        # Index numeriques
-        numeric_indexes: list[tuple[str, PayloadSchemaType]] = [
-            ("start_page", PayloadSchemaType.INTEGER),
-            ("end_page", PayloadSchemaType.INTEGER),
-            ("token_count", PayloadSchemaType.INTEGER),
-        ]
-
-        # Index booleens
-        bool_indexes: list[tuple[str, PayloadSchemaType]] = [
-            ("has_table", PayloadSchemaType.BOOL),
-            ("has_image", PayloadSchemaType.BOOL),
-            ("has_equation", PayloadSchemaType.BOOL),
-        ]
-
-        # Index datetime
-        datetime_indexes: list[tuple[str, PayloadSchemaType]] = [
-            ("ingested_at", PayloadSchemaType.DATETIME),
-        ]
-
-        # Creer tous les index
-        all_indexes = (
-            high_cardinality
-            + medium_cardinality
-            + numeric_indexes
-            + bool_indexes
-            + datetime_indexes
-        )
-
-        for field_name, field_type in all_indexes:
+        """Cree les index payload et full-text pour filtrage performant."""
+        for field_name, field_type in _ALL_PAYLOAD_INDEXES:
             await asyncio.to_thread(
                 self.client.create_payload_index,
                 collection_name=self.COLLECTION_NAME,
@@ -411,7 +386,7 @@ class QdrantVectorStore:
                 "doc_title": unified_meta.title or "",
                 "doc_author": unified_meta.author or "",
                 "doc_total_pages": unified_meta.page_count or 0,
-                "doc_file_hash": "",
+                "doc_file_hash": unified_meta.file_hash,
                 "ingested_at": unified_meta.indexed_at.isoformat(),
                 "doc_creation_date": (
                     unified_meta.created_at.isoformat() if unified_meta.created_at else None
@@ -504,6 +479,128 @@ class QdrantVectorStore:
         )
 
         return self._format_search_results(response.points)
+
+    async def hybrid_search(
+        self,
+        query_embedding: list[float],
+        query_text: str,
+        top_k: int = 5,
+        filters: dict[str, Any] | None = None,
+        score_threshold: float = 0.7,
+        rrf_k: int = 60,
+    ) -> list[dict[str, Any]]:
+        """Recherche hybride combinant vecteur dense et full-text.
+
+        Effectue deux recherches en parallele puis fusionne avec RRF.
+
+        Args:
+            query_embedding: Vecteur de requete (1024 dimensions).
+            query_text: Texte de la requete pour recherche full-text.
+            top_k: Nombre maximum de resultats. Defaut 5.
+            filters: Filtres optionnels (voir _build_filter).
+            score_threshold: Score minimum pour recherche dense. Defaut 0.7.
+            rrf_k: Constante RRF (defaut 60).
+
+        Returns:
+            Liste de resultats fusionnes, ordonnee par score RRF.
+        """
+        dense_results, text_results = await asyncio.gather(
+            self._dense_search(query_embedding, top_k * 2, filters, score_threshold),
+            self._text_search(query_text, top_k * 2, filters),
+        )
+
+        return self._rrf_fusion(dense_results, text_results, top_k, rrf_k)
+
+    async def _dense_search(
+        self,
+        query_embedding: list[float],
+        limit: int,
+        filters: dict[str, Any] | None,
+        score_threshold: float,
+    ) -> list[dict[str, Any]]:
+        """Recherche vectorielle dense."""
+        qdrant_filter = self._build_filter(filters) if filters else None
+
+        response = await asyncio.to_thread(
+            self.client.query_points,
+            collection_name=self.COLLECTION_NAME,
+            query=query_embedding,
+            limit=limit,
+            query_filter=qdrant_filter,
+            score_threshold=score_threshold,
+            with_payload=True,
+        )
+
+        return self._format_search_results(response.points)
+
+    async def _text_search(
+        self,
+        query_text: str,
+        limit: int,
+        filters: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        """Recherche full-text via MatchText sur le champ content."""
+        conditions: list[FieldCondition] = [
+            FieldCondition(key="content", match=MatchText(text=query_text)),
+        ]
+
+        if filters:
+            extra_filter = self._build_filter(filters)
+            if extra_filter and extra_filter.must:
+                conditions.extend(extra_filter.must)
+
+        results, _ = await asyncio.to_thread(
+            self.client.scroll,
+            collection_name=self.COLLECTION_NAME,
+            scroll_filter=Filter(must=conditions),
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
+        )
+
+        return self._format_search_results(results)
+
+    def _rrf_fusion(
+        self,
+        dense_results: list[dict[str, Any]],
+        text_results: list[dict[str, Any]],
+        top_k: int,
+        k: int = 60,
+    ) -> list[dict[str, Any]]:
+        """Fusionne deux listes de resultats avec Reciprocal Rank Fusion.
+
+        Args:
+            dense_results: Resultats de la recherche vectorielle.
+            text_results: Resultats de la recherche full-text.
+            top_k: Nombre maximum de resultats a retourner.
+            k: Constante RRF (defaut 60, standard).
+
+        Returns:
+            Liste fusionnee et triee par score RRF decroissant.
+        """
+        scores: dict[str, float] = {}
+        docs: dict[str, dict[str, Any]] = {}
+
+        for rank, result in enumerate(dense_results):
+            cid = result["chunk_id"]
+            scores[cid] = scores.get(cid, 0.0) + 1.0 / (k + rank + 1)
+            docs[cid] = result
+
+        for rank, result in enumerate(text_results):
+            cid = result["chunk_id"]
+            scores[cid] = scores.get(cid, 0.0) + 1.0 / (k + rank + 1)
+            if cid not in docs:
+                docs[cid] = result
+
+        sorted_ids = sorted(scores, key=lambda cid: scores[cid], reverse=True)
+
+        fused: list[dict[str, Any]] = []
+        for cid in sorted_ids[:top_k]:
+            entry = docs[cid].copy()
+            entry["score"] = round(scores[cid], 6)
+            fused.append(entry)
+
+        return fused
 
     def _format_search_results(self, points: list[Any]) -> list[dict[str, Any]]:
         """Transforme les points Qdrant en resultats de recherche."""
@@ -831,4 +928,5 @@ class QdrantVectorStore:
             "filename": filename,
             "total_chunks": count_result.count,
             "ingested_at": point.payload.get("ingested_at", ""),
+            "file_hash": point.payload.get("doc_file_hash", ""),
         }
