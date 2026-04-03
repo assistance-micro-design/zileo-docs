@@ -1,12 +1,12 @@
-"""Tests unitaires pour QdrantVectorStore.find_document_by_filename.
+"""Tests unitaires pour QdrantVectorStore.
 
-Ces tests verifient la detection de documents deja indexes par nom de fichier,
+Tests pour find_document_by_filename et initialize,
 sans necessiter une instance Qdrant.
 """
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -121,3 +121,28 @@ class TestFindDocumentByFilename:
         condition = count_filter.must[0]
         assert condition.key == "document_id"
         assert condition.match.value == "doc-456"
+
+
+class TestInitialize:
+    """Tests pour initialize."""
+
+    @pytest.mark.asyncio
+    async def test_creates_indexes_when_collection_exists(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """_create_indexes() doit etre appele meme si la collection existe deja."""
+        store_with_mock_client._initialized = False
+
+        # Collection existe deja
+        mock_collections = MagicMock()
+        mock_collection = MagicMock()
+        mock_collection.name = "documents"
+        mock_collections.collections = [mock_collection]
+        store_with_mock_client.client.get_collections = MagicMock(return_value=mock_collections)
+
+        with patch.object(
+            store_with_mock_client, "_create_indexes", new_callable=AsyncMock
+        ) as mock_create_indexes:
+            await store_with_mock_client.initialize()
+
+            mock_create_indexes.assert_called_once()

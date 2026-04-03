@@ -134,17 +134,13 @@ class QdrantVectorStore:
         collections = await asyncio.to_thread(self.client.get_collections)
         exists = any(c.name == self.COLLECTION_NAME for c in collections.collections)
 
-        # Guard clause: collection existante
-        if exists:
-            logger.debug("Collection %s already exists", self.COLLECTION_NAME)
-            self._initialized = True
-            return
+        if not exists:
+            logger.info("Creating Qdrant collection: %s", self.COLLECTION_NAME)
+            await self._create_collection()
 
-        # Création de la collection
-        logger.info("Creating Qdrant collection: %s", self.COLLECTION_NAME)
-        await self._create_collection()
+        # Toujours creer les indexes (idempotent dans Qdrant)
         await self._create_indexes()
-        logger.info("Collection %s created successfully", self.COLLECTION_NAME)
+        logger.info("Collection %s ready", self.COLLECTION_NAME)
         self._initialized = True
 
     async def _create_collection(self) -> None:
