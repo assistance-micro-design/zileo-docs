@@ -13,9 +13,11 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from src.api.auth import verify_api_key
-from src.api.dependencies import EmbedderDep, VectorStoreDep
+from src.api.dependencies import EmbedderDep, SparseEmbedderDep, VectorStoreDep
 from src.core.config import settings
 from src.models.search import SearchFilters, SearchQuery, SearchResponse, SearchResultItem
+from src.services.embedding.sparse_embedder import SparseEmbedder
+from src.services.vector.qdrant_store import QdrantVectorStore
 
 
 logger = logging.getLogger(__name__)
@@ -36,6 +38,7 @@ async def search_documents(
     query: SearchQuery,
     embedder: EmbedderDep,
     vector_store: VectorStoreDep,
+    sparse_embedder: SparseEmbedderDep,
 ) -> SearchResponse:
     """Execute une recherche semantique dans les documents.
 
@@ -60,18 +63,9 @@ async def search_documents(
         filters = _build_filters(query.filters) if query.filters else None
 
         # Rechercher selon le mode
-        search_kwargs: dict[str, Any] = {
-            "query_embedding": query_embedding,
-            "top_k": query.top_k,
-            "filters": filters,
-            "score_threshold": query.score_threshold,
-        }
-        if query.search_mode != "semantic":
-            search_kwargs["query_text"] = query.query
-        search_fn = (
-            vector_store.search if query.search_mode == "semantic" else vector_store.hybrid_search
+        results = await _dispatch_search(
+            query, query_embedding, filters, vector_store, sparse_embedder
         )
-        results = await search_fn(**search_kwargs)
 
         # Convertir en modeles de reponse
         result_items = [
@@ -116,6 +110,7 @@ async def search_documents_get(
     request: Request,
     embedder: EmbedderDep,
     vector_store: VectorStoreDep,
+    sparse_embedder: SparseEmbedderDep,
     q: str = Query(..., min_length=1, description="Texte de recherche"),
     top_k: int = Query(default=5, ge=1, le=100, description="Nombre de resultats"),
     score_threshold: float = Query(default=0.7, ge=0.0, le=1.0, description="Score minimum"),
@@ -155,11 +150,47 @@ async def search_documents_get(
         query=q,
         top_k=top_k,
         score_threshold=score_threshold,
-        filters=filters if any([document_id, content_type, has_table, has_image]) else None,
+        filters=filters if any((document_id, content_type, has_table, has_image)) else None,
         search_mode=mode,
     )
 
-    return await search_documents(request, query, embedder, vector_store)  # type: ignore[no-any-return]
+    return await search_documents(request, query, embedder, vector_store, sparse_embedder)  # type: ignore[no-any-return]
+
+
+async def _dispatch_search(
+    query: SearchQuery,
+    query_embedding: list[float],
+    filters: dict[str, Any] | None,
+    vector_store: QdrantVectorStore,
+    sparse_embedder: SparseEmbedder,
+) -> list[dict[str, Any]]:
+    """Dispatch la recherche selon le mode (semantic ou hybrid).
+
+    Args:
+        query: Parametres de recherche.
+        query_embedding: Vecteur dense de la requete.
+        filters: Filtres Qdrant optionnels.
+        vector_store: Service de stockage vectoriel.
+        sparse_embedder: Service d'embedding sparse.
+
+    Returns:
+        Liste de resultats de recherche.
+    """
+    if query.search_mode == "semantic":
+        return await vector_store.search(
+            query_embedding=query_embedding,
+            top_k=query.top_k,
+            filters=filters,
+            score_threshold=query.score_threshold,
+        )
+    # Mode hybrid: generer sparse embedding BM25 et fusion RRF
+    sparse_data = await sparse_embedder.embed_query(query.query)
+    return await vector_store.hybrid_search(
+        query_embedding=query_embedding,
+        sparse_embedding=sparse_data,
+        top_k=query.top_k,
+        filters=filters,
+    )
 
 
 def _build_filters(filters: SearchFilters) -> dict[str, Any]:

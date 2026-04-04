@@ -13,7 +13,7 @@ import hashlib
 import logging
 import re
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from qdrant_client import QdrantClient, models
 from qdrant_client.models import (
@@ -26,8 +26,6 @@ from qdrant_client.models import (
     PayloadSelectorInclude,
     PointStruct,
     Range,
-    TextIndexParams,
-    TokenizerType,
     VectorParams,
 )
 
@@ -35,6 +33,10 @@ from src.core.config import settings
 from src.models.chunk import DocumentChunk
 from src.models.document import DocumentMetadata
 from src.models.unified import UnifiedMetadata
+
+
+if TYPE_CHECKING:
+    from src.services.embedding.sparse_embedder import SparseEmbeddingData
 
 
 logger = logging.getLogger(__name__)
@@ -177,11 +179,18 @@ class QdrantVectorStore:
         await asyncio.to_thread(
             self.client.create_collection,
             collection_name=self.COLLECTION_NAME,
-            vectors_config=VectorParams(
-                size=self.VECTOR_SIZE,
-                distance=Distance.COSINE,
-                on_disk=False,
-            ),
+            vectors_config={
+                "dense": VectorParams(
+                    size=self.VECTOR_SIZE,
+                    distance=Distance.COSINE,
+                    on_disk=False,
+                ),
+            },
+            sparse_vectors_config={
+                "sparse": models.SparseVectorParams(
+                    modifier=models.Modifier.IDF,
+                ),
+            },
             optimizers_config=models.OptimizersConfigDiff(
                 indexing_threshold=20000,
             ),
@@ -204,7 +213,10 @@ class QdrantVectorStore:
                 field_schema=field_type,
             )
 
-        # Index full-text pour recherche hybride
+        # TEXT index conserve pour le filtre text_search (MatchText dans _build_filter)
+        # La recherche hybride utilise les sparse vectors BM25, pas ce TEXT index
+        from qdrant_client.models import TextIndexParams, TokenizerType  # noqa: PLC0415
+
         await asyncio.to_thread(
             self.client.create_payload_index,
             collection_name=self.COLLECTION_NAME,
@@ -311,13 +323,20 @@ class QdrantVectorStore:
         points: list[PointStruct] = []
         skipped = 0
         for chunk in chunks:
-            if chunk.embedding is None:
+            if chunk.embedding is None or chunk.sparse_embedding is None:
                 skipped += 1
                 continue
+            sparse = chunk.sparse_embedding
             points.append(
                 PointStruct(
                     id=self._generate_point_id(chunk.metadata.chunk_id),
-                    vector=chunk.embedding,
+                    vector={
+                        "dense": chunk.embedding,
+                        "sparse": models.SparseVector(
+                            indices=sparse.indices,
+                            values=sparse.values,
+                        ),
+                    },
                     payload=payload_builder(chunk),
                 )
             )
@@ -472,6 +491,7 @@ class QdrantVectorStore:
             self.client.query_points,
             collection_name=self.COLLECTION_NAME,
             query=query_embedding,
+            using="dense",
             limit=top_k,
             query_filter=qdrant_filter,
             score_threshold=score_threshold,
@@ -483,124 +503,55 @@ class QdrantVectorStore:
     async def hybrid_search(
         self,
         query_embedding: list[float],
-        query_text: str,
+        sparse_embedding: SparseEmbeddingData,
         top_k: int = 5,
         filters: dict[str, Any] | None = None,
-        score_threshold: float = 0.7,
-        rrf_k: int = 60,
+        score_threshold: float | None = None,
     ) -> list[dict[str, Any]]:
-        """Recherche hybride combinant vecteur dense et full-text.
+        """Recherche hybride via Qdrant natif (prefetch + RRF fusion).
 
-        Effectue deux recherches en parallele puis fusionne avec RRF.
+        Combine recherche dense (Mistral embeddings) et sparse (BM25)
+        avec fusion RRF cote serveur Qdrant.
 
         Args:
-            query_embedding: Vecteur de requete (1024 dimensions).
-            query_text: Texte de la requete pour recherche full-text.
+            query_embedding: Vecteur dense (1024 dimensions Mistral).
+            sparse_embedding: Donnees sparse BM25 (indices + values).
             top_k: Nombre maximum de resultats. Defaut 5.
             filters: Filtres optionnels (voir _build_filter).
-            score_threshold: Score minimum pour recherche dense. Defaut 0.7.
-            rrf_k: Constante RRF (defaut 60).
+            score_threshold: Score minimum (optionnel).
 
         Returns:
-            Liste de resultats fusionnes, ordonnee par score RRF.
+            Liste de resultats fusionnes par RRF, ordonnee par score.
         """
-        dense_results, text_results = await asyncio.gather(
-            self._dense_search(query_embedding, top_k * 2, filters, score_threshold),
-            self._text_search(query_text, top_k * 2, filters),
-        )
-
-        return self._rrf_fusion(dense_results, text_results, top_k, rrf_k)
-
-    async def _dense_search(
-        self,
-        query_embedding: list[float],
-        limit: int,
-        filters: dict[str, Any] | None,
-        score_threshold: float,
-    ) -> list[dict[str, Any]]:
-        """Recherche vectorielle dense."""
         qdrant_filter = self._build_filter(filters) if filters else None
+        sparse_vec = models.SparseVector(
+            indices=sparse_embedding.indices,
+            values=sparse_embedding.values,
+        )
 
         response = await asyncio.to_thread(
             self.client.query_points,
             collection_name=self.COLLECTION_NAME,
-            query=query_embedding,
-            limit=limit,
+            prefetch=[
+                models.Prefetch(
+                    query=query_embedding,
+                    using="dense",
+                    limit=top_k * 2,
+                ),
+                models.Prefetch(
+                    query=sparse_vec,
+                    using="sparse",
+                    limit=top_k * 2,
+                ),
+            ],
+            query=models.FusionQuery(fusion=models.Fusion.RRF),
+            limit=top_k,
             query_filter=qdrant_filter,
             score_threshold=score_threshold,
             with_payload=True,
         )
 
         return self._format_search_results(response.points)
-
-    async def _text_search(
-        self,
-        query_text: str,
-        limit: int,
-        filters: dict[str, Any] | None,
-    ) -> list[dict[str, Any]]:
-        """Recherche full-text via MatchText sur le champ content."""
-        conditions: list[FieldCondition] = [
-            FieldCondition(key="content", match=MatchText(text=query_text)),
-        ]
-
-        if filters:
-            extra_filter = self._build_filter(filters)
-            if extra_filter and extra_filter.must:
-                conditions.extend(extra_filter.must)
-
-        results, _ = await asyncio.to_thread(
-            self.client.scroll,
-            collection_name=self.COLLECTION_NAME,
-            scroll_filter=Filter(must=conditions),
-            limit=limit,
-            with_payload=True,
-            with_vectors=False,
-        )
-
-        return self._format_search_results(results)
-
-    def _rrf_fusion(
-        self,
-        dense_results: list[dict[str, Any]],
-        text_results: list[dict[str, Any]],
-        top_k: int,
-        k: int = 60,
-    ) -> list[dict[str, Any]]:
-        """Fusionne deux listes de resultats avec Reciprocal Rank Fusion.
-
-        Args:
-            dense_results: Resultats de la recherche vectorielle.
-            text_results: Resultats de la recherche full-text.
-            top_k: Nombre maximum de resultats a retourner.
-            k: Constante RRF (defaut 60, standard).
-
-        Returns:
-            Liste fusionnee et triee par score RRF decroissant.
-        """
-        scores: dict[str, float] = {}
-        docs: dict[str, dict[str, Any]] = {}
-
-        for rank, result in enumerate(dense_results):
-            cid = result["chunk_id"]
-            scores[cid] = scores.get(cid, 0.0) + 1.0 / (k + rank + 1)
-            docs[cid] = result
-
-        for rank, result in enumerate(text_results):
-            cid = result["chunk_id"]
-            scores[cid] = scores.get(cid, 0.0) + 1.0 / (k + rank + 1)
-            if cid not in docs:
-                docs[cid] = result
-
-        sorted_ids = sorted(scores, key=lambda cid: scores[cid], reverse=True)
-
-        fused: list[dict[str, Any]] = []
-        for cid in sorted_ids[:top_k]:
-            entry = docs[cid].copy()
-            entry["score"] = round(scores[cid], 6)
-            fused.append(entry)
-
-        return fused
 
     def _format_search_results(self, points: list[Any]) -> list[dict[str, Any]]:
         """Transforme les points Qdrant en resultats de recherche."""
@@ -609,7 +560,7 @@ class QdrantVectorStore:
                 "chunk_id": hit.payload["chunk_id"] if hit.payload else None,
                 "content": hit.payload["content"] if hit.payload else None,
                 "content_preview": hit.payload.get("content_preview") if hit.payload else None,
-                "score": hit.score,
+                "score": getattr(hit, "score", 0.0),
                 "document_id": hit.payload["document_id"] if hit.payload else None,
                 "page_numbers": hit.payload.get("page_numbers", []) if hit.payload else [],
                 "section_title": hit.payload.get("section_title") if hit.payload else None,

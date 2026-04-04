@@ -38,6 +38,9 @@ dependencies = [
     # Vector Store
     "qdrant-client>=1.9.0",
 
+    # Sparse Embeddings (BM25)
+    "fastembed>=0.4.0",
+
     # Rate limiting
     "slowapi>=0.1.9",
 

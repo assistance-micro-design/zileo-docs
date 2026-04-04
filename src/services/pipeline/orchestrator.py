@@ -23,6 +23,7 @@ from src.models.document import DocumentAnalysisResult
 from src.models.extraction import ExtractedContent, OCRResult
 from src.services.chunking.chunker import SmartChunker
 from src.services.embedding.mistral_embedder import MistralEmbedder
+from src.services.embedding.sparse_embedder import SparseEmbedder, embed_dense_and_sparse
 from src.services.pdf.analyzer import DocumentAnalyzer
 from src.services.pdf.native_extractor import NativeContentExtractor
 from src.services.pdf.ocr_processor import MistralOCRProcessor
@@ -136,6 +137,7 @@ class PDFPipelineOrchestrator:
         self._api_key = api_key or settings.MISTRAL_API_KEY
         self._ocr_processor: MistralOCRProcessor | None = None
         self._embedder: MistralEmbedder | None = None
+        self._sparse_embedder: SparseEmbedder | None = None
         self._chunker: SmartChunker | None = None
         self._vector_store: QdrantVectorStore | None = None
         self._initialized = False
@@ -163,6 +165,13 @@ class PDFPipelineOrchestrator:
         if self._embedder is None:
             self._embedder = MistralEmbedder(self._api_key)
         return self._embedder
+
+    @property
+    def sparse_embedder(self) -> SparseEmbedder:
+        """Retourne le sparse embedder BM25 (lazy initialization)."""
+        if self._sparse_embedder is None:
+            self._sparse_embedder = SparseEmbedder()
+        return self._sparse_embedder
 
     @property
     def chunker(self) -> SmartChunker:
@@ -433,7 +442,7 @@ class PDFPipelineOrchestrator:
             chunks_generated = len(chunks)
             chunks_embedded = 0
             if chunks:
-                chunks = await self.embedder.embed_chunks(chunks, use_enriched=True)
+                chunks = await embed_dense_and_sparse(chunks, self.embedder, self.sparse_embedder)
                 chunks_embedded = sum(1 for c in chunks if c.has_embedding)
             return chunks, chunks_generated, chunks_embedded
         except Exception as e:

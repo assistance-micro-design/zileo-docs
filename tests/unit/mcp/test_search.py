@@ -50,15 +50,30 @@ def search_results() -> list[dict[str, Any]]:
 
 
 @pytest.fixture
+def mock_sparse_embedder() -> AsyncMock:
+    """Mock du sparse embedder BM25."""
+    from unittest.mock import MagicMock
+
+    embedder = AsyncMock()
+    sparse_data = MagicMock()
+    sparse_data.indices = [1, 42]
+    sparse_data.values = [0.5, 0.8]
+    embedder.embed_query = AsyncMock(return_value=sparse_data)
+    return embedder
+
+
+@pytest.fixture
 def tool_with_mock(
     mock_vector_store: AsyncMock,
     mock_embedder: AsyncMock,
+    mock_sparse_embedder: AsyncMock,
     search_results: list[dict[str, Any]],
 ) -> SearchDocumentsTool:
     """Tool avec dependances mockees (mode hybrid par defaut)."""
     tool = SearchDocumentsTool(
         vector_store=mock_vector_store,
         embedder=mock_embedder,
+        sparse_embedder=mock_sparse_embedder,
     )
     mock_vector_store.search = AsyncMock(return_value=search_results)
     mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
@@ -156,12 +171,14 @@ class TestSearchModeHybrid:
         self,
         mock_vector_store: AsyncMock,
         mock_embedder: AsyncMock,
+        mock_sparse_embedder: AsyncMock,
         search_results: list[dict[str, Any]],
     ) -> None:
         """Le mode par defaut est hybrid."""
         tool = SearchDocumentsTool(
             vector_store=mock_vector_store,
             embedder=mock_embedder,
+            sparse_embedder=mock_sparse_embedder,
         )
         mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
         tool._initialized = True
@@ -177,12 +194,14 @@ class TestSearchModeHybrid:
         self,
         mock_vector_store: AsyncMock,
         mock_embedder: AsyncMock,
+        mock_sparse_embedder: AsyncMock,
         search_results: list[dict[str, Any]],
     ) -> None:
         """Le mode semantic utilise uniquement la recherche dense."""
         tool = SearchDocumentsTool(
             vector_store=mock_vector_store,
             embedder=mock_embedder,
+            sparse_embedder=mock_sparse_embedder,
         )
         mock_vector_store.search = AsyncMock(return_value=search_results)
         tool._initialized = True
@@ -194,16 +213,18 @@ class TestSearchModeHybrid:
         assert result["total_results"] == 1
 
     @pytest.mark.asyncio
-    async def test_hybrid_passes_query_text(
+    async def test_hybrid_passes_sparse_embedding(
         self,
         mock_vector_store: AsyncMock,
         mock_embedder: AsyncMock,
+        mock_sparse_embedder: AsyncMock,
         search_results: list[dict[str, Any]],
     ) -> None:
-        """Le mode hybrid passe le texte de la requete a hybrid_search."""
+        """Le mode hybrid passe un sparse embedding a hybrid_search."""
         tool = SearchDocumentsTool(
             vector_store=mock_vector_store,
             embedder=mock_embedder,
+            sparse_embedder=mock_sparse_embedder,
         )
         mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
         tool._initialized = True
@@ -211,7 +232,8 @@ class TestSearchModeHybrid:
         await tool.execute({"query": "facture 2024-0123"})
 
         call_kwargs = mock_vector_store.hybrid_search.call_args.kwargs
-        assert call_kwargs["query_text"] == "facture 2024-0123"
+        assert "sparse_embedding" in call_kwargs
+        mock_sparse_embedder.embed_query.assert_called_once_with("facture 2024-0123")
 
     def test_input_schema_has_search_mode(self) -> None:
         """Le schema d'input expose search_mode."""

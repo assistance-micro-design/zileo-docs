@@ -148,191 +148,139 @@ class TestFindDocumentByFilename:
 
 
 class TestHybridSearch:
-    """Tests pour hybrid_search et _rrf_fusion."""
+    """Tests pour hybrid_search avec Qdrant natif (prefetch + FusionQuery)."""
 
     @pytest.mark.asyncio
-    async def test_hybrid_search_combines_dense_and_text(
+    async def test_hybrid_search_uses_prefetch_fusion(
         self, store_with_mock_client: QdrantVectorStore
     ) -> None:
-        """Les resultats combinent recherche vectorielle et full-text."""
-        # Dense results
-        dense_point = MagicMock()
-        dense_point.id = 1
-        dense_point.score = 0.95
-        dense_point.payload = {
-            "chunk_id": "chunk-dense",
-            "document_id": "doc-1",
-            "content": "Dense result",
-            "content_preview": "Dense",
-            "page_numbers": [1],
-            "section_title": "Title",
-            "content_type": "text",
-            "doc_filename": "file.pdf",
-        }
+        """hybrid_search appelle query_points avec prefetch et FusionQuery."""
+        from src.services.embedding.sparse_embedder import SparseEmbeddingData
 
-        dense_response = MagicMock()
-        dense_response.points = [dense_point]
-
-        # Full-text results
-        text_point = MagicMock()
-        text_point.id = 2
-        text_point.payload = {
-            "chunk_id": "chunk-text",
-            "document_id": "doc-2",
-            "content": "Text result with exact keyword",
-            "content_preview": "Text",
-            "page_numbers": [3],
-            "section_title": "Other",
-            "content_type": "text",
-            "doc_filename": "other.pdf",
-        }
-
-        store_with_mock_client.client.query_points = MagicMock(return_value=dense_response)
-        store_with_mock_client.client.scroll = MagicMock(return_value=([text_point], None))
-
-        results = await store_with_mock_client.hybrid_search(
-            query_embedding=[0.1] * 1024,
-            query_text="exact keyword",
-            top_k=5,
-        )
-
-        # Les deux resultats doivent etre presents
-        chunk_ids = {r["chunk_id"] for r in results}
-        assert "chunk-dense" in chunk_ids
-        assert "chunk-text" in chunk_ids
-
-    @pytest.mark.asyncio
-    async def test_hybrid_search_deduplicates_by_chunk_id(
-        self, store_with_mock_client: QdrantVectorStore
-    ) -> None:
-        """Un chunk present dans les deux recherches n'apparait qu'une fois."""
-        shared_payload = {
-            "chunk_id": "chunk-shared",
-            "document_id": "doc-1",
-            "content": "Shared content",
-            "content_preview": "Shared",
-            "page_numbers": [1],
-            "section_title": "Title",
-            "content_type": "text",
-            "doc_filename": "file.pdf",
-        }
-
-        dense_point = MagicMock()
-        dense_point.id = 1
-        dense_point.score = 0.9
-        dense_point.payload = shared_payload
-
-        text_point = MagicMock()
-        text_point.id = 1
-        text_point.payload = shared_payload
-
-        dense_response = MagicMock()
-        dense_response.points = [dense_point]
-
-        store_with_mock_client.client.query_points = MagicMock(return_value=dense_response)
-        store_with_mock_client.client.scroll = MagicMock(return_value=([text_point], None))
-
-        results = await store_with_mock_client.hybrid_search(
-            query_embedding=[0.1] * 1024,
-            query_text="shared content",
-            top_k=5,
-        )
-
-        assert len(results) == 1
-        assert results[0]["chunk_id"] == "chunk-shared"
-
-    @pytest.mark.asyncio
-    async def test_hybrid_search_respects_top_k(
-        self, store_with_mock_client: QdrantVectorStore
-    ) -> None:
-        """Le nombre de resultats ne depasse pas top_k."""
-        points = []
-        for i in range(10):
-            p = MagicMock()
-            p.id = i
-            p.score = 0.9 - i * 0.05
-            p.payload = {
-                "chunk_id": f"chunk-{i}",
-                "document_id": "doc-1",
-                "content": f"Content {i}",
-                "content_preview": f"Preview {i}",
-                "page_numbers": [1],
-                "section_title": None,
-                "content_type": "text",
-                "doc_filename": "file.pdf",
-            }
-            points.append(p)
-
-        dense_response = MagicMock()
-        dense_response.points = points
-
-        store_with_mock_client.client.query_points = MagicMock(return_value=dense_response)
-        store_with_mock_client.client.scroll = MagicMock(return_value=([], None))
-
-        results = await store_with_mock_client.hybrid_search(
-            query_embedding=[0.1] * 1024,
-            query_text="test",
-            top_k=3,
-        )
-
-        assert len(results) <= 3
-
-    @pytest.mark.asyncio
-    async def test_hybrid_search_no_text_results_falls_back(
-        self, store_with_mock_client: QdrantVectorStore
-    ) -> None:
-        """Sans resultats full-text, retourne les resultats dense."""
-        dense_point = MagicMock()
-        dense_point.id = 1
-        dense_point.score = 0.85
-        dense_point.payload = {
+        point = MagicMock()
+        point.id = 1
+        point.score = 0.85
+        point.payload = {
             "chunk_id": "chunk-1",
             "document_id": "doc-1",
-            "content": "Dense only",
-            "content_preview": "Dense",
-            "page_numbers": [],
+            "content": "Result",
+            "content_preview": "Result",
+            "page_numbers": [1],
             "section_title": None,
             "content_type": "text",
             "doc_filename": "file.pdf",
         }
 
-        dense_response = MagicMock()
-        dense_response.points = [dense_point]
+        response = MagicMock()
+        response.points = [point]
+        store_with_mock_client.client.query_points = MagicMock(return_value=response)
 
-        store_with_mock_client.client.query_points = MagicMock(return_value=dense_response)
-        store_with_mock_client.client.scroll = MagicMock(return_value=([], None))
-
+        sparse_data = SparseEmbeddingData(indices=[1, 42], values=[0.5, 0.8])
         results = await store_with_mock_client.hybrid_search(
             query_embedding=[0.1] * 1024,
-            query_text="no match",
+            sparse_embedding=sparse_data,
             top_k=5,
         )
 
         assert len(results) == 1
         assert results[0]["chunk_id"] == "chunk-1"
 
-    def test_rrf_fusion_ranking(self, store_with_mock_client: QdrantVectorStore) -> None:
-        """RRF favorise les chunks presents dans les deux listes."""
-        dense = [
-            {"chunk_id": "A", "score": 0.9},
-            {"chunk_id": "B", "score": 0.8},
-            {"chunk_id": "C", "score": 0.7},
-        ]
-        text = [
-            {"chunk_id": "B", "score": 0.0},  # score inutilise pour RRF
-            {"chunk_id": "D", "score": 0.0},
-        ]
+        # Verifier que query_points a ete appele avec prefetch
+        call_kwargs = store_with_mock_client.client.query_points.call_args.kwargs
+        assert "prefetch" in call_kwargs
+        assert len(call_kwargs["prefetch"]) == 2
 
-        fused = store_with_mock_client._rrf_fusion(dense, text, top_k=3, k=60)
+    @pytest.mark.asyncio
+    async def test_hybrid_search_returns_empty_when_no_results(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """Pas de resultats retourne une liste vide."""
+        from src.services.embedding.sparse_embedder import SparseEmbeddingData
 
-        # B devrait etre premier car present dans les deux listes
-        assert fused[0]["chunk_id"] == "B"
-        assert len(fused) <= 3
+        response = MagicMock()
+        response.points = []
+        store_with_mock_client.client.query_points = MagicMock(return_value=response)
 
-    def test_rrf_fusion_empty_lists(self, store_with_mock_client: QdrantVectorStore) -> None:
-        """Fusion de listes vides retourne une liste vide."""
-        result = store_with_mock_client._rrf_fusion([], [], top_k=5, k=60)
-        assert result == []
+        results = await store_with_mock_client.hybrid_search(
+            query_embedding=[0.1] * 1024,
+            sparse_embedding=SparseEmbeddingData(indices=[1], values=[0.5]),
+            top_k=5,
+        )
+
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_hybrid_search_passes_filters(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """Les filtres sont passes a query_points."""
+        from src.services.embedding.sparse_embedder import SparseEmbeddingData
+
+        response = MagicMock()
+        response.points = []
+        store_with_mock_client.client.query_points = MagicMock(return_value=response)
+
+        await store_with_mock_client.hybrid_search(
+            query_embedding=[0.1] * 1024,
+            sparse_embedding=SparseEmbeddingData(indices=[1], values=[0.5]),
+            top_k=5,
+            filters={"document_id": "doc-1"},
+        )
+
+        call_kwargs = store_with_mock_client.client.query_points.call_args.kwargs
+        assert call_kwargs["query_filter"] is not None
+
+
+class TestSemanticSearch:
+    """Tests pour search() avec named vector 'dense'."""
+
+    @pytest.mark.asyncio
+    async def test_search_uses_dense_named_vector(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """search() passe using='dense' pour named vector."""
+        response = MagicMock()
+        response.points = []
+        store_with_mock_client.client.query_points = MagicMock(return_value=response)
+
+        await store_with_mock_client.search(
+            query_embedding=[0.1] * 1024,
+            top_k=5,
+        )
+
+        call_kwargs = store_with_mock_client.client.query_points.call_args.kwargs
+        assert call_kwargs.get("using") == "dense"
+
+    @pytest.mark.asyncio
+    async def test_search_returns_results_with_scores(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """search() retourne des resultats avec scores cosine."""
+        point = MagicMock()
+        point.id = 1
+        point.score = 0.82
+        point.payload = {
+            "chunk_id": "chunk-1",
+            "document_id": "doc-1",
+            "content": "Semantic result",
+            "content_preview": "Semantic",
+            "page_numbers": [1],
+            "section_title": None,
+            "content_type": "text",
+            "doc_filename": "file.pdf",
+        }
+
+        response = MagicMock()
+        response.points = [point]
+        store_with_mock_client.client.query_points = MagicMock(return_value=response)
+
+        results = await store_with_mock_client.search(
+            query_embedding=[0.1] * 1024,
+            top_k=5,
+        )
+
+        assert len(results) == 1
+        assert results[0]["score"] == 0.82
 
 
 class TestInitialize:
@@ -358,3 +306,126 @@ class TestInitialize:
             await store_with_mock_client.initialize()
 
             mock_create_indexes.assert_called_once()
+
+
+class TestBuildPoints:
+    """Tests pour _build_points avec named vectors."""
+
+    def test_builds_named_dense_and_sparse_vectors(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """Les points ont un dict de named vectors (dense + sparse)."""
+        from src.models.chunk import ChunkMetadata, DocumentChunk
+        from src.services.embedding.sparse_embedder import SparseEmbeddingData
+
+        chunk = DocumentChunk(
+            content="Test content",
+            metadata=ChunkMetadata(chunk_id="c1", document_id="d1"),
+            embedding=[0.1] * 1024,
+            sparse_embedding=SparseEmbeddingData(indices=[1, 42], values=[0.5, 0.8]),
+        )
+
+        points, skipped = store_with_mock_client._build_points(
+            [chunk], lambda c: {"content": c.content}
+        )
+
+        assert skipped == 0
+        assert len(points) == 1
+        vector = points[0].vector
+        assert isinstance(vector, dict)
+        assert "dense" in vector
+        assert len(vector["dense"]) == 1024
+        assert "sparse" in vector
+
+    def test_skips_chunk_without_dense_embedding(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """Chunk sans embedding dense est skippé."""
+        from src.models.chunk import ChunkMetadata, DocumentChunk
+        from src.services.embedding.sparse_embedder import SparseEmbeddingData
+
+        chunk = DocumentChunk(
+            content="No embedding",
+            metadata=ChunkMetadata(chunk_id="c1", document_id="d1"),
+            embedding=None,
+            sparse_embedding=SparseEmbeddingData(indices=[1], values=[0.5]),
+        )
+
+        points, skipped = store_with_mock_client._build_points(
+            [chunk], lambda c: {"content": c.content}
+        )
+
+        assert len(points) == 0
+        assert skipped == 1
+
+    def test_skips_chunk_without_sparse_embedding(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """Chunk sans sparse embedding est skippé."""
+        from src.models.chunk import ChunkMetadata, DocumentChunk
+
+        chunk = DocumentChunk(
+            content="Dense only",
+            metadata=ChunkMetadata(chunk_id="c1", document_id="d1"),
+            embedding=[0.1] * 1024,
+            sparse_embedding=None,
+        )
+
+        points, skipped = store_with_mock_client._build_points(
+            [chunk], lambda c: {"content": c.content}
+        )
+
+        assert len(points) == 0
+        assert skipped == 1
+
+
+class TestCreateCollection:
+    """Tests pour _create_collection avec named vectors."""
+
+    @pytest.mark.asyncio
+    async def test_creates_collection_with_named_dense_vector(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """La collection utilise un named vector 'dense' de 1024d cosine."""
+        await store_with_mock_client._create_collection()
+
+        call_kwargs = store_with_mock_client.client.create_collection.call_args
+        vectors_config = call_kwargs.kwargs.get(
+            "vectors_config", call_kwargs[1].get("vectors_config")
+        )
+
+        # Doit etre un dict de named vectors, pas un VectorParams unnamed
+        assert isinstance(vectors_config, dict)
+        assert "dense" in vectors_config
+        assert vectors_config["dense"].size == 1024
+
+    @pytest.mark.asyncio
+    async def test_creates_collection_with_sparse_vectors(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """La collection configure des sparse vectors pour BM25."""
+        await store_with_mock_client._create_collection()
+
+        call_kwargs = store_with_mock_client.client.create_collection.call_args
+        sparse_config = call_kwargs.kwargs.get(
+            "sparse_vectors_config", call_kwargs[1].get("sparse_vectors_config")
+        )
+
+        assert sparse_config is not None
+        assert "sparse" in sparse_config
+
+    @pytest.mark.asyncio
+    async def test_text_index_on_content_for_filtering(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """TEXT index sur 'content' conserve pour filtre text_search."""
+        await store_with_mock_client._create_indexes()
+
+        # Verifier qu'un appel cree un TextIndexParams sur "content"
+        found_text_index = False
+        for call in store_with_mock_client.client.create_payload_index.call_args_list:
+            kwargs = call.kwargs if call.kwargs else {}
+            field_name = kwargs.get("field_name")
+            if field_name == "content":
+                found_text_index = True
+        assert found_text_index, "TEXT index on 'content' needed for text_search filter"

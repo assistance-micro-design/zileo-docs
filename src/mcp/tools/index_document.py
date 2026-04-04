@@ -18,6 +18,7 @@ from src.models.chunk import ChunkMetadata, DocumentChunk
 from src.models.unified import DocumentType, FormulaData, UnifiedDocument
 from src.services.document.router import DocumentRouter
 from src.services.embedding.mistral_embedder import MistralEmbedder
+from src.services.embedding.sparse_embedder import SparseEmbedder, embed_dense_and_sparse
 from src.services.pipeline.orchestrator import PDFPipelineOrchestrator
 from src.services.vector.qdrant_store import QdrantVectorStore
 
@@ -83,17 +84,20 @@ class IndexDocumentTool(BaseMCPTool):
         self,
         vector_store: QdrantVectorStore | None = None,
         embedder: MistralEmbedder | None = None,
+        sparse_embedder: SparseEmbedder | None = None,
     ) -> None:
         """Initialise le tool d'indexation.
 
         Args:
             vector_store: Instance partagee du vector store (injection).
             embedder: Instance partagee de l'embedder (injection).
+            sparse_embedder: Instance partagee du sparse embedder (injection).
         """
         super().__init__()
         self._pdf_orchestrator = PDFPipelineOrchestrator()
         self._router = DocumentRouter()
         self._embedder = embedder or MistralEmbedder()
+        self._sparse_embedder = sparse_embedder or SparseEmbedder()
         self._vector_store = vector_store or QdrantVectorStore()
 
     async def _do_initialize(self) -> None:
@@ -304,9 +308,9 @@ class IndexDocumentTool(BaseMCPTool):
         # Creer les chunks a partir du contenu unifie
         chunks = await self._create_chunks_from_unified(unified_doc, params)
 
-        # Generer les embeddings
+        # Generer les embeddings (dense + sparse en parallele)
         if chunks:
-            chunks = await self._embedder.embed_chunks(chunks, use_enriched=True)
+            chunks = await embed_dense_and_sparse(chunks, self._embedder, self._sparse_embedder)
 
         # Stocker dans Qdrant
         chunks_stored = 0

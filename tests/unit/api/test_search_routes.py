@@ -44,16 +44,30 @@ def search_results() -> list[dict[str, Any]]:
 
 
 @pytest.fixture
-def app(mock_embedder, mock_vector_store, search_results):
+def mock_sparse_embedder():
+    """Mock du sparse embedder BM25."""
+    from unittest.mock import MagicMock
+
+    embedder = AsyncMock()
+    sparse_data = MagicMock()
+    sparse_data.indices = [1, 42]
+    sparse_data.values = [0.5, 0.8]
+    embedder.embed_query = AsyncMock(return_value=sparse_data)
+    return embedder
+
+
+@pytest.fixture
+def app(mock_embedder, mock_vector_store, mock_sparse_embedder, search_results):
     """Application avec mocks."""
     app = create_app()
 
-    from src.api.dependencies import get_embedder, get_vector_store
+    from src.api.dependencies import get_embedder, get_sparse_embedder, get_vector_store
 
     mock_vector_store.search = AsyncMock(return_value=search_results)
     mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
     app.dependency_overrides[get_embedder] = lambda: mock_embedder
     app.dependency_overrides[get_vector_store] = lambda: mock_vector_store
+    app.dependency_overrides[get_sparse_embedder] = lambda: mock_sparse_embedder
     return app
 
 

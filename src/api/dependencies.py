@@ -14,6 +14,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.services.embedding.mistral_embedder import MistralEmbedder
+from src.services.embedding.sparse_embedder import SparseEmbedder
 from src.services.pipeline.orchestrator import PDFPipelineOrchestrator
 from src.services.vector.qdrant_store import QdrantVectorStore
 
@@ -48,7 +49,18 @@ def get_embedder() -> MistralEmbedder:
     return MistralEmbedder()
 
 
+@lru_cache
+def get_sparse_embedder() -> SparseEmbedder:
+    """Retourne une instance singleton du sparse embedder BM25.
+
+    Returns:
+        SparseEmbedder configure avec le modele par defaut.
+    """
+    return SparseEmbedder()
+
+
 # Type aliases pour injection de dependances
 OrchestratorDep = Annotated[PDFPipelineOrchestrator, Depends(get_orchestrator)]
 VectorStoreDep = Annotated[QdrantVectorStore, Depends(get_vector_store)]
 EmbedderDep = Annotated[MistralEmbedder, Depends(get_embedder)]
+SparseEmbedderDep = Annotated[SparseEmbedder, Depends(get_sparse_embedder)]

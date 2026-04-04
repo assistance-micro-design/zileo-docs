@@ -5,6 +5,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from src.services.embedding.sparse_embedder import SparseEmbeddingData
 
 
 @dataclass
@@ -137,6 +142,7 @@ class DocumentChunk:
     content: str
     metadata: ChunkMetadata
     embedding: list[float] | None = None
+    sparse_embedding: SparseEmbeddingData | None = None
     content_with_context: str | None = None
 
     def to_dict(self) -> dict[str, object]:

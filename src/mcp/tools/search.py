@@ -11,6 +11,7 @@ from src.core.exceptions import EmptyQueryError
 from src.mcp.tools.base import VectorStoreMCPTool
 from src.models.api import SearchDocumentsParams
 from src.services.embedding.mistral_embedder import MistralEmbedder
+from src.services.embedding.sparse_embedder import SparseEmbedder
 from src.services.vector.qdrant_store import QdrantVectorStore
 
 
@@ -117,15 +118,18 @@ class SearchDocumentsTool(VectorStoreMCPTool):
         self,
         vector_store: QdrantVectorStore | None = None,
         embedder: MistralEmbedder | None = None,
+        sparse_embedder: SparseEmbedder | None = None,
     ) -> None:
         """Initialise le tool de recherche.
 
         Args:
             vector_store: Instance partagee du vector store (injection).
-            embedder: Instance partagee de l'embedder (injection).
+            embedder: Instance partagee de l'embedder dense (injection).
+            sparse_embedder: Instance partagee de l'embedder sparse (injection).
         """
         super().__init__(vector_store=vector_store)
         self._embedder = embedder or MistralEmbedder()
+        self._sparse_embedder = sparse_embedder or SparseEmbedder()
 
     async def _execute_search(
         self,
@@ -140,12 +144,15 @@ class SearchDocumentsTool(VectorStoreMCPTool):
                 filters=params.filters,
                 score_threshold=params.score_threshold,
             )
+        # Mode hybrid: generer sparse embedding BM25 et fusion RRF
+        sparse_data = await self._sparse_embedder.embed_query(params.query)
+        # score_threshold non transmis en hybrid — les scores RRF
+        # ne sont pas sur la meme echelle que cosine similarity
         return await self._vector_store.hybrid_search(
             query_embedding=query_embedding,
-            query_text=params.query,
+            sparse_embedding=sparse_data,
             top_k=params.top_k,
             filters=params.filters,
-            score_threshold=params.score_threshold,
         )
 
     async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:

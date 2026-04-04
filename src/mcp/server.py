@@ -33,6 +33,7 @@ from src.mcp.tools.read_document_content import ReadDocumentContentTool
 from src.mcp.tools.search import SearchDocumentsTool
 from src.mcp.types import RequestId
 from src.services.embedding.mistral_embedder import MistralEmbedder
+from src.services.embedding.sparse_embedder import SparseEmbedder
 from src.services.vector.qdrant_store import QdrantVectorStore
 
 
@@ -161,6 +162,7 @@ class MCPServer:
         # Dependances partagees
         self._shared_vector_store = QdrantVectorStore()
         self._shared_embedder = MistralEmbedder()
+        self._shared_sparse_embedder = SparseEmbedder()
 
         # Instancier les tools avec injection de dependances
         self._create_excel = CreateExcelTool()
@@ -170,10 +172,12 @@ class MCPServer:
         self._index_document = IndexDocumentTool(
             vector_store=self._shared_vector_store,
             embedder=self._shared_embedder,
+            sparse_embedder=self._shared_sparse_embedder,
         )
         self._search_documents = SearchDocumentsTool(
             vector_store=self._shared_vector_store,
             embedder=self._shared_embedder,
+            sparse_embedder=self._shared_sparse_embedder,
         )
         self._get_document = GetDocumentTool(
             vector_store=self._shared_vector_store,
