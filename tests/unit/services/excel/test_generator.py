@@ -12,7 +12,7 @@ from openpyxl import load_workbook
 from src.core.exceptions import (
     ExcelChartError,
     ExcelFormulaInjectionError,
-    ExcelOutputTooLargeError,
+    ExcelGenerationError,
 )
 from src.models.api import CreateExcelParams, CreateExcelResult
 from src.models.excel_generation import (
@@ -269,7 +269,7 @@ class TestExcelGeneratorErrors:
 
     @pytest.mark.asyncio
     async def test_output_too_large(self, tmp_path: Path) -> None:
-        """Fichier trop volumineux leve ExcelOutputTooLargeError."""
+        """Fichier trop volumineux leve ExcelGenerationError."""
         gen = ExcelGenerator(output_path=tmp_path)
         # Creer un fichier avec beaucoup de donnees
         # On triche en forçant une taille max tres petite
@@ -283,7 +283,7 @@ class TestExcelGeneratorErrors:
                 )
             ],
         )
-        with pytest.raises(ExcelOutputTooLargeError):
+        with pytest.raises(ExcelGenerationError):
             await gen.generate(params)
 
     @pytest.mark.asyncio

@@ -326,6 +326,66 @@ class EditExcelResult(BaseModel):
     file_size_bytes: int
 
 
+class CreateWordParams(BaseModel):
+    """Parametres du tool MCP create_word_document.
+
+    Attributes:
+        filename: Nom du fichier docx a creer.
+        content: Contenu Markdown a convertir en Word.
+        title: Titre du document (metadonnee).
+        author: Auteur du document (metadonnee).
+    """
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "filename": "report.docx",
+                    "content": "# Report\n\n## Introduction\n\nThis is a **bold** statement.\n\n- Item 1\n- Item 2\n  - Sub-item\n\n| Name | Value |\n|------|-------|\n| A | 1 |\n",
+                    "title": "Monthly Report",
+                    "author": "Zileo",
+                }
+            ]
+        }
+    }
+
+    filename: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=255,
+            pattern=r"^[\w\-. ()]+\.docx$",
+            description="Nom du fichier. Doit se terminer par .docx",
+        ),
+    ]
+    content: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=500_000,
+            description="Contenu Markdown a convertir en document Word",
+        ),
+    ]
+    title: Annotated[str | None, Field(default=None, max_length=255)] = None
+    author: Annotated[str | None, Field(default=None, max_length=255)] = None
+
+
+class CreateWordResult(BaseModel):
+    """Resultat de la creation d'un document Word.
+
+    Attributes:
+        file_path: Chemin absolu du fichier cree.
+        filename: Nom du fichier.
+        file_size_bytes: Taille du fichier en octets.
+        overwritten: True si un fichier existant a ete ecrase.
+    """
+
+    file_path: str
+    filename: str
+    file_size_bytes: int
+    overwritten: bool = False
+
+
 class ListAvailableDocumentsParams(BaseModel):
     """Paramètres du tool MCP list_available_documents.
 

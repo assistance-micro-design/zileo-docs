@@ -16,14 +16,11 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from src.core.config import settings
 from src.core.exceptions import (
     ExcelChartError,
     ExcelFormulaInjectionError,
     ExcelGenerationError,
-    ExcelOutputTooLargeError,
 )
-from src.core.file_validation import validate_filename_safety
 from src.models.api import CreateExcelParams, CreateExcelResult
 from src.models.excel_generation import (
     CellStyleDef,
@@ -32,6 +29,7 @@ from src.models.excel_generation import (
     MergedCellDef,
     SheetDef,
 )
+from src.services.document.base_generator import BaseDocumentGenerator
 
 
 if TYPE_CHECKING:
@@ -53,15 +51,14 @@ _DANGEROUS_FORMULA_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 
-class ExcelGenerator:
+class ExcelGenerator(BaseDocumentGenerator):
     """Genere des fichiers Excel a partir de definitions structurees.
 
     Utilise openpyxl pour creer des classeurs .xlsx avec donnees,
     styles, graphiques et validations de donnees.
-
-    Attributes:
-        _output_path: Repertoire de sortie des fichiers generes.
     """
+
+    _error_class = ExcelGenerationError
 
     def __init__(self, output_path: Path | None = None) -> None:
         """Initialise le generateur.
@@ -69,8 +66,7 @@ class ExcelGenerator:
         Args:
             output_path: Repertoire de sortie (defaut: settings.OUTPUT_PATH).
         """
-        self._output_path = Path(output_path or settings.OUTPUT_PATH)
-        self._max_output_size_mb = settings.MAX_OUTPUT_FILE_SIZE_MB
+        super().__init__(output_path)
 
     async def generate(self, params: CreateExcelParams) -> CreateExcelResult:
         """Point d'entree principal. Cree le fichier xlsx.
@@ -154,22 +150,10 @@ class ExcelGenerator:
 
         Returns:
             Taille du fichier en octets.
-
-        Raises:
-            ExcelOutputTooLargeError: Si le fichier depasse la taille max.
         """
         wb.save(str(file_path))
         wb.close()
-        file_size = file_path.stat().st_size
-        size_mb = file_size / (1024 * 1024)
-        if size_mb > self._max_output_size_mb:
-            file_path.unlink()
-            raise ExcelOutputTooLargeError(
-                filename=filename,
-                size_mb=size_mb,
-                max_size_mb=self._max_output_size_mb,
-            )
-        return file_size
+        return self.verify_file_size(file_path, filename)
 
     def _create_sheet(self, wb: Workbook, sheet_def: SheetDef) -> Worksheet:
         """Cree une feuille avec donnees, headers, widths."""
@@ -366,39 +350,6 @@ class ExcelGenerator:
             ws[top_left] = merge_def.value
             ws[top_left].alignment = Alignment(horizontal="center", vertical="center")
 
-    def sanitize_filename(self, filename: str) -> str:
-        """Securise le nom de fichier (path traversal prevention).
-
-        Args:
-            filename: Nom de fichier a securiser.
-
-        Returns:
-            Nom de fichier securise.
-
-        Raises:
-            ExcelGenerationError: Si le nom est invalide ou dangereux.
-        """
-        if not validate_filename_safety(filename):
-            raise ExcelGenerationError(
-                message=f"Nom de fichier invalide: {filename}",
-                code="INVALID_FILENAME",
-                suggestion="Le nom de fichier ne doit pas contenir '..' , '/' ou '\\'.",
-                parameter="filename",
-                retry=True,
-            )
-
-        resolved = (self._output_path / filename).resolve()
-        if not resolved.is_relative_to(self._output_path.resolve()):
-            raise ExcelGenerationError(
-                message=f"Path traversal detecte: {filename}",
-                code="PATH_TRAVERSAL",
-                suggestion="Utiliser un nom de fichier simple sans chemin.",
-                parameter="filename",
-                retry=True,
-            )
-
-        return filename
-
     @staticmethod
     def check_cell_value_safety(value: object) -> None:
         """Verifie qu'une valeur de cellule ne contient pas de formule dangereuse.
@@ -414,7 +365,3 @@ class ExcelGenerator:
         for pattern in _DANGEROUS_FORMULA_PATTERNS:
             if pattern.search(value):
                 raise ExcelFormulaInjectionError(value=value, pattern=pattern.pattern)
-
-    def ensure_output_dir(self) -> None:
-        """Cree le repertoire OUTPUT_PATH s'il n'existe pas."""
-        self._output_path.mkdir(parents=True, exist_ok=True)

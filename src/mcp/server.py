@@ -20,6 +20,7 @@ from src.core.config import settings
 from src.core.exceptions import MCPZileoError
 from src.mcp.tools.base import BaseMCPTool
 from src.mcp.tools.create_excel import CreateExcelTool
+from src.mcp.tools.create_word import CreateWordTool
 from src.mcp.tools.delete_document import DeleteDocumentTool
 from src.mcp.tools.edit_excel import EditExcelTool
 from src.mcp.tools.get_document import GetDocumentTool
@@ -163,6 +164,7 @@ class MCPServer:
 
         # Instancier les tools avec injection de dependances
         self._create_excel = CreateExcelTool()
+        self._create_word = CreateWordTool()
         self._edit_excel = EditExcelTool()
         self._inspect_generated_file = InspectGeneratedFileTool()
         self._index_document = IndexDocumentTool(
@@ -193,6 +195,7 @@ class MCPServer:
         # Registry des tools
         self.tools: dict[str, BaseMCPTool] = {
             "create_excel_document": self._create_excel,
+            "create_word_document": self._create_word,
             "edit_excel_document": self._edit_excel,
             "inspect_generated_file": self._inspect_generated_file,
             "index_document": self._index_document,

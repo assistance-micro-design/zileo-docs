@@ -12,7 +12,7 @@ from openpyxl import load_workbook
 from src.core.exceptions import (
     ExcelFileNotFoundError,
     ExcelFormulaInjectionError,
-    ExcelOutputTooLargeError,
+    ExcelGenerationError,
     ExcelSheetNotFoundError,
 )
 from src.models.api import CreateExcelParams, EditExcelParams
@@ -559,7 +559,7 @@ class TestEditorErrors:
 
     @pytest.mark.asyncio
     async def test_output_too_large(self, tmp_path: Path, sample_file: str) -> None:
-        """Fichier trop gros leve ExcelOutputTooLargeError."""
+        """Fichier trop gros leve ExcelGenerationError."""
         # Recreer sample_file car le fixture generator utilise tmp_path
         ed = ExcelEditor(output_path=tmp_path)
         ed._generator._max_output_size_mb = 0  # type: ignore[attr-defined]
@@ -572,7 +572,7 @@ class TestEditorErrors:
                 )
             ],
         )
-        with pytest.raises(ExcelOutputTooLargeError):
+        with pytest.raises(ExcelGenerationError):
             await ed.edit(params)
 
 

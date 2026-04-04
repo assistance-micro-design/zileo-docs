@@ -288,24 +288,6 @@ class ExcelGenerationError(MCPZileoError):
         super().__init__(message, code, details, suggestion, parameter, retry)
 
 
-class ExcelOutputTooLargeError(ExcelGenerationError):
-    """Fichier Excel genere depasse la taille maximale."""
-
-    def __init__(self, filename: str, size_mb: float, max_size_mb: int) -> None:
-        super().__init__(
-            message=f"Fichier Excel trop volumineux: {size_mb:.1f}MB (max: {max_size_mb}MB)",
-            code="EXCEL_OUTPUT_TOO_LARGE",
-            details={
-                "filename": filename,
-                "size_mb": size_mb,
-                "max_size_mb": max_size_mb,
-            },
-            suggestion=f"Reduire le nombre de lignes ou de feuilles. Max {max_size_mb}MB.",
-            parameter="sheets",
-            retry=True,
-        )
-
-
 class ExcelChartError(ExcelGenerationError):
     """Erreur lors de la creation d'un graphique."""
 
@@ -360,6 +342,24 @@ class ExcelSheetNotFoundError(ExcelGenerationError):
             parameter="sheet",
             retry=True,
         )
+
+
+# === Word Generation Errors ===
+
+
+class WordGenerationError(MCPZileoError):
+    """Erreur liee a la generation de fichiers Word."""
+
+    def __init__(
+        self,
+        message: str,
+        code: str = "WORD_GENERATION_ERROR",
+        details: dict[str, Any] | None = None,
+        suggestion: str | None = None,
+        parameter: str | None = None,
+        retry: bool = False,
+    ) -> None:
+        super().__init__(message, code, details, suggestion, parameter, retry)
 
 
 # === Validation Errors ===
