@@ -30,10 +30,12 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
+ARG APP_VERSION=0.2.0
+
 # Labels
 LABEL org.opencontainers.image.title="MCP Zileo RAG"
 LABEL org.opencontainers.image.description="MCP Server for document processing (PDF, Excel, Word) with OCR and vector search"
-LABEL org.opencontainers.image.version="0.1.0"
+LABEL org.opencontainers.image.version="${APP_VERSION}"
 
 # Copier le venv du builder
 COPY --from=builder /opt/venv /opt/venv
@@ -43,7 +45,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     APP_NAME="MCP Zileo RAG" \
-    APP_VERSION="0.1.0" \
+    APP_VERSION="${APP_VERSION}" \
     LOG_LEVEL="INFO" \
     LOG_FORMAT="json"
 

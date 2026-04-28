@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import secrets
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Security, status
@@ -38,7 +39,7 @@ async def verify_api_key(
             detail="X-API-Key header required",
         )
 
-    if api_key != settings.API_KEY:
+    if not secrets.compare_digest(api_key, settings.API_KEY):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid API key",

@@ -7,8 +7,9 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from src.api.auth import verify_api_key
 from src.api.dependencies import VectorStoreDep
 from src.core.config import settings
 from src.models.api import HealthResponse
@@ -22,8 +23,9 @@ router = APIRouter(prefix="/health", tags=["Health"])
 @router.get(
     "",
     response_model=HealthResponse,
-    summary="Health check",
-    description="Verifie l'etat de sante du service et de ses dependances.",
+    summary="Health check (detaille, protege)",
+    description="Verifie l'etat de sante du service et de ses dependances. Auth requise.",
+    dependencies=[Depends(verify_api_key)],
 )
 async def health_check(vector_store: VectorStoreDep) -> HealthResponse:
     """Verifie l'etat de sante du service.
@@ -79,7 +81,7 @@ async def readiness(vector_store: VectorStoreDep) -> dict[str, str]:
 
     if qdrant_status == "healthy":
         return {"status": "ready"}
-    return {"status": "not_ready", "reason": "qdrant_unavailable"}
+    return {"status": "not_ready"}
 
 
 def _compute_health_status(qdrant: str, mistral: str) -> str:

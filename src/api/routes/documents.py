@@ -24,7 +24,11 @@ from src.core.exceptions import (
     PDFTooManyPagesError,
     SourceFileNotFoundError,
 )
+from src.core.file_validation import validate_file_magic
 from src.models.api import DeleteResult, ProcessingStatus
+
+
+_UPLOAD_CHUNK_BYTES = 64 * 1024
 
 
 logger = logging.getLogger(__name__)
@@ -66,38 +70,17 @@ async def index_pdf(
     Raises:
         HTTPException: Si le fichier est invalide.
     """
-    # Validation du fichier
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le fichier doit etre un PDF",
-        )
-
-    # Verifier la taille et le magic number
-    content = await file.read()
-    size_mb = len(content) / (1024 * 1024)
-
-    if not content.startswith(b"%PDF"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Fichier invalide: magic number PDF manquant (%PDF-)",
-        )
-
-    if size_mb > settings.MAX_FILE_SIZE_MB:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Fichier trop volumineux: {size_mb:.1f}MB (max: {settings.MAX_FILE_SIZE_MB}MB)",
-        )
-
-    # Sauvegarder temporairement
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        tmp.write(content)
-        tmp_path = Path(tmp.name)
+    _validate_upload_filename(file.filename)
+    tmp_path = await _stream_upload_to_temp(file, settings.MAX_FILE_SIZE_MB)
 
     try:
-        # Initialiser l'orchestrateur et traiter
-        await orchestrator.initialize()
+        if not validate_file_magic(tmp_path):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Fichier invalide: magic number PDF manquant (%PDF-)",
+            )
 
+        await orchestrator.initialize()
         result = await orchestrator.process_and_index(
             tmp_path,
             options={
@@ -121,24 +104,74 @@ async def index_pdf(
             "errors": result.errors,
         }
 
-    except SourceFileNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=e.message,
-        ) from e
-    except PDFCorruptedError as e:
+    except (
+        SourceFileNotFoundError,
+        PDFCorruptedError,
+        PDFTooLargeError,
+        PDFTooManyPagesError,
+    ) as e:
+        raise _orchestrator_error_to_http(e) from e
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def _validate_upload_filename(filename: str | None) -> None:
+    """Verifie que le nom de fichier termine en .pdf."""
+    if not filename or not filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=e.message,
-        ) from e
-    except (PDFTooLargeError, PDFTooManyPagesError) as e:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=e.message,
-        ) from e
-    finally:
-        # Nettoyer le fichier temporaire
-        tmp_path.unlink(missing_ok=True)
+            detail="Le fichier doit etre un PDF",
+        )
+
+
+async def _stream_upload_to_temp(file: UploadFile, max_size_mb: int) -> Path:
+    """Streame l'upload dans un fichier temporaire avec cap de taille (fail-fast).
+
+    Args:
+        file: Upload FastAPI.
+        max_size_mb: Taille max autorisee en MB.
+
+    Returns:
+        Chemin du fichier temporaire ecrit.
+
+    Raises:
+        HTTPException 413: Si la taille depasse `max_size_mb`.
+    """
+    max_bytes = max_size_mb * 1024 * 1024
+    written = 0
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+        while chunk := await file.read(_UPLOAD_CHUNK_BYTES):
+            written += len(chunk)
+            if written > max_bytes:
+                tmp.close()
+                tmp_path.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"Fichier trop volumineux (max: {max_size_mb}MB)",
+                )
+            tmp.write(chunk)
+    return tmp_path
+
+
+def _orchestrator_error_to_http(exc: Exception) -> HTTPException:
+    """Mappe une erreur d'orchestration sur un code HTTP.
+
+    Args:
+        exc: Exception levee par l'orchestrateur.
+
+    Returns:
+        HTTPException avec le code adequat.
+    """
+    if isinstance(exc, SourceFileNotFoundError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message)
+    if isinstance(exc, (PDFTooLargeError, PDFTooManyPagesError)):
+        return HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=exc.message
+        )
+    if isinstance(exc, PDFCorruptedError):
+        return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message)
+    return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
 
 @router.get(

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # === Application ===
     APP_NAME: str = "MCP Zileo RAG"
-    APP_VERSION: str = "0.1.0"
+    APP_VERSION: str = "0.2.0"
     DEBUG: bool = False
 
     # === Mistral API ===
@@ -99,6 +99,12 @@ class Settings(BaseSettings):
         ge=1,
         le=100,
         description="Taille max d'un fichier genere en MB",
+    )
+    MAX_MCP_BODY_MB: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Taille max du body JSON-RPC sur /mcp (DoS protection)",
     )
 
     # === Authentication ===

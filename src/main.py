@@ -57,6 +57,10 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.DEBUG:
         logger.warning("APPLICATION EN MODE DEBUG - NE PAS UTILISER EN PRODUCTION")
 
+    if not settings.DEBUG and not settings.API_KEY:
+        msg = "API_KEY non configuree en mode production: les endpoints proteges sont ouverts"
+        raise RuntimeError(msg)
+
     # Initialiser le serveur MCP
     try:
         await mcp_server.initialize()
@@ -122,10 +126,26 @@ def _register_routes(app: FastAPI, limiter: Limiter) -> None:
     async def mcp_exception_handler(_request: Request, exc: MCPZileoError) -> JSONResponse:
         return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=exc.to_dict())
 
+    max_mcp_body_bytes = settings.MAX_MCP_BODY_MB * 1024 * 1024
+
     @app.post("/mcp", dependencies=[Depends(verify_api_key)])
     @limiter.limit(settings.RATE_LIMIT_MCP)  # type: ignore[untyped-decorator]
     async def mcp_endpoint(request: Request) -> dict[str, Any]:
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > max_mcp_body_bytes:
+            return {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32600, "message": "Body too large"},
+            }
         try:
+            raw = await request.body()
+            if len(raw) > max_mcp_body_bytes:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32600, "message": "Body too large"},
+                }
             body = await request.json()
             return await mcp_server.handle_request(body)
         except Exception as e:

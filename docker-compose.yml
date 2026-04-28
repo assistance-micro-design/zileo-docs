@@ -18,9 +18,11 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_FORMAT=${LOG_FORMAT:-json}
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - API_KEY=${API_KEY}
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-documents}
+      - MAX_MCP_BODY_MB=${MAX_MCP_BODY_MB:-5}
     volumes:
       - ./data:/app/data
       - ${DOCUMENTS_PATH:-./data/documents}:/app/documents:ro
@@ -30,7 +32,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
       interval: 30s
       timeout: 10s
       retries: 3

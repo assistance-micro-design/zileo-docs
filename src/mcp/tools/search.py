@@ -187,11 +187,11 @@ class SearchDocumentsTool(VectorStoreMCPTool):
             raise EmptyQueryError()
 
         logger.info(
-            "Recherche: '%s' (top_k=%d, threshold=%.2f, filters=%s)",
+            "Recherche: '%s' (top_k=%d, threshold=%.2f, filter_keys=%s)",
             params.query[:50],
             params.top_k,
             params.score_threshold,
-            params.filters,
+            sorted(params.filters.keys()) if params.filters else [],
         )
 
         # Generer l'embedding de la requete
