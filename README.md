@@ -1,6 +1,17 @@
 # MCP Zileo RAG
 
-Serveur MCP (Model Context Protocol) pour l'indexation, la recherche semantique et la generation de documents. Expose 11 outils via JSON-RPC 2.0 pour permettre a un LLM de chercher dans vos fichiers PDF, Excel et Word, et de creer/editer des fichiers Excel.
+[![Version](https://img.shields.io/badge/version-0.2.0-orange)](https://github.com/assistance-micro-design/mcp-zileo-rag)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
+[![Status](https://img.shields.io/badge/status-beta-yellow)](https://github.com/assistance-micro-design/mcp-zileo-rag)
+
+> Serveur MCP (Model Context Protocol) pour l'indexation, la recherche semantique et la generation de documents. Expose 12 outils via JSON-RPC 2.0 pour permettre a un LLM de chercher dans vos fichiers PDF, Excel et Word, et de creer/editer des fichiers Excel et Word.
+
+**Developed by** [Assistance Micro Design](https://www.assistancemicrodesign.net/)
+
+**Built with** [Claude Code](https://claude.com/claude-code) by Anthropic
+
+---
 
 > **Usage personnel uniquement** - Concu pour une utilisation locale via Docker. Aucune garantie pour un deploiement public. L'auteur decline toute responsabilite en cas d'exposition a Internet.
 
@@ -29,8 +40,8 @@ Serveur MCP (Model Context Protocol) pour l'indexation, la recherche semantique 
 ## Installation
 
 ```bash
-git clone <repository-url>
-cd Mcp-Zileo-Rag
+git clone https://github.com/assistance-micro-design/mcp-zileo-rag.git
+cd mcp-zileo-rag
 cp .env.example .env
 # Editer .env : renseigner MISTRAL_API_KEY et DOCUMENTS_PATH
 docker compose up -d
@@ -68,7 +79,7 @@ Ajouter dans le fichier de configuration Claude Desktop :
 }
 ```
 
-Redemarrer Claude Desktop apres modification. Les 11 outils apparaitront automatiquement dans l'interface.
+Redemarrer Claude Desktop apres modification. Les 12 outils apparaitront automatiquement dans l'interface.
 
 ### Zileo Chat
 
@@ -103,7 +114,7 @@ Si Zileo Chat et MCP Zileo RAG tournent dans le meme reseau Docker, utiliser le 
 Tout client compatible MCP peut se connecter en HTTP Streamable vers `http://localhost:8000/mcp`. Le serveur implemente les methodes standard :
 
 - `initialize` — Handshake et capabilities
-- `tools/list` — Liste des 11 outils disponibles
+- `tools/list` — Liste des 12 outils disponibles
 - `tools/call` — Execution d'un outil
 
 Le transport utilise HTTP POST avec des requetes JSON-RPC 2.0. Pas de SSE, pas de WebSocket.
@@ -128,6 +139,7 @@ Le transport utilise HTTP POST avec des requetes JSON-RPC 2.0. Pas de SSE, pas d
 |-------|-------------|
 | `create_excel_document` | Creer un fichier Excel (.xlsx) avec donnees, styles, graphiques |
 | `edit_excel_document` | Editer un fichier Excel existant (13 operations) |
+| `create_word_document` | Creer un fichier Word (.docx) a partir d'un contenu Markdown |
 
 ### Utilitaires
 
@@ -182,7 +194,7 @@ src/
   api/routes/          # Endpoints REST (health, documents, search)
   mcp/
     server.py          # Routeur JSON-RPC 2.0
-    tools/             # 11 outils MCP
+    tools/             # 12 outils MCP
   services/
     pdf/               # Analyse, extraction native, OCR Mistral
     excel/             # Extraction + generation + edition
@@ -208,4 +220,14 @@ src/
 
 ## Licence
 
-AGPL-3.0-or-later
+Distribue sous la licence [GNU Affero General Public License v3.0 ou ulterieure](LICENSE).
+
+Cette licence est **obligatoire** car le projet depend de [PyMuPDF](https://github.com/pymupdf/PyMuPDF) et [pymupdf4llm](https://github.com/pymupdf/RAG) (Artifex Software, Inc.) qui sont distribues sous AGPL-3.0. Voir [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) pour l'inventaire complet.
+
+## Securite
+
+Pour signaler une vulnerabilite, voir [SECURITY.md](SECURITY.md). **Ne pas creer d'issue publique.**
+
+## Contribuer
+
+Voir [CONTRIBUTORS.md](CONTRIBUTORS.md) et [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md).

@@ -7,18 +7,28 @@ et ce projet adhere au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-28
+
 ### Added
 - Recherche hybride RRF : `hybrid_search` combine dense (vecteur) + full-text avec Reciprocal Rank Fusion
+- Sparse embeddings BM25 via `fastembed` (prefetch natif Qdrant)
 - Parametre `search_mode` (hybrid/semantic) sur MCP `search_documents` et REST `/api/v1/search`
 - Hash SHA-256 de fichier (`compute_file_hash`) pour deduplication Excel/Word
 - Detection de fichier modifie : comparaison hash lors de `index_document`
 - Champ `file_hash` dans `UnifiedMetadata` et payload Qdrant
+- Outil MCP `create_word_document` : generation Word (.docx) depuis Markdown
+- Fichiers communaute GitHub : `SECURITY.md`, `CONTRIBUTORS.md`, `NOTICE`, `THIRD_PARTY_LICENSES.md`
+- CI GitHub Actions : `validate.yml` (ruff, mypy, pytest unit), `dependabot.yml` (pip + docker + actions)
+- Templates issue (bug, feature) et pull request
 
 ### Changed
 - `IndexDocumentTool` utilise injection de dependances (vector_store, embedder)
 - Mode de recherche par defaut : `hybrid` (avant: semantic uniquement)
 - `_create_indexes` refactorise avec constantes de module
 - `_extract_excel`/`_extract_word` reutilisent les extracteurs deja initialises
+- Statut projet : Alpha → Beta
+- Renommage `LICENSE.txt` → `LICENSE` (convention GitHub)
+- Branche par defaut : `master` → `main`
 
 ### Removed
 - Code mort `_VALID_TYPES_BY_SOURCE` dans `ListAvailableDocumentsParams`
