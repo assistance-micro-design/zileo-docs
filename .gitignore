@@ -1,6 +1,10 @@
 # Local dotfiles (config, env, tools)
 .*
 !.env.example
+!.dockerignore
+!.gitignore
+!.github/
+!.github/**
 CLAUDE.md
 
 # Python

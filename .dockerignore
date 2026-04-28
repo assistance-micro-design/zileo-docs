@@ -1,0 +1,16 @@
+.git
+.gitignore
+tests/
+docs/
+.coverage
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.env
+*.md
+!README.md
+.claude/
+.serena/
+__pycache__/
+*.pyc
+.venv/
