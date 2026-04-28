@@ -45,14 +45,14 @@ Toute la configuration se fait via variables d'environnement. Copier `.env.examp
 |----------|--------|-------------|
 | `MAX_FILE_SIZE_MB` | `50` | Taille maximum d'un fichier en Mo |
 | `MAX_PAGES` | `1000` | Nombre maximum de pages par document |
-| `MAX_OUTPUT_FILE_SIZE_MB` | `10` | Taille maximum d'un fichier genere (Excel) en Mo |
+| `MAX_OUTPUT_FILE_SIZE_MB` | `10` | Taille maximum d'un fichier genere (Excel/Word) en Mo |
 
 ### Chemins
 
 | Variable | Defaut | Description |
 |----------|--------|-------------|
 | `DOCUMENTS_PATH` | `/app/documents` | Dossier contenant les documents (PDF, Excel, Word) accessibles pour indexation |
-| `OUTPUT_PATH` | `/app/output` | Dossier de sortie des fichiers generes (Excel crees/edites via MCP) |
+| `OUTPUT_PATH` | `/app/output` | Dossier de sortie des fichiers generes (Excel et Word crees/edites via MCP) |
 
 ### Rate limiting
 

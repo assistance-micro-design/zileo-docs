@@ -209,13 +209,14 @@ src/
 
 ## Documentation
 
-- [Guide de generation Excel](docs/generation-guide.md) — Options, design, exemples complets
 - [Configuration clients MCP](docs/mcp-client-setup.md) — Claude Desktop, Zileo Chat, autres clients
+- [Guide de recherche](docs/research-guide.md) — Indexation, recherche hybride, lecture
+- [Guide de generation Excel & Word](docs/generation-guide.md) — Options, design, exemples
+- [Reference API](docs/api-reference.md) — Endpoints REST et 12 outils MCP
 - [Architecture](docs/architecture.md) — Pipeline de traitement et composants
-- [Reference API](docs/api-reference.md) — Endpoints REST et outils MCP
 - [Configuration](docs/configuration.md) — Variables d'environnement
 - [Deploiement](docs/deployment.md) — Docker et developpement local
-- [Multi-format](docs/multi-format.md) — Support Excel et Word
+- [Multi-format](docs/multi-format.md) — Support PDF, Excel, Word
 - [Code style](docs/code-style.md) — Conventions de code
 
 ## Licence

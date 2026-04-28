@@ -1,40 +1,21 @@
-# Code Style - Patterns et Conventions
+# Code Style
 
-## Vue d'Ensemble
+Conventions de code obligatoires pour ce projet. Tout doit passer `ruff` (configuration dans `pyproject.toml`) et `mypy --strict`.
 
-Ce projet suit des conventions de code strictes pour maintenir la lisibilite et la maintenabilite. Ce document detaille les patterns recommandes.
+## Principes
 
-## Elimination des `else`
+- Python 3.11+ avec `from __future__ import annotations` en première ligne
+- Type hints partout (params + retour). Mode `mypy strict`
+- Pas de `else` : guard clauses, early return, ternaire, expression `or`
+- Fonctions < 50 lignes (split sinon)
+- Pas de `TODO`/`FIXME`, code mort, imports inutilisés ou variables inutilisées dans le code merge
 
-Le projet favorise l'elimination des blocs `else` au profit de patterns plus lisibles.
+## Pas de `else`
 
-### Patterns Recommandes
-
-| Pattern | Cas d'Usage | Exemple |
-|---------|-------------|---------|
-| **Guard clause** | Validation/cas d'erreur | `if invalid: return` |
-| **Early return** | Cas simple en premier | `if simple_case: return result` |
-| **Early continue** | Dans les boucles | `if skip_condition: continue` |
-| **Expression `or`** | Valeur par defaut | `value = x or default` |
-| **Ternaire** | 2 options simples | `x if cond else y` |
-| **Dict dispatch** | 3+ cas de routing | `handlers[key]()` |
-| **Default + override** | Configuration | Valeur par defaut puis modification conditionnelle |
-
-### Guard Clause
+### Guard clause (validation)
 
 ```python
-# AVANT - Nested logic
-def process(data):
-    if data:
-        if data.is_valid:
-            return do_work(data)
-        else:
-            return None
-    else:
-        return None
-
-# APRES - Guard clauses
-def process(data):
+def process(data: Data | None) -> Result | None:
     if not data:
         return None
     if not data.is_valid:
@@ -42,196 +23,173 @@ def process(data):
     return do_work(data)
 ```
 
-### Early Return
+### Early return
 
 ```python
-# AVANT
-def get_status(qdrant: str, mistral: str) -> str:
-    if qdrant == "healthy" and mistral == "healthy":
-        status = "healthy"
-    elif qdrant == "unhealthy" or mistral == "unhealthy":
-        status = "degraded"
-    else:
-        status = "healthy"
-    return status
-
-# APRES
 def get_status(qdrant: str, mistral: str) -> str:
     if "unhealthy" in (qdrant, mistral):
         return "degraded"
     return "healthy"
 ```
 
-### Early Continue
+### Expression `or` (defaut)
 
 ```python
-# AVANT
-for item in items:
-    if condition_a:
-        process_a(item)
-    else:
-        process_b(item)
-
-# APRES
-for item in items:
-    if condition_a:
-        process_a(item)
-        continue
-    process_b(item)
-```
-
-### Expression `or`
-
-```python
-# AVANT
-if self.headers:
-    headers = self.headers
-else:
-    headers = [cell.text for cell in self.rows[0]]
-
-# APRES
 headers = self.headers or [cell.text for cell in self.rows[0]]
 ```
 
-### Ternaire
+### Dict dispatch (3+ cas)
 
 ```python
-# Acceptable pour 2 options courtes
-renderer = (
-    JSONRenderer()
-    if settings.LOG_FORMAT == "json"
-    else ConsoleRenderer(colors=True)
-)
-```
-
-### Dict Dispatch
-
-```python
-# Pour 3+ cas de routing
 HANDLERS: dict[str, Callable[[], Any]] = {
     "pdf": handle_pdf,
     "excel": handle_excel,
     "word": handle_word,
 }
-
-handler = HANDLERS.get(doc_type, handle_default)
-result = handler()
+result = HANDLERS.get(doc_type, handle_default)()
 ```
 
-### Default + Override
+## Nommage
 
-```python
-# AVANT
-if options.get("force_ocr", False):
-    pages_native = []
-    pages_ocr = all_pages
-else:
-    pages_native = analysis.native_pages
-    pages_ocr = analysis.ocr_pages
+| Element | Convention | Exemple |
+|---------|------------|---------|
+| Fichiers | `snake_case.py` | `vector_store.py` |
+| Classes | `PascalCase` | `QdrantVectorStore` |
+| Fonctions / methodes | `snake_case` | `get_document()` |
+| Constantes | `UPPER_SNAKE_CASE` | `MAX_CHUNK_SIZE` |
+| Prive | `_snake_case` | `_compute_status()` |
 
-# APRES
-pages_native = analysis.native_pages
-pages_ocr = analysis.ocr_pages
+### Suffixes des modèles Pydantic
 
-if options.get("force_ocr", False):
-    pages_native = []
-    pages_ocr = all_pages
-```
+| Contexte | Suffixe | Exemple |
+|----------|---------|---------|
+| Paramètres MCP tool | `*Params` | `SearchDocumentsParams` |
+| Request API REST | `*Request` | `IndexDocumentRequest` |
+| Résultat opération | `*Result` | `IndexResult` |
+| Réponse HTTP | `*Response` | `SearchResponse` |
+| Item dans une liste | `*Item` | `SearchResultItem` |
+| Objet domaine interne | (aucun) | `DocumentChunk` |
 
-## Comparaison des Patterns
-
-| Critere | Dict Dispatch | Guard Clause | Ternaire |
-|---------|---------------|--------------|----------|
-| Nombre de cas | 3+ | 2 | 2 |
-| Extensibilite | Haute | Moyenne | Basse |
-| Lisibilite | Moyenne | Haute | Haute (si court) |
-| Performance | O(1) | O(n) | O(1) |
-
-## Conventions Generales
-
-### Imports
+## Imports (ordre ruff `I`)
 
 ```python
 from __future__ import annotations
 
 # stdlib
-import asyncio
+import logging
 from pathlib import Path
 
 # third-party
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-# local
+# local (premier-party : src.*)
 from src.core.config import settings
+from src.models.document import DocumentMetadata
 ```
 
-### Nommage
-
-| Element | Convention | Exemple |
-|---------|------------|---------|
-| Fichiers | `snake_case.py` | `vector_store.py` |
-| Classes | `PascalCase` | `QdrantVectorStore` |
-| Fonctions | `snake_case` | `get_document()` |
-| Constantes | `UPPER_SNAKE_CASE` | `MAX_CHUNK_SIZE` |
-| Fonctions privees | `_snake_case` | `_compute_status()` |
-
-### Docstrings (Google Style)
+## Type hints
 
 ```python
-def process_document(
-    path: Path,
-    options: dict[str, Any] | None = None,
-) -> ProcessResult:
-    """Traite un document et retourne le resultat.
+# Union moderne (pas Optional / Union)
+def process(data: str | None = None) -> dict[str, Any]: ...
+
+# ClassVar pour attributs de classe
+class MyTool(BaseMCPTool):
+    name: ClassVar[str] = "my_tool"
+
+# TypeAlias pour types complexes
+from typing import TypeAlias
+RequestId: TypeAlias = str | int | None
+```
+
+## Pydantic
+
+```python
+from typing import Annotated
+from pydantic import BaseModel, Field
+
+class SearchParams(BaseModel):
+    query: Annotated[str, Field(min_length=1, description="Search query")]
+    top_k: Annotated[int, Field(default=5, ge=1, le=100)]
+```
+
+`description=` est **obligatoire** sur tout champ exposé au LLM (apparaît dans `input_schema`).
+
+## Async
+
+Toute opération I/O est async :
+
+```python
+async def fetch_data(url: str) -> dict[str, Any]:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return response.json()
+```
+
+- `asyncio.to_thread(fn, ...)` pour wrapper des APIs synchrones (openpyxl, docx2python)
+- `asyncio.gather(...)` pour opérations parallèles indépendantes
+- Pas de `time.sleep()` — utiliser `await asyncio.sleep()`
+
+## Logging
+
+```python
+logger = logging.getLogger(__name__)
+
+# Format %-style avec contexte
+logger.info("Document indexed: %s (%d chunks)", doc_id, len(chunks))
+```
+
+Jamais de `print()` en production. Jamais logger de secret (clé API, token).
+
+## Pathlib
+
+Toujours `Path`, jamais `os.path` :
+
+```python
+from pathlib import Path
+
+config_path = Path(settings.DOCUMENTS_PATH) / "rapport.pdf"
+with config_path.open("rb") as f:
+    data = f.read()
+```
+
+## Docstrings (Google style)
+
+```python
+def process_document(path: Path, options: dict[str, Any] | None = None) -> ProcessResult:
+    """Traite un document et retourne le résultat.
 
     Args:
         path: Chemin vers le document.
         options: Options de traitement optionnelles.
 
     Returns:
-        Resultat du traitement avec metadata.
+        Résultat avec metadata.
 
     Raises:
         DocumentNotFoundError: Si le document n'existe pas.
-        ProcessingError: Si le traitement echoue.
     """
 ```
 
-### Async/Await
+## Interdictions absolues
 
-Toutes les operations I/O utilisent async :
+- `except: pass` ou `except Exception: pass`
+- `from x import *`
+- `print()` en production (utiliser `logging`)
+- `# type: ignore` sans code spécifique (`# type: ignore[attr-defined]`)
+- `Any` sauf pour JSON dynamique (`dict[str, Any]`)
+- `time.sleep()` (utiliser `asyncio.sleep()`)
+- `else` dans la mesure du possible (cf. patterns ci-dessus)
+- TODO/FIXME dans le code merge
 
-```python
-async def fetch_data() -> Data:
-    async with aiohttp.ClientSession() as session:
-        response = await session.get(url)
-        return await response.json()
-```
-
-### Validation Pydantic
-
-Tous les inputs sont valides via Pydantic :
-
-```python
-class IndexParams(BaseModel):
-    file_path: Path
-    force_ocr: bool = False
-    chunk_size: int = Field(default=512, ge=100, le=2000)
-```
-
-## Validation du Code
-
-Avant chaque commit :
+## Validation avant commit
 
 ```bash
-# Linting + formatting
-ruff check src/ --fix
-ruff format src/
-
-# Type checking strict
+ruff check --fix src/ tests/
+ruff format src/ tests/
 mypy src/
-
-# Tests
-pytest tests/
+pytest --cov=src --cov-fail-under=80
 ```
+
+Échec sur l'une de ces commandes = pas de merge.

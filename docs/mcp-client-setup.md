@@ -1,10 +1,8 @@
 # Configuration des clients MCP
 
-Guide de connexion des clients MCP (Claude Desktop, Zileo Chat, autres) au serveur MCP Zileo RAG.
+Connecter un client MCP (Claude Desktop, Zileo Chat, custom) au serveur. Le serveur expose `POST http://localhost:8000/mcp` (JSON-RPC 2.0 sur HTTP).
 
-## Prerequis
-
-Le serveur MCP Zileo RAG doit etre demarre et accessible :
+## Prérequis
 
 ```bash
 docker compose up -d
@@ -12,13 +10,9 @@ curl http://localhost:8000/health
 # {"status": "healthy", ...}
 ```
 
-L'endpoint MCP est `POST http://localhost:8000/mcp` (JSON-RPC 2.0 sur HTTP).
-
----
-
 ## Claude Desktop
 
-### Localisation du fichier de configuration
+### Fichier de configuration
 
 | OS | Chemin |
 |----|--------|
@@ -28,8 +22,6 @@ L'endpoint MCP est `POST http://localhost:8000/mcp` (JSON-RPC 2.0 sur HTTP).
 
 ### Configuration
 
-Ajouter (ou creer) le fichier avec le contenu suivant :
-
 ```json
 {
   "mcpServers": {
@@ -41,45 +33,22 @@ Ajouter (ou creer) le fichier avec le contenu suivant :
 }
 ```
 
-Si d'autres serveurs MCP sont deja configures, ajouter `zileo-rag` dans l'objet `mcpServers` existant :
+Si d'autres serveurs sont déjà configurés, ajouter `zileo-rag` dans le `mcpServers` existant.
 
-```json
-{
-  "mcpServers": {
-    "autre-serveur": {
-      "command": "node",
-      "args": ["autre-serveur/index.js"]
-    },
-    "zileo-rag": {
-      "url": "http://localhost:8000/mcp",
-      "transport": "http"
-    }
-  }
-}
-```
+Redémarrer Claude Desktop. Les **12 outils** apparaissent dans l'icône d'outils.
 
-### Verification
+### Dépannage
 
-1. Redemarrer Claude Desktop
-2. Dans une nouvelle conversation, les 11 outils MCP apparaissent dans l'icone d'outils
-3. Tester avec un prompt : *"Liste les documents disponibles"* — Claude appellera `list_available_documents`
-
-### Depannage Claude Desktop
-
-| Symptome | Cause probable | Solution |
-|----------|---------------|----------|
-| Outils non visibles | Config non rechargee | Redemarrer Claude Desktop |
-| Erreur de connexion | Serveur non demarre | `docker compose ps` pour verifier |
-| Timeout | Port bloque | Verifier `curl http://localhost:8000/health` |
-| Erreur JSON | Syntaxe JSON invalide | Valider le fichier avec `jq . config.json` |
-
----
+| Symptôme | Cause | Solution |
+|----------|-------|----------|
+| Outils non visibles | Config non rechargée | Redémarrer Claude Desktop |
+| Erreur de connexion | Serveur arrêté | `docker compose ps` |
+| Timeout | Port bloqué / firewall | `curl http://localhost:8000/health` |
+| Erreur JSON | Syntaxe invalide | `jq . config.json` |
 
 ## Zileo Chat
 
-### Configuration locale (meme machine)
-
-Dans la configuration MCP de Zileo Chat :
+### Même machine (localhost)
 
 ```json
 {
@@ -92,9 +61,9 @@ Dans la configuration MCP de Zileo Chat :
 }
 ```
 
-### Configuration Docker (meme reseau)
+### Même réseau Docker
 
-Si Zileo Chat et MCP Zileo RAG tournent dans le meme reseau Docker, utiliser le nom du container :
+Si Zileo Chat tourne dans Docker sur la même machine, utiliser le nom du container :
 
 ```json
 {
@@ -107,12 +76,11 @@ Si Zileo Chat et MCP Zileo RAG tournent dans le meme reseau Docker, utiliser le 
 }
 ```
 
-Pour connecter Zileo Chat au reseau Docker de MCP Zileo RAG, ajouter dans le `docker-compose.yml` de Zileo Chat :
+Et brancher Zileo Chat sur le réseau de MCP Zileo RAG (dans son `docker-compose.yml`) :
 
 ```yaml
 services:
   zileo-chat:
-    # ... config existante ...
     networks:
       - mcp-zileo-rag_mcp-network
 
@@ -121,11 +89,9 @@ networks:
     external: true
 ```
 
-Le nom du reseau externe est `mcp-zileo-rag_mcp-network` (prefixe du projet Docker Compose + nom du reseau).
+Le nom du réseau externe est `<projet>_mcp-network` (préfixe Docker Compose + nom du réseau).
 
-### Configuration reseau distant
-
-Si Zileo Chat tourne sur une autre machine du reseau local :
+### Machine distante (LAN)
 
 ```json
 {
@@ -138,34 +104,26 @@ Si Zileo Chat tourne sur une autre machine du reseau local :
 }
 ```
 
-Remplacer `192.168.1.X` par l'IP de la machine qui heberge MCP Zileo RAG.
-
-### Verification
-
-1. Recharger la configuration Zileo Chat
-2. Les 11 outils MCP doivent apparaitre
-3. Tester : *"Indexe le fichier rapport.pdf"* — Zileo Chat appellera `index_document`
-
----
+Remplacer `192.168.1.X` par l'IP de la machine qui héberge MCP Zileo RAG.
 
 ## Autres clients MCP
 
-Tout client compatible MCP peut se connecter au serveur. La configuration minimale est :
-
+Tout client compatible MCP peut se connecter :
 - **URL** : `http://localhost:8000/mcp`
-- **Transport** : HTTP (POST)
+- **Transport** : HTTP POST
 - **Protocole** : JSON-RPC 2.0
+- **Pas de SSE, pas de WebSocket**
 
-### Methodes implementees
+### Méthodes implémentées
 
-| Methode | Description |
+| Méthode | Description |
 |---------|-------------|
-| `initialize` | Handshake initial, retourne les capabilities du serveur |
-| `notifications/initialized` | Notification post-handshake (pas de reponse) |
-| `tools/list` | Liste les 11 outils avec leurs schemas |
-| `tools/call` | Execute un outil avec les arguments fournis |
+| `initialize` | Handshake. Retourne `protocolVersion: "2024-11-05"` et capabilities |
+| `notifications/initialized` | Notification post-handshake (pas de réponse) |
+| `tools/list` | Liste les 12 outils avec leurs schemas |
+| `tools/call` | Exécute un outil avec ses arguments |
 
-### Exemple de requete manuelle
+### Exemples de requêtes
 
 ```bash
 # Handshake
@@ -176,7 +134,7 @@ curl -X POST http://localhost:8000/mcp \
     "id": 1,
     "method": "initialize",
     "params": {
-      "protocolVersion": "2025-11-25",
+      "protocolVersion": "2024-11-05",
       "capabilities": {},
       "clientInfo": {"name": "test", "version": "1.0"}
     }
@@ -185,11 +143,7 @@ curl -X POST http://localhost:8000/mcp \
 # Lister les outils
 curl -X POST http://localhost:8000/mcp \
   -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 2,
-    "method": "tools/list"
-  }'
+  -d '{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}'
 
 # Appeler un outil
 curl -X POST http://localhost:8000/mcp \
@@ -205,45 +159,39 @@ curl -X POST http://localhost:8000/mcp \
   }'
 ```
 
----
+## Outils disponibles (12)
 
-## Outils disponibles
+### Indexation et recherche (7)
 
-Une fois connecte, le client MCP a acces aux 11 outils suivants :
+| Outil | Rôle |
+|-------|------|
+| `index_document` | Indexer PDF / Excel / Word |
+| `search_documents` | Recherche hybride (défaut) ou sémantique |
+| `get_document` | Métadonnées + aperçu chunks |
+| `delete_document` | Supprimer de l'index |
+| `list_indexed_documents` | Lister documents indexés |
+| `read_document_content` | Contenu Markdown reconstitué |
+| `get_excel_formulas` | Formules d'un Excel indexé |
 
-### Indexation et recherche
+### Génération et édition (3)
 
-| Outil | Description |
-|-------|-------------|
-| `index_document` | Indexer un PDF, Excel ou Word (extraction + embeddings + Qdrant) |
-| `search_documents` | Recherche semantique dans les documents indexes |
-| `get_document` | Metadonnees et chunks d'un document |
-| `delete_document` | Supprimer un document de l'index |
-| `list_indexed_documents` | Lister les documents indexes |
-| `read_document_content` | Contenu Markdown d'un document indexe |
-| `get_excel_formulas` | Formules d'un Excel indexe |
+| Outil | Rôle |
+|-------|------|
+| `create_excel_document` | Créer .xlsx (data, styles, charts, validations) |
+| `edit_excel_document` | Éditer .xlsx (13 opérations) |
+| `create_word_document` | Créer .docx depuis Markdown |
 
-### Generation et edition
+### Utilitaires (2)
 
-| Outil | Description |
-|-------|-------------|
-| `create_excel_document` | Creer un fichier Excel (.xlsx) |
-| `edit_excel_document` | Editer un Excel existant (13 operations) |
+| Outil | Rôle |
+|-------|------|
+| `list_available_documents` | Lister fichiers (sources `documents` / `generated`) |
+| `inspect_generated_file` | Inspecter structure d'un Excel généré |
 
-### Utilitaires
+## Sécurité
 
-| Outil | Description |
-|-------|-------------|
-| `list_available_documents` | Lister les fichiers (2 sources) |
-| `inspect_generated_file` | Inspecter la structure d'un fichier genere |
-
----
-
-## Securite
-
-- Le serveur ecoute sur toutes les interfaces (`0.0.0.0:8000`) dans le container Docker
-- Le port 8000 est mappe sur `localhost:8000` par defaut (accessible uniquement depuis la machine hote)
-- **Ne pas exposer le port 8000 sur Internet** sans authentification
-- Rate limiting : 30 requetes/minute sur `/mcp` par defaut
-- CORS desactive par defaut (active uniquement avec `DEBUG=true`)
-- Pour un acces reseau local, configurer le firewall pour limiter l'acces au port 8000
+- Le serveur écoute sur `0.0.0.0:8000` dans le container, mappé sur `localhost:8000` par défaut.
+- **Ne pas exposer le port 8000 sur Internet** sans authentification (le projet est destiné à un usage local).
+- Rate limiting `/mcp` : 30 req/min par défaut (configurable via `RATE_LIMIT_MCP`).
+- CORS désactivé par défaut (activé uniquement si `DEBUG=true`).
+- Pour un accès LAN, restreindre via firewall.

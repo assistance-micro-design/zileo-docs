@@ -18,12 +18,12 @@ Editer `.env` : renseigner `MISTRAL_API_KEY` et `DOCUMENTS_PATH`.
 ### 2. Lancement
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 Deux services demarrent :
 - **app** (`mcp-zileo-rag`) : Application FastAPI sur le port 8000
-- **qdrant** (`mcp-zileo-rag-qdrant`) : Base vectorielle sur les ports 6333 (HTTP) et 6334 (gRPC)
+- **qdrant** (`mcp-zileo-rag-qdrant`) : Base vectorielle sur les ports 6333 (HTTP) et 6334 (gRPC, reseau interne uniquement)
 
 Les services communiquent via un reseau Docker interne (`mcp-network`). L'application attend que Qdrant soit healthy avant de demarrer (`depends_on: condition: service_healthy`).
 
@@ -39,12 +39,12 @@ Reponse attendue : `{"status": "ready"}`.
 
 | Action | Commande |
 |--------|----------|
-| Demarrer | `docker-compose up -d` |
-| Arreter | `docker-compose down` |
-| Logs application | `docker-compose logs -f app` |
-| Logs Qdrant | `docker-compose logs -f qdrant` |
-| Rebuild (apres modification du code) | `docker-compose build --no-cache` |
-| Supprimer volumes (perte de donnees) | `docker-compose down -v` |
+| Demarrer | `docker compose up -d` |
+| Arreter | `docker compose down` |
+| Logs application | `docker compose logs -f app` |
+| Logs Qdrant | `docker compose logs -f qdrant` |
+| Rebuild (apres modification du code) | `docker compose build --no-cache` |
+| Supprimer volumes (perte de donnees) | `docker compose down -v` |
 
 ---
 
@@ -59,7 +59,7 @@ pip install -e ".[dev]"
 ### Demarrer Qdrant seul
 
 ```bash
-docker-compose up -d qdrant
+docker compose up -d qdrant
 ```
 
 ### Lancer l'application
@@ -78,7 +78,14 @@ En local, `QDRANT_HOST` doit rester `localhost` (pas `qdrant`).
 ruff check src/ tests/
 ruff format --check src/ tests/
 mypy src/
-pytest tests/ -v
+pytest tests/unit --cov=src --cov-fail-under=80
+```
+
+Tests d'integration et e2e (necessitent Qdrant + cle Mistral) :
+
+```bash
+pytest tests/integration -v
+pytest tests/e2e -v
 ```
 
 ---

@@ -1,421 +1,192 @@
-# Reference API
+# Référence API
 
-## Endpoints REST
+Endpoints REST + 12 outils MCP. Pour les options détaillées de génération Excel/Word, voir [generation-guide.md](generation-guide.md).
 
-### Health checks
+## REST
 
-| Methode | Path | Description |
-|---------|------|-------------|
-| GET | `/` | Info du service (nom, version) |
-| GET | `/health` | Health check complet (Qdrant + config Mistral) |
-| GET | `/health/live` | Liveness probe (toujours 200) |
-| GET | `/health/ready` | Readiness probe (verifie la connexion Qdrant) |
+| Méthode | Path | Description | Rate limit |
+|---------|------|-------------|------------|
+| GET | `/` | Info service (nom, version) | — |
+| GET | `/health` | Health complet (Qdrant + config Mistral) | — |
+| GET | `/health/live` | Liveness probe | — |
+| GET | `/health/ready` | Readiness probe (vérifie Qdrant) | — |
+| POST | `/api/v1/documents/index` | Upload + indexation PDF (multipart, **PDF seul**) | 10/min |
+| GET | `/api/v1/documents/{id}` | Chunks + métadonnées | — |
+| DELETE | `/api/v1/documents/{id}` | Supprimer de l'index | — |
+| GET | `/api/v1/documents` | Stats collection | — |
+| POST | `/api/v1/search` | Recherche (body JSON) | 30/min |
+| GET | `/api/v1/search` | Recherche (query params) | 30/min |
 
-### Documents
+Pour indexer Excel ou Word : utiliser le tool MCP `index_document`.
 
-| Methode | Path | Description |
-|---------|------|-------------|
-| POST | `/api/v1/documents/index` | Indexer un fichier PDF (upload multipart) |
-| GET | `/api/v1/documents/{document_id}` | Recuperer les chunks et metadata d'un document |
-| DELETE | `/api/v1/documents/{document_id}` | Supprimer un document de l'index |
-| GET | `/api/v1/documents` | Statistiques de la collection Qdrant |
-
-#### POST /api/v1/documents/index
-
-Upload et indexation d'un PDF. L'API REST ne supporte que le PDF (upload multipart). Pour indexer des Excel ou Word, utiliser l'outil MCP `index_document` qui accepte un chemin fichier.
-
-**Parametres (multipart/form-data)** :
-- `file` : Fichier PDF
-- `force_ocr` : Forcer OCR sur toutes les pages (query param, defaut: false)
-- `table_format` : Format des tableaux, `markdown` ou `html` (query param, defaut: markdown)
-
-**Reponse** : `document_id`, `filename`, `total_pages`, `chunks_created`, `processing_time_seconds`
-
-Rate limit : 10 requetes/minute.
-
-### Recherche
-
-| Methode | Path | Description |
-|---------|------|-------------|
-| POST | `/api/v1/search` | Recherche semantique (body JSON) |
-| GET | `/api/v1/search` | Recherche semantique (query params) |
-
-Rate limit : 30 requetes/minute.
-
-#### POST /api/v1/search
-
-**Body JSON** :
+### Exemple recherche
 
 ```json
+POST /api/v1/search
 {
   "query": "comment configurer X ?",
   "top_k": 5,
   "score_threshold": 0.7,
-  "filters": {
-    "document_id": "uuid",
-    "content_type": "text",
-    "has_table": true,
-    "doc_filename": "rapport.pdf"
-  }
+  "search_mode": "hybrid",
+  "filters": {"document_type": "pdf", "has_table": true}
 }
 ```
 
-#### GET /api/v1/search
+Réponse : `query`, `total_results`, `results[]` (chunk_id, document_id, content, score, page_numbers, section_title, content_type, doc_filename, document_type, has_formula, sheet_names).
 
-**Query params** : `q` (requis), `top_k`, `score_threshold`, `document_id`, `content_type`, `has_table`, `has_image`
+## MCP (JSON-RPC 2.0)
 
-**Reponse** :
+`POST /mcp`. Rate limit : 30/min.
 
-```json
-{
-  "query": "...",
-  "total_results": 5,
-  "results": [
-    {
-      "chunk_id": "...",
-      "document_id": "...",
-      "content": "...",
-      "content_preview": "...",
-      "score": 0.89,
-      "page_numbers": [1, 2],
-      "section_title": "...",
-      "content_type": "text",
-      "doc_filename": "rapport.pdf"
-    }
-  ],
-  "processing_time_ms": 120
-}
-```
-
----
-
-## Serveur MCP (JSON-RPC 2.0)
-
-Endpoint : `POST /mcp`
-Rate limit : 30 requetes/minute.
-
-### Methodes JSON-RPC
-
-| Methode | Description |
+| Méthode | Description |
 |---------|-------------|
-| `initialize` | Initialiser la session MCP, retourne les capabilities du serveur |
-| `tools/list` | Lister les 11 outils disponibles avec leurs schemas |
-| `tools/call` | Executer un outil par nom |
+| `initialize` | Handshake → `protocolVersion: "2024-11-05"` + capabilities |
+| `tools/list` | Liste les **12 outils** avec leurs schemas |
+| `tools/call` | Exécute un outil par nom |
 
-### Outils MCP
+## Outils MCP
 
-#### index_document
+### `index_document`
 
-Extrait et indexe un document pour la recherche semantique. Le fichier doit etre accessible dans le dossier monte (`DOCUMENTS_PATH`).
+Indexe PDF / Excel / Word. Idempotent (hash dédup). Si fichier modifié : `file_modified: true` (à supprimer puis ré-indexer).
 
-Si un document avec le meme nom de fichier est deja indexe, retourne l'ID existant sans re-indexer.
+| Param | Type | Requis | Description |
+|-------|------|--------|-------------|
+| `file_path` | string | ✅ | Chemin absolu dans `DOCUMENTS_PATH` |
+| `force_ocr` | boolean | | PDF : forcer OCR |
+| `sheets` | string[] | | Excel : feuilles à indexer |
+| `table_format` | string | | `markdown` / `html` |
 
-**Parametres** :
+Retour : `document_id`, `document_type`, `filename`, `chunks_stored`, `has_tables`, `has_formulas`, `has_images`, `processing_time_seconds`.
 
-| Parametre | Type | Requis | Description |
-|-----------|------|--------|-------------|
-| `file_path` | string | Oui | Chemin absolu vers le document (doit etre dans DOCUMENTS_PATH) |
-| `force_ocr` | boolean | Non | PDF : forcer OCR meme si texte natif (defaut: false) |
-| `sheets` | array[string] | Non | Excel : noms des feuilles a indexer (toutes si omis) |
-| `table_format` | string | Non | Format des tableaux : `markdown` ou `html` (defaut: markdown) |
+### `search_documents`
 
-**Retour** :
+Recherche hybride (vecteur dense + BM25 sparse, fusion RRF) ou sémantique pure.
 
-```json
-{
-  "document_id": "uuid",
-  "document_type": "pdf",
-  "filename": "rapport.pdf",
-  "chunks_stored": 42,
-  "has_tables": true,
-  "has_formulas": false,
-  "has_images": true,
-  "processing_time_seconds": 12.5
-}
-```
+| Param | Type | Défaut | Description |
+|-------|------|--------|-------------|
+| `query` | string | — | Requête en langage naturel |
+| `top_k` | int | 5 | 1-100 |
+| `score_threshold` | float | 0.7 | 0.0-1.0 (ignoré en `hybrid`) |
+| `search_mode` | string | `hybrid` | `hybrid` ou `semantic` |
+| `filters` | object | — | Voir ci-dessous |
 
-#### search_documents
+**Filtres** : `document_id`, `doc_filename`, `document_type` (`pdf`/`excel`/`word`), `has_table`, `has_image`, `has_formula`, `text_search`, `sheet_name`.
 
-Recherche dans les documents indexes par similarite vectorielle. Necessite au moins un document indexe.
+> En mode `hybrid`, `score_threshold` n'est pas appliqué (les scores RRF ne sont pas sur l'échelle cosine).
 
-**Parametres** :
+### `get_document`, `delete_document`, `list_indexed_documents`
 
-| Parametre | Type | Requis | Description |
-|-----------|------|--------|-------------|
-| `query` | string | Oui | Question en langage naturel |
-| `top_k` | integer | Non | Nombre de resultats (1-100, defaut: 5) |
-| `score_threshold` | number | Non | Score minimum de similarite (0.0-1.0, defaut: 0.7) |
-| `filters` | object | Non | Filtres (voir ci-dessous) |
+| Tool | Param | Retour |
+|------|-------|--------|
+| `get_document` | `document_id` ✅ | Métadonnées + aperçu chunks |
+| `delete_document` | `document_id` ✅ | `chunks_deleted`, `status`. **Supprime de l'index Qdrant uniquement** |
+| `list_indexed_documents` | (aucun) | `total_documents`, `documents[]` |
 
-**Filtres disponibles** :
+### `list_available_documents`
 
-| Filtre | Type | Description |
-|--------|------|-------------|
-| `document_id` | string | Limiter a un document |
-| `doc_filename` | string | Filtrer par nom de fichier |
-| `document_type` | string | `pdf`, `excel` ou `word` |
-| `has_table` | boolean | Chunks contenant des tableaux |
-| `has_image` | boolean | Chunks contenant des images |
-| `has_formula` | boolean | Chunks avec formules (Excel) |
-| `text_search` | string | Recherche full-text dans le contenu |
-| `sheet_name` | string | Filtrer par feuille (Excel) |
+Liste les fichiers du disque accessibles au serveur.
 
-**Note sur score_threshold** : Le defaut (0.7) est adapte a la recherche de concepts. Pour des noms propres ou des termes specifiques, baisser a 0.3-0.5 et combiner avec `text_search` pour de meilleurs resultats.
+| Param | Type | Défaut | Description |
+|-------|------|--------|-------------|
+| `source` | string | `documents` | `documents` (DOCUMENTS_PATH) ou `generated` (OUTPUT_PATH) |
+| `type_filter` | string | `all` | `pdf`, `excel`, `word`, `all` |
+| `subdirectory` | string | `""` | Sous-dossier relatif |
+| `recursive` | boolean | `true` | Récursif |
 
-#### get_document
+Retour : `source`, `base_path`, `total_files`, `by_type`, `files[]` avec `filename`, `path`, `relative_path`, `type`, `size_mb`, `extension`, `editable_with`.
 
-Recupere les metadonnees et un apercu des chunks d'un document indexe.
+### `read_document_content`
 
-| Parametre | Type | Requis | Description |
-|-----------|------|--------|-------------|
-| `document_id` | string | Oui | ID du document |
+Lit le contenu Markdown reconstitué d'un document indexé.
 
-#### delete_document
-
-Supprime un document de l'index Qdrant. Ne supprime **pas** le fichier source sur le disque.
-
-| Parametre | Type | Requis | Description |
-|-----------|------|--------|-------------|
-| `document_id` | string | Oui | ID du document |
-
-Retour : `chunks_deleted` (nombre), `status` (`deleted` ou `not_found`).
-
-#### list_indexed_documents
-
-Liste tous les documents indexes dans Qdrant. Aucun parametre.
-
-Retour : liste de documents avec `document_id`, `filename`, `total_chunks`, `ingested_at`.
-
-#### list_available_documents
-
-Liste les fichiers disponibles dans le projet. Supporte 2 sources differentes.
-
-| Parametre | Type | Requis | Description |
-|-----------|------|--------|-------------|
-| `source` | string | Non | `documents` (defaut), `generated` |
-| `type_filter` | string | Non | `pdf`, `excel`, `word` ou `all` (defaut: all) |
-| `subdirectory` | string | Non | Sous-dossier relatif a explorer |
-| `recursive` | boolean | Non | Explorer recursivement (defaut: true) |
-
-**Sources** :
-- `documents` : Fichiers PDF/Excel/Word a indexer (dans `DOCUMENTS_PATH`)
-- `generated` : Fichiers crees par `create_excel_document` (dans `OUTPUT_PATH`)
-
-Retour : `source`, `base_path`, `total_files`, `by_type` (comptage par format), `files` (liste avec `filename`, `path`, `relative_path`, `type`, `size_mb`, `extension` et champs contextuels `editable_with`).
-
-#### read_document_content
-
-Lit le contenu Markdown reconstitue d'un document indexe, en concatenant ses chunks.
-
-| Parametre | Type | Requis | Description |
-|-----------|------|--------|-------------|
-| `document_id` | string | Oui | ID du document |
-| `page_start` | integer | Non | Page de debut (1-indexed) |
-| `page_end` | integer | Non | Page de fin (1-indexed) |
-| `include_chunks_detail` | boolean | Non | Inclure les metadata de chaque chunk (defaut: false) |
-
-#### get_excel_formulas
-
-Recupere les formules d'un document Excel indexe. Les formules sont stockees dans des chunks dedies lors de l'indexation.
-
-| Parametre | Type | Requis | Description |
-|-----------|------|--------|-------------|
-| `document_id` | string | Oui | ID du document Excel |
-| `sheet` | string | Non | Filtrer par nom de feuille |
-| `cell_range` | string | Non | Filtrer par plage de cellules (ex: `A1:D10`) |
-
-Retour : `total_formulas`, `formulas` (liste avec `sheet`, `cell`, `formula`, `result`).
-
-#### create_excel_document
-
-Cree un fichier Excel (.xlsx) avec donnees, styles, graphiques et validations de donnees. Le fichier est cree dans `OUTPUT_PATH`.
-
-**Parametres** :
-
-| Parametre | Type | Requis | Description |
-|-----------|------|--------|-------------|
-| `filename` | string | Oui | Nom du fichier (doit se terminer par `.xlsx`) |
-| `sheets` | array[SheetDef] | Oui | Definitions des feuilles (1 a 50) |
-| `author` | string | Non | Auteur du classeur (metadonnee) |
-
-**Structure d'une feuille (SheetDef)** :
-
-| Champ | Type | Description |
+| Param | Type | Description |
 |-------|------|-------------|
-| `name` | string | Nom de la feuille (1-31 caracteres) |
-| `headers` | array[string] | En-tetes de colonnes |
-| `rows` | array[array] | Lignes de donnees (max 10 000) |
-| `styles` | array[CellStyleDef] | Styles (police, couleur, bordure) |
-| `charts` | array[ChartDef] | Graphiques (type requis: bar\|line\|pie\|scatter\|area\|column) |
-| `data_validations` | array | Regles de validation |
-| `merged_cells` | array | Cellules a fusionner |
-| `column_widths` | object | Largeurs de colonnes (`{"A": 20}`) |
-| `auto_filter` | boolean | Activer l'auto-filtre |
-| `freeze_panes` | string | Figer les volets (`"A2"`) |
+| `document_id` ✅ | string | |
+| `page_start` | int | Page de début (1-indexed) |
+| `page_end` | int | Page de fin (1-indexed) |
+| `include_chunks_detail` | bool | Métadonnées chunks (défaut `false`) |
 
-**Exemple** :
+### `get_excel_formulas`
 
-```json
-{
-  "filename": "report.xlsx",
-  "sheets": [
-    {
-      "name": "Data",
-      "headers": ["Name", "Value"],
-      "rows": [["Item A", 100], ["Item B", 200]],
-      "charts": [
-        {
-          "type": "bar",
-          "data_range": "B1:B3",
-          "categories_range": "A2:A3",
-          "title": "Values"
-        }
-      ]
-    }
-  ]
-}
-```
+| Param | Type | Description |
+|-------|------|-------------|
+| `document_id` ✅ | string | Document Excel |
+| `sheet` | string | Filtrer par feuille |
+| `cell_range` | string | Filtrer par plage (`A1:D10`) |
 
-**Retour** :
+Retour : `total_formulas`, `formulas[]` (`sheet`, `cell`, `formula`, `result`).
 
-```json
-{
-  "file_path": "/app/output/report.xlsx",
-  "filename": "report.xlsx",
-  "sheets_created": 1,
-  "total_rows": 2,
-  "total_charts": 1,
-  "file_size_bytes": 8542,
-  "overwritten": false
-}
-```
+### `create_excel_document`
 
-#### edit_excel_document
+Crée un `.xlsx` dans `OUTPUT_PATH`. Schéma Pydantic complet via `tools/list`.
 
-Edite un fichier Excel (.xlsx) existant dans `OUTPUT_PATH`. Le fichier doit avoir ete cree par `create_excel_document`. Chaque operation doit avoir un champ `op` qui determine le type d'operation.
+| Param | Type | Requis | Limites |
+|-------|------|--------|---------|
+| `filename` | string | ✅ | doit finir par `.xlsx` |
+| `sheets` | SheetDef[] | ✅ | 1 à 50 feuilles |
+| `author` | string | | max 255 chars |
 
-**Parametres** :
+`SheetDef` : `name`, `headers`, `rows` (max 10 000 / 500 colonnes), `styles`, `charts` (`bar`/`line`/`pie`/`scatter`/`area`/`column`), `data_validations`, `merged_cells`, `column_widths`, `auto_filter`, `freeze_panes`, `tab_color`.
 
-| Parametre | Type | Requis | Description |
-|-----------|------|--------|-------------|
-| `filename` | string | Oui | Nom du fichier existant dans OUTPUT_PATH |
-| `operations` | array[EditOp] | Oui | Operations a appliquer en ordre (1 a 100) |
+Retour : `file_path`, `filename`, `sheets_created`, `total_rows`, `total_charts`, `file_size_bytes`, `overwritten`.
 
-**Operations disponibles (champ `op`)** :
+### `edit_excel_document`
 
-| Op | Description | Champs principaux |
-|----|-------------|-------------------|
-| `update_cells` | Modifier des cellules | `sheet`, `cells` (`{"A1": 42, "B1": "hello"}`) |
-| `insert_rows` | Inserer des lignes | `sheet`, `row_index`, `rows` |
-| `delete_rows` | Supprimer des lignes | `sheet`, `start_row`, `end_row` |
-| `apply_styles` | Appliquer des styles | `sheet`, `styles` (liste de CellStyleDef) |
-| `add_sheet` | Ajouter une feuille | `name`, `headers`, `rows` |
-| `delete_sheet` | Supprimer une feuille | `sheet` |
-| `rename_sheet` | Renommer une feuille | `sheet`, `new_name` |
-| `add_chart` | Ajouter un graphique | `sheet`, `chart` (ChartDef) |
-| `remove_charts` | Supprimer tous les graphiques | `sheet` |
-| `add_data_validation` | Ajouter une validation | `sheet`, `validation` |
-| `merge_cells` | Fusionner des cellules | `sheet`, `range` |
-| `unmerge_cells` | Defusionner des cellules | `sheet`, `range` |
-| `set_sheet_properties` | Proprietes de feuille | `sheet`, `tab_color`, `auto_filter`, `freeze_panes` |
+Édite un `.xlsx` existant. Liste d'opérations appliquées en séquence.
 
-**Exemple** :
+| Param | Type | Requis | Limites |
+|-------|------|--------|---------|
+| `filename` | string | ✅ | fichier dans `OUTPUT_PATH` |
+| `operations` | EditOp[] | ✅ | 1 à 100 |
 
-```json
-{
-  "filename": "report.xlsx",
-  "operations": [
-    {"op": "update_cells", "sheet": "Sheet1", "cells": {"A1": 42, "B1": "hello"}},
-    {
-      "op": "add_chart",
-      "sheet": "Sheet1",
-      "chart": {"type": "bar", "data_range": "A1:B5", "title": "Sales"}
-    },
-    {"op": "delete_rows", "sheet": "Sheet1", "start_row": 10, "end_row": 12}
-  ]
-}
-```
+**13 opérations** (champ `op` discriminant) : `update_cells`, `insert_rows`, `delete_rows`, `apply_styles`, `add_sheet`, `delete_sheet`, `rename_sheet`, `add_chart`, `remove_charts`, `add_data_validation`, `merge_cells`, `unmerge_cells`, `set_sheet_properties`. Détails : [generation-guide.md](generation-guide.md).
 
-**Retour** :
+Retour : `operations_applied`, `operations_skipped`, `file_size_bytes`. Les erreurs de graphique sont non bloquantes (`skipped`).
 
-```json
-{
-  "file_path": "/app/output/report.xlsx",
-  "filename": "report.xlsx",
-  "operations_applied": 3,
-  "operations_skipped": 0,
-  "file_size_bytes": 9120
-}
-```
+### `create_word_document`
 
-**Note** : Les erreurs de graphique (ChartDef invalide) sont gerees en degradation gracieuse : l'operation est comptee comme `skipped` et les autres operations continuent.
+Crée un `.docx` à partir de Markdown.
 
-#### inspect_generated_file
+| Param | Type | Requis | Limites |
+|-------|------|--------|---------|
+| `filename` | string | ✅ | doit finir par `.docx` |
+| `content` | string | ✅ | Markdown, max 500 000 chars |
+| `title` | string | | max 255 chars |
+| `author` | string | | max 255 chars |
 
-Inspecte la structure d'un fichier Excel cree par `create_excel_document`. Retourne la structure dans le vocabulaire des tools d'edition pour permettre la construction directe d'operations.
+Markdown supporté : headings (`#`-`######`), `**bold**`, `*italic*`, listes à puces / numérotées (imbriquables), tables, blocs de code (` ``` `), citations (`>`), saut de page (`---`).
 
-**Parametres** :
+Retour : `file_path`, `filename`, `file_size_bytes`, `overwritten`.
 
-| Parametre | Type | Requis | Description |
-|-----------|------|--------|-------------|
-| `filename` | string | Oui | Nom du fichier dans OUTPUT_PATH (.xlsx) |
-| `max_rows_per_sheet` | integer | Non | Excel : nombre max de lignes a afficher par feuille (1-100, defaut: 10) |
+### `inspect_generated_file`
 
-**Retour** : `filename`, `type`, `editable_with`, `sheets` (avec `name`, `headers`, `sample_data`, `formulas`, `charts`, `merged_cells`, `column_widths`, `freeze_panes`).
+| Param | Type | Description |
+|-------|------|-------------|
+| `filename` ✅ | string | Fichier dans `OUTPUT_PATH` |
+| `max_rows_per_sheet` | int | Excel : 1-100, défaut 10 |
 
-**Workflow recommande** : `list_available_documents(source='generated')` → `inspect_generated_file` → `edit_excel_document`.
-
----
+Retour : `filename`, `type`, `editable_with`, `sheets[]` (name, headers, sample_data, formulas, charts, merged_cells, column_widths, freeze_panes). **Workflow** : `list_available_documents(source='generated')` → `inspect_generated_file` → `edit_excel_document`.
 
 ## Codes d'erreur
 
-### HTTP
+| HTTP | JSON-RPC | Sens |
+|------|----------|------|
+| 400 | -32600 | Requête invalide |
+| 404 | — | Non trouvé |
+| 413 | — | Fichier trop volumineux |
+| 422 | -32602 | Validation Pydantic / params invalides |
+| 429 | — | Rate limit |
+| 500 | -32603 | Erreur interne |
+| — | -32601 | Méthode JSON-RPC inconnue |
 
-| Code | Description |
-|------|-------------|
-| 400 | Requete invalide |
-| 404 | Document non trouve |
-| 413 | Fichier trop volumineux |
-| 422 | Erreur de validation |
-| 429 | Rate limit depasse |
-| 500 | Erreur interne |
-
-### JSON-RPC
-
-| Code | Message |
-|------|---------|
-| -32600 | Invalid Request |
-| -32601 | Method not found |
-| -32602 | Invalid params |
-| -32603 | Internal error |
-
-### Format d'erreur MCP
-
-Les erreurs MCP utilisent `to_llm_format()` qui produit un texte structure pour guider le LLM :
+### Format d'erreur MCP (LLM-aware)
 
 ```
 ERROR [PDF_NOT_FOUND]: Fichier PDF introuvable: /bad/path.pdf
-SUGGESTION: Verifier le chemin. Utiliser un chemin absolu commencant par /.
+SUGGESTION: Vérifier le chemin. Utiliser un chemin absolu.
 PARAMETER: file_path
-RETRY: Corriger et reessayer
+RETRY: True
 ```
 
-Ce format est genere par la hierarchie d'exceptions `MCPZileoError` dans `src/core/exceptions.py`. Chaque exception porte un code, un message, une suggestion, et un indicateur de retry.
-
-### Format d'erreur de validation
-
-Les erreurs de validation Pydantic (`ValidationError`) sont interceptees et formatees avec des hints contextuels pour guider le LLM :
-
-```
-ERROR [VALIDATION_ERROR]: 2 erreur(s) de validation.
-  - operations -> 0: Unable to extract tag using discriminator 'op'
-  - operations -> 1: Unable to extract tag using discriminator 'op'
-RETRY: Corriger et reessayer.
-HINT: Chaque operation doit avoir un champ 'op'.
-Available 'op' values: update_cells, insert_rows, delete_rows, apply_styles, ...
-Example update_cells: {"op": "update_cells", "sheet": "Sheet1", "cells": {"A1": 42}}.
-```
-
-Les hints sont contextuels :
-- **Discriminated union** (`edit_excel_document`) : Liste les valeurs `op` valides avec exemples
-- **Charts** (`create_excel_document`) : Rappelle que `type` et `data_range` sont requis
+Pour les `ValidationError` Pydantic, des **hints contextuels** sont ajoutés (liste des `op` valides pour `edit_excel_document`, rappel du format `chart`, etc.).
