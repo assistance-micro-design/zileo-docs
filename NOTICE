@@ -1,0 +1,21 @@
+MCP Zileo RAG
+Copyright 2025-2026 Assistance Micro Design
+https://www.assistancemicrodesign.net/
+https://github.com/assistance-micro-design
+
+This product is licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
+See the LICENSE file for the full license text.
+
+This product includes software developed by:
+- Assistance Micro Design (https://www.assistancemicrodesign.net/)
+
+This product depends on PyMuPDF and pymupdf4llm (Artifex Software, Inc.), which are
+distributed under the GNU AGPL-3.0. The use of these libraries requires the entire
+combined work to be distributed under AGPL-3.0 or a compatible license. A commercial
+license is available from Artifex if AGPL terms are not suitable.
+
+Third-party libraries and their licenses are documented in:
+- THIRD_PARTY_LICENSES.md (complete license inventory)
+- pyproject.toml (Python dependencies and version constraints)
+
+Built with Claude Code (https://claude.com/claude-code) by Anthropic.
