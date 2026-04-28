@@ -6,9 +6,58 @@ Connecter un client MCP (Claude Desktop, Zileo Chat, custom) au serveur. Le serv
 
 ```bash
 docker compose up -d
-curl http://localhost:8000/health
+curl -H "X-API-Key: $API_KEY" http://localhost:8000/health
 # {"status": "healthy", ...}
 ```
+
+## Authentification
+
+Le serveur protège les endpoints `/api/v1/*`, `/mcp` et `/health` (détaillé) via une clé API passée dans le header `X-API-Key`. Hors mode `DEBUG=true`, le démarrage échoue si la clé est vide.
+
+### Générer la clé
+
+La clé est **générée par toi** (pas une clé tierce). Choisir une commande :
+
+```bash
+# openssl (32 octets hex = 64 caractères)
+openssl rand -hex 32
+
+# Python (URL-safe base64)
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Critères : ≥ 32 octets d'entropie (256 bits), une clé différente par environnement (dev / prod / CI), jamais commitée.
+
+### Configurer le serveur
+
+Dans `.env` :
+
+```
+API_KEY=8f3d9e2a4b7c1f6e5d8a9b2c3f4e7a1d6b9c8e2f5a3d7b4c1e9f6a2d8b5c3e7f
+```
+
+Redémarrer le container : `docker compose up -d`.
+
+### Endpoints protégés vs publics
+
+| Endpoint | Auth requise |
+|----------|--------------|
+| `POST /mcp` | Oui |
+| `POST /api/v1/documents/index` | Oui |
+| `GET /api/v1/documents` | Oui |
+| `GET /api/v1/documents/{id}` | Oui |
+| `DELETE /api/v1/documents/{id}` | Oui |
+| `POST /api/v1/search` | Oui |
+| `GET /health` (détaillé) | Oui |
+| `GET /health/live` | **Non** (liveness Kubernetes) |
+| `GET /health/ready` | **Non** (readiness Kubernetes) |
+
+### Codes d'erreur
+
+| HTTP | Cause |
+|------|-------|
+| `401 Unauthorized` | Header `X-API-Key` manquant |
+| `403 Forbidden` | Clé invalide |
 
 ## Claude Desktop
 
@@ -27,13 +76,16 @@ curl http://localhost:8000/health
   "mcpServers": {
     "zileo-rag": {
       "url": "http://localhost:8000/mcp",
-      "transport": "http"
+      "transport": "http",
+      "headers": {
+        "X-API-Key": "ta_cle_api_ici"
+      }
     }
   }
 }
 ```
 
-Si d'autres serveurs sont déjà configurés, ajouter `zileo-rag` dans le `mcpServers` existant.
+Remplacer `ta_cle_api_ici` par la valeur de `API_KEY` du fichier `.env` du serveur. Si d'autres serveurs sont déjà configurés, ajouter `zileo-rag` dans le `mcpServers` existant.
 
 Redémarrer Claude Desktop. Les **12 outils** apparaissent dans l'icône d'outils.
 
@@ -43,8 +95,10 @@ Redémarrer Claude Desktop. Les **12 outils** apparaissent dans l'icône d'outil
 |----------|-------|----------|
 | Outils non visibles | Config non rechargée | Redémarrer Claude Desktop |
 | Erreur de connexion | Serveur arrêté | `docker compose ps` |
-| Timeout | Port bloqué / firewall | `curl http://localhost:8000/health` |
+| Timeout | Port bloqué / firewall | `curl -H "X-API-Key: $API_KEY" http://localhost:8000/health` |
 | Erreur JSON | Syntaxe invalide | `jq . config.json` |
+| `401 Unauthorized` | Header `X-API-Key` manquant dans la config | Ajouter le bloc `headers` |
+| `403 Forbidden` | Clé incorrecte | Vérifier que la clé du client correspond à `API_KEY` du `.env` |
 
 ## Zileo Chat
 
@@ -55,7 +109,10 @@ Redémarrer Claude Desktop. Les **12 outils** apparaissent dans l'icône d'outil
   "mcpServers": {
     "zileo-rag": {
       "url": "http://localhost:8000/mcp",
-      "transport": "http"
+      "transport": "http",
+      "headers": {
+        "X-API-Key": "ta_cle_api_ici"
+      }
     }
   }
 }
@@ -70,7 +127,10 @@ Si Zileo Chat tourne dans Docker sur la même machine, utiliser le nom du contai
   "mcpServers": {
     "zileo-rag": {
       "url": "http://mcp-zileo-rag:8000/mcp",
-      "transport": "http"
+      "transport": "http",
+      "headers": {
+        "X-API-Key": "ta_cle_api_ici"
+      }
     }
   }
 }
@@ -98,7 +158,10 @@ Le nom du réseau externe est `<projet>_mcp-network` (préfixe Docker Compose + 
   "mcpServers": {
     "zileo-rag": {
       "url": "http://192.168.1.X:8000/mcp",
-      "transport": "http"
+      "transport": "http",
+      "headers": {
+        "X-API-Key": "ta_cle_api_ici"
+      }
     }
   }
 }
@@ -125,10 +188,13 @@ Tout client compatible MCP peut se connecter :
 
 ### Exemples de requêtes
 
+Toutes les requêtes vers `/mcp` doivent inclure le header `X-API-Key`.
+
 ```bash
 # Handshake
 curl -X POST http://localhost:8000/mcp \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
@@ -143,11 +209,13 @@ curl -X POST http://localhost:8000/mcp \
 # Lister les outils
 curl -X POST http://localhost:8000/mcp \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
   -d '{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}'
 
 # Appeler un outil
 curl -X POST http://localhost:8000/mcp \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
   -d '{
     "jsonrpc": "2.0",
     "id": 3,
@@ -191,7 +259,9 @@ curl -X POST http://localhost:8000/mcp \
 ## Sécurité
 
 - Le serveur écoute sur `0.0.0.0:8000` dans le container, mappé sur `localhost:8000` par défaut.
-- **Ne pas exposer le port 8000 sur Internet** sans authentification (le projet est destiné à un usage local).
+- **Authentification obligatoire hors DEBUG** : tous les endpoints sensibles exigent `X-API-Key`. Le serveur refuse de démarrer si `API_KEY` est vide en production.
+- **Ne pas exposer le port 8000 sur Internet** : la clé API protège l'accès, mais le projet n'est pas conçu pour un déploiement public.
+- `MAX_MCP_BODY_MB` : taille max du body JSON-RPC (défaut 5 MB, protection DoS).
 - Rate limiting `/mcp` : 30 req/min par défaut (configurable via `RATE_LIMIT_MCP`).
 - CORS désactivé par défaut (activé uniquement si `DEBUG=true`).
-- Pour un accès LAN, restreindre via firewall.
+- Pour un accès LAN, restreindre via firewall en plus de la clé API.

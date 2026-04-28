@@ -20,6 +20,14 @@ Toute la configuration se fait via variables d'environnement. Copier `.env.examp
 | `MISTRAL_OCR_MODEL` | `mistral-ocr-latest` | Modele utilise pour l'OCR des pages PDF complexes |
 | `MISTRAL_EMBED_MODEL` | `mistral-embed` | Modele utilise pour les embeddings (1024 dimensions) |
 
+### Authentification
+
+| Variable | Defaut | Description |
+|----------|--------|-------------|
+| `API_KEY` | - | Cle d'authentification pour les endpoints proteges. **Requise hors `DEBUG=true`** : le serveur refuse de demarrer si vide. Generer via `openssl rand -hex 32`. |
+
+La cle est passee par le client dans le header `X-API-Key`. Voir [docs/mcp-client-setup.md](mcp-client-setup.md#authentification) pour la configuration cote client.
+
 ### Qdrant
 
 | Variable | Defaut | Description |
@@ -43,9 +51,10 @@ Toute la configuration se fait via variables d'environnement. Copier `.env.examp
 
 | Variable | Defaut | Description |
 |----------|--------|-------------|
-| `MAX_FILE_SIZE_MB` | `50` | Taille maximum d'un fichier en Mo |
+| `MAX_FILE_SIZE_MB` | `50` | Taille maximum d'un fichier en Mo (streaming + cap fail-fast) |
 | `MAX_PAGES` | `1000` | Nombre maximum de pages par document |
 | `MAX_OUTPUT_FILE_SIZE_MB` | `10` | Taille maximum d'un fichier genere (Excel/Word) en Mo |
+| `MAX_MCP_BODY_MB` | `5` | Taille maximum du body JSON-RPC sur `/mcp` (protection DoS) |
 
 ### Chemins
 
@@ -71,11 +80,12 @@ Format : `"X/minute"` ou `"X/hour"`. Implemente via slowapi.
 
 ```
 MISTRAL_API_KEY=sk-...
+API_KEY=8f3d9e2a4b7c1f6e5d8a9b2c3f4e7a1d6b9c8e2f5a3d7b4c1e9f6a2d8b5c3e7f
 DOCUMENTS_PATH=/home/user/Documents
 OUTPUT_PATH=/home/user/Documents/output
 ```
 
-En mode Docker, `QDRANT_HOST` est automatiquement `qdrant` via le reseau Docker interne.
+Generer `API_KEY` avec `openssl rand -hex 32`. En mode Docker, `QDRANT_HOST` est automatiquement `qdrant` via le reseau Docker interne.
 
 ## Exemple complet
 
@@ -89,6 +99,9 @@ LOG_FORMAT=json
 MISTRAL_API_KEY=sk-...
 MISTRAL_OCR_MODEL=mistral-ocr-latest
 MISTRAL_EMBED_MODEL=mistral-embed
+
+# Authentification (REQUIS hors DEBUG)
+API_KEY=8f3d9e2a4b7c1f6e5d8a9b2c3f4e7a1d6b9c8e2f5a3d7b4c1e9f6a2d8b5c3e7f
 
 # Qdrant
 QDRANT_HOST=qdrant
@@ -106,6 +119,7 @@ OCR_TABLE_FORMAT=markdown
 MAX_FILE_SIZE_MB=50
 MAX_PAGES=1000
 MAX_OUTPUT_FILE_SIZE_MB=10
+MAX_MCP_BODY_MB=5
 
 # Chemins
 DOCUMENTS_PATH=/home/user/Documents

@@ -43,14 +43,20 @@
 git clone https://github.com/assistance-micro-design/mcp-zileo-rag.git
 cd mcp-zileo-rag
 cp .env.example .env
-# Editer .env : renseigner MISTRAL_API_KEY et DOCUMENTS_PATH
+
+# Editer .env : renseigner MISTRAL_API_KEY, DOCUMENTS_PATH
+# Generer une cle API pour proteger le serveur :
+echo "API_KEY=$(openssl rand -hex 32)" >> .env
+
 docker compose up -d
 ```
+
+> **Note sur `API_KEY`** : la cle protege les endpoints `/api/v1/*`, `/mcp` et `/health`. Hors mode `DEBUG=true`, le serveur refuse de demarrer si la cle est vide. Voir [docs/mcp-client-setup.md](docs/mcp-client-setup.md#authentification) pour la passer aux clients MCP.
 
 Verifier que le serveur fonctionne :
 
 ```bash
-curl http://localhost:8000/health
+curl -H "X-API-Key: $API_KEY" http://localhost:8000/health
 # {"status": "healthy", ...}
 ```
 
@@ -73,13 +79,16 @@ Ajouter dans le fichier de configuration Claude Desktop :
   "mcpServers": {
     "zileo-rag": {
       "url": "http://localhost:8000/mcp",
-      "transport": "http"
+      "transport": "http",
+      "headers": {
+        "X-API-Key": "ta_cle_api_ici"
+      }
     }
   }
 }
 ```
 
-Redemarrer Claude Desktop apres modification. Les 12 outils apparaitront automatiquement dans l'interface.
+Remplacer `ta_cle_api_ici` par la valeur de `API_KEY` definie dans `.env`. Redemarrer Claude Desktop apres modification. Les 12 outils apparaitront automatiquement dans l'interface.
 
 ### Zileo Chat
 
@@ -90,7 +99,10 @@ Ajouter dans la configuration MCP de Zileo Chat (`config.json` ou panneau de con
   "mcpServers": {
     "zileo-rag": {
       "url": "http://localhost:8000/mcp",
-      "transport": "http"
+      "transport": "http",
+      "headers": {
+        "X-API-Key": "ta_cle_api_ici"
+      }
     }
   }
 }
@@ -103,7 +115,10 @@ Si Zileo Chat et MCP Zileo RAG tournent dans le meme reseau Docker, utiliser le 
   "mcpServers": {
     "zileo-rag": {
       "url": "http://mcp-zileo-rag:8000/mcp",
-      "transport": "http"
+      "transport": "http",
+      "headers": {
+        "X-API-Key": "ta_cle_api_ici"
+      }
     }
   }
 }
@@ -155,6 +170,7 @@ Variables d'environnement principales (voir [docs/configuration.md](docs/configu
 | Variable | Requis | Description |
 |----------|--------|-------------|
 | `MISTRAL_API_KEY` | Oui | Cle API Mistral (embeddings + OCR) |
+| `API_KEY` | Oui (hors DEBUG) | Cle d'authentification pour les endpoints proteges. Generer via `openssl rand -hex 32`. Vide accepte uniquement si `DEBUG=true`. |
 | `DOCUMENTS_PATH` | Oui | Chemin local vers vos documents |
 | `OUTPUT_PATH` | Non | Dossier de sortie des fichiers generes (defaut: `./output`) |
 | `QDRANT_HOST` | Non | Hote Qdrant (defaut: `localhost`, `qdrant` en Docker) |
