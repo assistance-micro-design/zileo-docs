@@ -4,19 +4,22 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 
 class MCPZileoError(Exception):
     """Classe de base pour toutes les exceptions de l'application.
 
     Inclut un champ `suggestion` pour guider les LLM sur comment corriger l'erreur.
+    Les sous-classes peuvent surcharger `default_code` pour eviter de dupliquer __init__.
     """
+
+    default_code: ClassVar[str] = "INTERNAL_ERROR"
 
     def __init__(
         self,
         message: str,
-        code: str = "INTERNAL_ERROR",
+        code: str | None = None,
         details: dict[str, Any] | None = None,
         suggestion: str | None = None,
         parameter: str | None = None,
@@ -26,7 +29,7 @@ class MCPZileoError(Exception):
 
         Args:
             message: Message d'erreur lisible.
-            code: Code d'erreur unique pour identification.
+            code: Code d'erreur unique. Si None, utilise `default_code` de la classe.
             details: Details supplementaires optionnels.
             suggestion: Conseil pour le LLM sur comment corriger l'erreur.
             parameter: Nom du parametre concerne (pour les erreurs de validation).
@@ -34,7 +37,7 @@ class MCPZileoError(Exception):
         """
         super().__init__(message)
         self.message = message
-        self.code = code
+        self.code = code or self.default_code
         self.details = details or {}
         self.suggestion = suggestion
         self.parameter = parameter
@@ -73,16 +76,7 @@ class MCPZileoError(Exception):
 class PDFError(MCPZileoError):
     """Erreur liee au traitement PDF."""
 
-    def __init__(
-        self,
-        message: str,
-        code: str = "PDF_ERROR",
-        details: dict[str, Any] | None = None,
-        suggestion: str | None = None,
-        parameter: str | None = None,
-        retry: bool = False,
-    ) -> None:
-        super().__init__(message, code, details, suggestion, parameter, retry)
+    default_code: ClassVar[str] = "PDF_ERROR"
 
 
 class SourceFileNotFoundError(PDFError):
@@ -155,16 +149,7 @@ class PDFTooManyPagesError(PDFError):
 class OCRError(MCPZileoError):
     """Erreur liee au service OCR."""
 
-    def __init__(
-        self,
-        message: str,
-        code: str = "OCR_ERROR",
-        details: dict[str, Any] | None = None,
-        suggestion: str | None = None,
-        parameter: str | None = None,
-        retry: bool = False,
-    ) -> None:
-        super().__init__(message, code, details, suggestion, parameter, retry)
+    default_code: ClassVar[str] = "OCR_ERROR"
 
 
 class OCRAPIError(OCRError):
@@ -200,16 +185,7 @@ class OCRRateLimitError(OCRError):
 class EmbeddingError(MCPZileoError):
     """Erreur liee au service d'embeddings."""
 
-    def __init__(
-        self,
-        message: str,
-        code: str = "EMBEDDING_ERROR",
-        details: dict[str, Any] | None = None,
-        suggestion: str | None = None,
-        parameter: str | None = None,
-        retry: bool = False,
-    ) -> None:
-        super().__init__(message, code, details, suggestion, parameter, retry)
+    default_code: ClassVar[str] = "EMBEDDING_ERROR"
 
 
 class EmbeddingAPIError(EmbeddingError):
@@ -231,16 +207,7 @@ class EmbeddingAPIError(EmbeddingError):
 class VectorStoreError(MCPZileoError):
     """Erreur liee au vector store."""
 
-    def __init__(
-        self,
-        message: str,
-        code: str = "VECTOR_STORE_ERROR",
-        details: dict[str, Any] | None = None,
-        suggestion: str | None = None,
-        parameter: str | None = None,
-        retry: bool = False,
-    ) -> None:
-        super().__init__(message, code, details, suggestion, parameter, retry)
+    default_code: ClassVar[str] = "VECTOR_STORE_ERROR"
 
 
 class VectorStoreConnectionError(VectorStoreError):
@@ -276,16 +243,7 @@ class DocumentNotFoundError(VectorStoreError):
 class ExcelGenerationError(MCPZileoError):
     """Erreur liee a la generation de fichiers Excel."""
 
-    def __init__(
-        self,
-        message: str,
-        code: str = "EXCEL_GENERATION_ERROR",
-        details: dict[str, Any] | None = None,
-        suggestion: str | None = None,
-        parameter: str | None = None,
-        retry: bool = False,
-    ) -> None:
-        super().__init__(message, code, details, suggestion, parameter, retry)
+    default_code: ClassVar[str] = "EXCEL_GENERATION_ERROR"
 
 
 class ExcelChartError(ExcelGenerationError):
@@ -350,16 +308,7 @@ class ExcelSheetNotFoundError(ExcelGenerationError):
 class WordGenerationError(MCPZileoError):
     """Erreur liee a la generation de fichiers Word."""
 
-    def __init__(
-        self,
-        message: str,
-        code: str = "WORD_GENERATION_ERROR",
-        details: dict[str, Any] | None = None,
-        suggestion: str | None = None,
-        parameter: str | None = None,
-        retry: bool = False,
-    ) -> None:
-        super().__init__(message, code, details, suggestion, parameter, retry)
+    default_code: ClassVar[str] = "WORD_GENERATION_ERROR"
 
 
 # === Validation Errors ===
@@ -367,6 +316,8 @@ class WordGenerationError(MCPZileoError):
 
 class ValidationError(MCPZileoError):
     """Erreur de validation des donnees."""
+
+    default_code: ClassVar[str] = "VALIDATION_ERROR"
 
     def __init__(
         self,
@@ -380,7 +331,6 @@ class ValidationError(MCPZileoError):
             error_details["field"] = field
         super().__init__(
             message=message,
-            code="VALIDATION_ERROR",
             details=error_details,
             suggestion=suggestion,
             parameter=field,

@@ -201,48 +201,20 @@ class DocumentRouter:
         Returns:
             UnifiedDocument avec le contenu Excel.
         """
-        # Imports locaux pour éviter imports circulaires
         from src.models.unified import (  # noqa: PLC0415
-            FormulaData,
             StructuredData,
-            TableData,
             UnifiedDocument,
             UnifiedMetadata,
         )
 
-        extractor = self._extractors[DocumentType.EXCEL]
-        excel_doc = await extractor.extract(path)
+        excel_doc = await self._extractors[DocumentType.EXCEL].extract(path)
+        tables = self._excel_tables(excel_doc)
+        formulas = self._excel_formulas(excel_doc)
 
-        # Convertir les tableaux
-        tables: list[TableData] = []
-        for sheet in excel_doc.sheets:
-            for table in sheet.tables:
-                tables.append(
-                    TableData(
-                        headers=table.headers,
-                        rows=table.data,
-                        source_location=f"Feuille: {sheet.name}",
-                    )
-                )
-
-        # Convertir les formules
-        formulas = [
-            FormulaData(
-                cell=f.cell,
-                sheet=f.sheet,
-                formula=f.formula,
-                result=f.result,
-                dependencies=f.dependencies,
-            )
-            for f in excel_doc.get_all_formulas()
-        ]
-
-        # Métadonnées
-        file_hash = compute_file_hash(path)
         metadata = UnifiedMetadata(
             filename=excel_doc.filename,
             file_path=excel_doc.file_path,
-            file_hash=file_hash,
+            file_hash=compute_file_hash(path),
             document_type=DocumentType.EXCEL,
             original_format=f".{excel_doc.format}",
             page_count=len(excel_doc.sheets),
@@ -252,14 +224,10 @@ class DocumentRouter:
             author=excel_doc.properties.get("author"),
             sheet_names=[s.name for s in excel_doc.sheets],
         )
-
         return UnifiedDocument(
             metadata=metadata,
             content_markdown=excel_doc.to_markdown(),
-            structured_data=StructuredData(
-                tables=tables,
-                formulas=formulas,
-            ),
+            structured_data=StructuredData(tables=tables, formulas=formulas),
         )
 
     async def _extract_word(self, path: Path) -> UnifiedDocument:
@@ -271,48 +239,20 @@ class DocumentRouter:
         Returns:
             UnifiedDocument avec le contenu Word.
         """
-        # Imports locaux pour éviter imports circulaires
         from src.models.unified import (  # noqa: PLC0415
-            ImageData,
             StructuredData,
-            TableData,
             UnifiedDocument,
             UnifiedMetadata,
         )
 
-        extractor = self._extractors[DocumentType.WORD]
-        word_doc = await extractor.extract(path)
+        word_doc = await self._extractors[DocumentType.WORD].extract(path)
+        tables = self._word_tables(word_doc)
+        images = self._word_images(word_doc)
 
-        # Convertir les tableaux
-        tables: list[TableData] = []
-        for table in word_doc.tables:
-            headers = table.headers or ([c.text for c in table.rows[0]] if table.rows else [])
-            data_rows = table.rows[1:] if table.rows and not table.headers else table.rows
-            tables.append(
-                TableData(
-                    headers=headers,
-                    rows=[[c.text for c in row] for row in data_rows],
-                )
-            )
-
-        # Convertir les images
-        images: list[ImageData] = [
-            ImageData(
-                filename=img.filename,
-                content_type=img.content_type,
-                size_kb=img.size_kb,
-                has_base64=True,
-                alt_text=img.alt_text,
-            )
-            for img in word_doc.images
-        ]
-
-        # Métadonnées
-        file_hash = compute_file_hash(path)
         metadata = UnifiedMetadata(
             filename=word_doc.filename,
             file_path=word_doc.file_path,
-            file_hash=file_hash,
+            file_hash=compute_file_hash(path),
             document_type=DocumentType.WORD,
             original_format=".docx",
             word_count=word_doc.word_count,
@@ -321,12 +261,72 @@ class DocumentRouter:
             title=word_doc.metadata.get("title"),
             author=word_doc.metadata.get("author"),
         )
-
         return UnifiedDocument(
             metadata=metadata,
             content_markdown=word_doc.to_markdown(),
-            structured_data=StructuredData(
-                tables=tables,
-                images=images,
-            ),
+            structured_data=StructuredData(tables=tables, images=images),
         )
+
+    @staticmethod
+    def _excel_tables(excel_doc: object) -> list[object]:
+        """Convertit les tableaux d'un classeur Excel en TableData."""
+        from src.models.unified import TableData  # noqa: PLC0415
+
+        return [
+            TableData(
+                headers=table.headers,
+                rows=table.data,
+                source_location=f"Feuille: {sheet.name}",
+            )
+            for sheet in excel_doc.sheets  # type: ignore[attr-defined]
+            for table in sheet.tables
+        ]
+
+    @staticmethod
+    def _excel_formulas(excel_doc: object) -> list[object]:
+        """Convertit les formules d'un classeur Excel en FormulaData."""
+        from src.models.unified import FormulaData  # noqa: PLC0415
+
+        return [
+            FormulaData(
+                cell=f.cell,
+                sheet=f.sheet,
+                formula=f.formula,
+                result=f.result,
+                dependencies=f.dependencies,
+            )
+            for f in excel_doc.get_all_formulas()  # type: ignore[attr-defined]
+        ]
+
+    @staticmethod
+    def _word_tables(word_doc: object) -> list[object]:
+        """Convertit les tableaux d'un document Word en TableData."""
+        from src.models.unified import TableData  # noqa: PLC0415
+
+        result: list[object] = []
+        for table in word_doc.tables:  # type: ignore[attr-defined]
+            headers = table.headers or ([c.text for c in table.rows[0]] if table.rows else [])
+            data_rows = table.rows[1:] if table.rows and not table.headers else table.rows
+            result.append(
+                TableData(
+                    headers=headers,
+                    rows=[[c.text for c in row] for row in data_rows],
+                )
+            )
+        return result
+
+    @staticmethod
+    def _word_images(word_doc: object) -> list[object]:
+        """Convertit les images d'un document Word en ImageData."""
+        from src.models.unified import ImageData  # noqa: PLC0415
+
+        return [
+            ImageData(
+                filename=img.filename,
+                content_type=img.content_type,
+                size_kb=img.size_kb,
+                has_base64=True,
+                alt_text=img.alt_text,
+            )
+            for img in word_doc.images  # type: ignore[attr-defined]
+        ]

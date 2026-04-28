@@ -107,46 +107,26 @@ class MistralEmbedder:
             logger.warning("embed_chunks appele avec une liste vide")
             return []
 
-        # Preparer les textes a embedder
-        texts = self._prepare_texts(list(chunks), use_enriched)
+        chunks_list = list(chunks)
+        texts = self._prepare_texts(chunks_list, use_enriched)
+        batches = self._create_batches(texts)
 
         logger.info(
-            "Embedding de %d chunks (use_enriched=%s)",
-            len(chunks),
+            "Embedding de %d chunks en %d batches (use_enriched=%s)",
+            len(chunks_list),
+            len(batches),
             use_enriched,
         )
 
-        # Creer les batches en respectant les limites API
-        batches = self._create_batches(texts)
-
-        logger.debug(
-            "Chunks divises en %d batches",
-            len(batches),
-        )
-
-        # Traiter chaque batch
         all_embeddings: list[list[float]] = []
-        for batch_idx, batch in enumerate(batches):
-            logger.debug(
-                "Traitement batch %d/%d (%d textes)",
-                batch_idx + 1,
-                len(batches),
-                len(batch),
-            )
-
+        for batch in batches:
             batch_embeddings = await self._embed_batch(batch)
             all_embeddings.extend(batch_embeddings)
 
-        # Assigner les embeddings aux chunks
-        chunks_list = list(chunks)
         for chunk, embedding in zip(chunks_list, all_embeddings, strict=True):
             chunk.embedding = embedding
 
-        logger.info(
-            "Embedding termine: %d chunks traites",
-            len(chunks_list),
-        )
-
+        logger.info("Embedding termine: %d chunks", len(chunks_list))
         return chunks_list
 
     async def embed_query(self, query: str) -> list[float]:

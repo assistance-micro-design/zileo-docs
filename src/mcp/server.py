@@ -159,67 +159,12 @@ class MCPServer:
         self.version = settings.APP_VERSION
         self._initialized = False
 
-        # Dependances partagees
         self._shared_vector_store = QdrantVectorStore()
         self._shared_embedder = MistralEmbedder()
         self._shared_sparse_embedder = SparseEmbedder()
 
-        # Instancier les tools avec injection de dependances
-        self._create_excel = CreateExcelTool()
-        self._create_word = CreateWordTool()
-        self._edit_excel = EditExcelTool()
-        self._inspect_generated_file = InspectGeneratedFileTool()
-        self._index_document = IndexDocumentTool(
-            vector_store=self._shared_vector_store,
-            embedder=self._shared_embedder,
-            sparse_embedder=self._shared_sparse_embedder,
-        )
-        self._search_documents = SearchDocumentsTool(
-            vector_store=self._shared_vector_store,
-            embedder=self._shared_embedder,
-            sparse_embedder=self._shared_sparse_embedder,
-        )
-        self._get_document = GetDocumentTool(
-            vector_store=self._shared_vector_store,
-        )
-        self._delete_document = DeleteDocumentTool(
-            vector_store=self._shared_vector_store,
-        )
-        self._list_indexed_documents = ListIndexedDocumentsTool(
-            vector_store=self._shared_vector_store,
-        )
-        self._list_available_documents = ListAvailableDocumentsTool()
-        self._get_excel_formulas = GetExcelFormulasTool(
-            vector_store=self._shared_vector_store,
-        )
-        self._read_document_content = ReadDocumentContentTool(
-            vector_store=self._shared_vector_store,
-        )
-
-        # Registry des tools
-        self.tools: dict[str, BaseMCPTool] = {
-            "create_excel_document": self._create_excel,
-            "create_word_document": self._create_word,
-            "edit_excel_document": self._edit_excel,
-            "inspect_generated_file": self._inspect_generated_file,
-            "index_document": self._index_document,
-            "search_documents": self._search_documents,
-            "get_document": self._get_document,
-            "delete_document": self._delete_document,
-            "list_indexed_documents": self._list_indexed_documents,
-            "list_available_documents": self._list_available_documents,
-            "get_excel_formulas": self._get_excel_formulas,
-            "read_document_content": self._read_document_content,
-        }
-
-        # Routing vers handlers
-        self._method_handlers: dict[
-            str, Callable[[RequestId, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]]
-        ] = {
-            "initialize": self._handle_initialize,
-            "tools/list": self._handle_tools_list,
-            "tools/call": self._handle_tools_call,
-        }
+        self.tools: dict[str, BaseMCPTool] = self._build_tools()
+        self._method_handlers = self._build_method_handlers()
 
         logger.info(
             "MCP Server initialise: %s v%s (%d tools)",
@@ -227,6 +172,40 @@ class MCPServer:
             self.version,
             len(self.tools),
         )
+
+    def _build_tools(self) -> dict[str, BaseMCPTool]:
+        """Construit le registre des tools avec DI partagee."""
+        vs = self._shared_vector_store
+        emb = self._shared_embedder
+        sparse = self._shared_sparse_embedder
+        return {
+            "create_excel_document": CreateExcelTool(),
+            "create_word_document": CreateWordTool(),
+            "edit_excel_document": EditExcelTool(),
+            "inspect_generated_file": InspectGeneratedFileTool(),
+            "index_document": IndexDocumentTool(
+                vector_store=vs, embedder=emb, sparse_embedder=sparse
+            ),
+            "search_documents": SearchDocumentsTool(
+                vector_store=vs, embedder=emb, sparse_embedder=sparse
+            ),
+            "get_document": GetDocumentTool(vector_store=vs),
+            "delete_document": DeleteDocumentTool(vector_store=vs),
+            "list_indexed_documents": ListIndexedDocumentsTool(vector_store=vs),
+            "list_available_documents": ListAvailableDocumentsTool(),
+            "get_excel_formulas": GetExcelFormulasTool(vector_store=vs),
+            "read_document_content": ReadDocumentContentTool(vector_store=vs),
+        }
+
+    def _build_method_handlers(
+        self,
+    ) -> dict[str, Callable[[RequestId, dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]]]:
+        """Construit la table de routing JSON-RPC method -> handler."""
+        return {
+            "initialize": self._handle_initialize,
+            "tools/list": self._handle_tools_list,
+            "tools/call": self._handle_tools_call,
+        }
 
     async def initialize(self) -> None:
         """Initialise tous les tools en parallele.

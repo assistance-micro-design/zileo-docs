@@ -290,63 +290,75 @@ class SmartChunker:
             Liste de tuples (contenu, info_section, type_contenu, pages_set).
         """
         chunks: list[tuple[str, dict[str, object], str, set[int]]] = []
-        current_chunk = ""
-        current_pages: set[int] = set()
-        current_section: dict[str, object] = {"title": None, "hierarchy": []}
+        chunk = ""
+        pages: set[int] = set()
+        section: dict[str, object] = {"title": None, "hierarchy": []}
 
-        paragraphs = re.split(r"\n\n+", content)
-
-        for raw_para in paragraphs:
+        for raw_para in re.split(r"\n\n+", content):
             para = raw_para.strip()
             if not para or self.PAGE_MARKER_PATTERN.match(para):
                 continue
 
-            # Determiner la page de ce paragraphe
             para_pages = self._get_pages_at_position(content.find(para), len(para), page_mapping)
-
-            # Header: save current chunk + update section
-            header_match = re.match(r"^(#{1,6})\s+(.+)$", para)
-            if header_match:
-                self._save_current_chunk_with_pages(
-                    chunks, current_chunk, current_section, current_pages
-                )
-                current_chunk = header_match.group(0) + "\n\n"
-                current_pages = set(para_pages)
-                current_section = {
-                    "title": header_match.group(2),
-                    "hierarchy": self._get_hierarchy_at(content.find(para), sections),
-                }
-                continue
-
-            # Protected region: save current chunk + add protected element
-            is_protected, region_type = self._is_in_protected(para, content, protected_regions)
-            if is_protected:
-                self._save_current_chunk_with_pages(
-                    chunks, current_chunk, current_section, current_pages
-                )
-                chunks.append((para, dict(current_section), region_type, set(para_pages)))
-                current_chunk = ""
-                current_pages = set()
-                continue
-
-            # Normal paragraph: check size
-            test_chunk = current_chunk + para + "\n\n"
-            if self._count_tokens(test_chunk) <= self.chunk_size:
-                current_chunk = test_chunk
-                current_pages.update(para_pages)
-                continue
-
-            # Chunk full: save and restart with overlap
-            self._save_current_chunk_with_pages(
-                chunks, current_chunk, current_section, current_pages
+            chunk, pages, section = self._dispatch_paragraph(
+                para,
+                chunks,
+                chunk,
+                pages,
+                section,
+                content,
+                sections,
+                protected_regions,
+                para_pages,
             )
-            overlap = self._get_overlap(current_chunk)
-            current_chunk = overlap + para + "\n\n"
-            current_pages = set(para_pages)
 
-        # Save last chunk
-        self._save_current_chunk_with_pages(chunks, current_chunk, current_section, current_pages)
+        self._save_current_chunk_with_pages(chunks, chunk, section, pages)
         return chunks
+
+    def _dispatch_paragraph(
+        self,
+        para: str,
+        chunks: list[tuple[str, dict[str, object], str, set[int]]],
+        chunk: str,
+        pages: set[int],
+        section: dict[str, object],
+        content: str,
+        sections: list[dict[str, object]],
+        protected_regions: list[tuple[int, int, str]],
+        para_pages: set[int],
+    ) -> tuple[str, set[int], dict[str, object]]:
+        """Traite un paragraphe et retourne le nouvel etat (chunk, pages, section)."""
+        header_match = re.match(r"^(#{1,6})\s+(.+)$", para)
+        if header_match:
+            self._save_current_chunk_with_pages(chunks, chunk, section, pages)
+            return self._start_chunk_at_header(header_match, content, sections, para_pages)
+
+        is_protected, region_type = self._is_in_protected(para, content, protected_regions)
+        if is_protected:
+            self._save_current_chunk_with_pages(chunks, chunk, section, pages)
+            chunks.append((para, dict(section), region_type, set(para_pages)))
+            return "", set(), section
+
+        test_chunk = chunk + para + "\n\n"
+        if self._count_tokens(test_chunk) <= self.chunk_size:
+            return test_chunk, pages | para_pages, section
+
+        self._save_current_chunk_with_pages(chunks, chunk, section, pages)
+        return self._get_overlap(chunk) + para + "\n\n", set(para_pages), section
+
+    def _start_chunk_at_header(
+        self,
+        header_match: re.Match[str],
+        content: str,
+        sections: list[dict[str, object]],
+        para_pages: set[int],
+    ) -> tuple[str, set[int], dict[str, object]]:
+        """Construit le chunk initial pour un nouveau header."""
+        new_section: dict[str, object] = {
+            "title": header_match.group(2),
+            "hierarchy": self._get_hierarchy_at(content.find(header_match.group(0)), sections),
+        }
+        return header_match.group(0) + "\n\n", set(para_pages), new_section
 
     def _save_current_chunk_with_pages(
         self,
