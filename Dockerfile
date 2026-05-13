@@ -15,14 +15,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copier les fichiers de dependances
-COPY pyproject.toml README.md ./
+# Installer uv (pin de version pour reproductibilite)
+COPY --from=ghcr.io/astral-sh/uv:0.9.21 /uv /uvx /usr/local/bin/
 
-# Installer les dependances dans un venv
-RUN python -m venv /opt/venv
+# Copier les fichiers de dependances et le lockfile
+COPY pyproject.toml uv.lock ./
+
+# Installer uniquement les dependances depuis le lockfile (reproductible)
+# --no-install-project: on ne package pas src/, le runtime stage copie src/ directement
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1
+RUN uv sync --frozen --no-dev --no-install-project
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
 
 
 # --- Stage 2: Runtime ---
