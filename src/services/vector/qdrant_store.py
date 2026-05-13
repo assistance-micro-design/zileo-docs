@@ -9,9 +9,7 @@ de documents (PDF, Excel, Word) dans une base de donnees vectorielle Qdrant.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
-import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -20,12 +18,10 @@ from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
-    MatchText,
     MatchValue,
     PayloadSchemaType,
     PayloadSelectorInclude,
     PointStruct,
-    Range,
     VectorParams,
 )
 
@@ -33,6 +29,12 @@ from src.core.config import settings
 from src.models.chunk import DocumentChunk
 from src.models.document import DocumentMetadata
 from src.models.unified import UnifiedMetadata
+from src.services.vector.filters import build_filter
+from src.services.vector.payload_builder import (
+    build_payload,
+    build_unified_payload,
+    generate_point_id,
+)
 
 
 if TYPE_CHECKING:
@@ -40,15 +42,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-# Tables de mapping pour _build_filter (approche table-driven)
-_MATCH_FILTER_KEYS: tuple[str, ...] = (
-    "document_id",
-    "content_type",
-    "section_title",
-    "doc_filename",
-)
-_BOOL_FILTER_KEYS: tuple[str, ...] = ("has_table", "has_image", "has_equation")
 
 # Index Qdrant par type (pour _create_indexes)
 _KEYWORD_INDEXES: tuple[tuple[str, PayloadSchemaType], ...] = (
@@ -74,36 +67,6 @@ _DATETIME_INDEXES: tuple[tuple[str, PayloadSchemaType], ...] = (
 _ALL_PAYLOAD_INDEXES: tuple[tuple[str, PayloadSchemaType], ...] = (
     _KEYWORD_INDEXES + _INTEGER_INDEXES + _BOOL_INDEXES + _DATETIME_INDEXES
 )
-
-
-def _sanitize_text(text: str | None) -> str:
-    """Nettoie le texte des caracteres Unicode problematiques.
-
-    Remplace les caracteres de remplacement et normalise les espaces.
-
-    Args:
-        text: Texte a nettoyer.
-
-    Returns:
-        Texte nettoye.
-    """
-    if not text:
-        return ""
-
-    # Remplacer le caractere de remplacement Unicode
-    text = text.replace("\ufffd", "")
-
-    # Normaliser les espaces multiples
-    text = re.sub(r"\s+", " ", text)
-
-    # Supprimer les caracteres de controle (sauf newlines et tabs)
-    text = "".join(
-        char
-        for char in text
-        if char in ("\n", "\t", "\r") or (ord(char) >= 32 and ord(char) != 127)
-    )
-
-    return text.strip()
 
 
 class QdrantVectorStore:
@@ -265,7 +228,7 @@ class QdrantVectorStore:
         """
 
         def payload_builder(chunk: DocumentChunk) -> dict[str, Any]:
-            return self._build_payload(chunk, document_metadata)
+            return build_payload(chunk, document_metadata)
 
         return await self._store_chunks_internal(
             chunks, document_metadata.document_id, payload_builder
@@ -295,7 +258,7 @@ class QdrantVectorStore:
         """
 
         def payload_builder(chunk: DocumentChunk) -> dict[str, Any]:
-            return self._build_unified_payload(chunk, unified_metadata)
+            return build_unified_payload(chunk, unified_metadata)
 
         return await self._store_chunks_internal(
             chunks, unified_metadata.document_id, payload_builder
@@ -340,7 +303,7 @@ class QdrantVectorStore:
             sparse = chunk.sparse_embedding
             points.append(
                 PointStruct(
-                    id=self._generate_point_id(chunk.metadata.chunk_id),
+                    id=generate_point_id(chunk.metadata.chunk_id),
                     vector={
                         "dense": chunk.embedding,
                         "sparse": models.SparseVector(
@@ -363,104 +326,6 @@ class QdrantVectorStore:
                 collection_name=self.COLLECTION_NAME,
                 points=batch,
             )
-
-    def _build_common_payload(self, chunk: DocumentChunk) -> dict[str, Any]:
-        """Construit les champs communs du payload Qdrant.
-
-        Args:
-            chunk: Chunk a stocker.
-
-        Returns:
-            Dictionnaire partiel du payload (chunk + contenu + stats).
-        """
-        meta = chunk.metadata
-        content = _sanitize_text(chunk.content)
-
-        return {
-            "chunk_id": meta.chunk_id,
-            "document_id": meta.document_id,
-            "parent_chunk_id": meta.parent_chunk_id or "",
-            "content": content,
-            "content_preview": content[:500] if content else "",
-            "page_numbers": meta.page_numbers,
-            "start_page": meta.start_page,
-            "end_page": meta.end_page,
-            "chunk_index": meta.chunk_index,
-            "total_chunks": meta.total_chunks,
-            "section_title": meta.section_title or "",
-            "section_hierarchy": meta.section_hierarchy,
-            "content_type": meta.content_type,
-            "has_table": meta.has_table,
-            "has_image": meta.has_image,
-            "has_equation": meta.has_equation,
-            "token_count": meta.token_count,
-            "char_count": meta.char_count,
-            "word_count": meta.word_count,
-            "preceding_context": meta.preceding_context,
-            "following_context": meta.following_context,
-        }
-
-    def _build_unified_payload(
-        self,
-        chunk: DocumentChunk,
-        unified_meta: UnifiedMetadata,
-    ) -> dict[str, Any]:
-        """Construit le payload pour documents unifiés (Excel/Word)."""
-        payload = self._build_common_payload(chunk)
-        payload.update(
-            {
-                "document_type": unified_meta.document_type.value,
-                "has_formula": unified_meta.has_formulas,
-                "sheet_names": unified_meta.sheet_names,
-                "doc_filename": unified_meta.filename,
-                "doc_title": unified_meta.title or "",
-                "doc_author": unified_meta.author or "",
-                "doc_total_pages": unified_meta.page_count or 0,
-                "doc_file_hash": unified_meta.file_hash,
-                "ingested_at": unified_meta.indexed_at.isoformat(),
-                "doc_creation_date": (
-                    unified_meta.created_at.isoformat() if unified_meta.created_at else None
-                ),
-            }
-        )
-        return payload
-
-    def _build_payload(
-        self,
-        chunk: DocumentChunk,
-        doc_meta: DocumentMetadata,
-    ) -> dict[str, Any]:
-        """Construit le payload pour documents PDF."""
-        payload = self._build_common_payload(chunk)
-        payload.update(
-            {
-                "doc_filename": doc_meta.filename,
-                "doc_title": doc_meta.title or "",
-                "doc_author": doc_meta.author or "",
-                "doc_total_pages": doc_meta.total_pages,
-                "doc_file_hash": doc_meta.file_hash,
-                "ingested_at": doc_meta.ingested_at.isoformat(),
-                "doc_creation_date": (
-                    doc_meta.creation_date.isoformat() if doc_meta.creation_date else None
-                ),
-            }
-        )
-        return payload
-
-    def _generate_point_id(self, chunk_id: str) -> int:
-        """Genere un ID numerique unique a partir du chunk_id.
-
-        Utilise MD5 pour generer un hash reproductible qui permet
-        l'upsert (mise a jour si existant).
-
-        Args:
-            chunk_id: Identifiant unique du chunk.
-
-        Returns:
-            Identifiant numerique positif pour Qdrant.
-        """
-        hash_bytes = hashlib.md5(chunk_id.encode()).hexdigest()[:16]
-        return int(hash_bytes, 16)
 
     async def search(
         self,
@@ -496,7 +361,7 @@ class QdrantVectorStore:
             ...     filters={"document_id": "doc-123", "has_table": True},
             ... )
         """
-        qdrant_filter = self._build_filter(filters) if filters else None
+        qdrant_filter = build_filter(filters) if filters else None
 
         response = await asyncio.to_thread(
             self.client.query_points,
@@ -534,7 +399,7 @@ class QdrantVectorStore:
         Returns:
             Liste de resultats fusionnes par RRF, ordonnee par score.
         """
-        qdrant_filter = self._build_filter(filters) if filters else None
+        qdrant_filter = build_filter(filters) if filters else None
         sparse_vec = models.SparseVector(
             indices=sparse_embedding.indices,
             values=sparse_embedding.values,
@@ -580,73 +445,6 @@ class QdrantVectorStore:
             }
             for hit in points
         ]
-
-    def _build_filter(self, filters: dict[str, Any]) -> Filter | None:
-        """Construit un filtre Qdrant a partir d'un dictionnaire.
-
-        Args:
-            filters: Dictionnaire des filtres supportes:
-                - document_id: Filtre par ID document exact
-                - content_type: Filtre par type de contenu
-                - page_range: Tuple (start, end) pour pages
-                - has_table: Boolean pour presence de tableaux
-                - has_image: Boolean pour presence d'images
-                - has_equation: Boolean pour presence d'equations
-                - section_title: Filtre par titre de section
-                - text_search: Recherche full-text dans content
-                - doc_filename: Filtre par nom de fichier
-
-        Returns:
-            Filtre Qdrant ou None si aucune condition.
-        """
-        conditions: list[FieldCondition] = []
-        conditions.extend(self._build_match_conditions(filters))
-        conditions.extend(self._build_bool_conditions(filters))
-
-        range_cond = self._build_range_condition(filters)
-        if range_cond:
-            conditions.append(range_cond)
-
-        text_cond = self._build_text_search_condition(filters)
-        if text_cond:
-            conditions.append(text_cond)
-
-        return Filter(must=conditions) if conditions else None
-
-    def _build_match_conditions(self, filters: dict[str, Any]) -> list[FieldCondition]:
-        """Construit les conditions MatchValue pour filtres keyword."""
-        return [
-            FieldCondition(key=key, match=MatchValue(value=filters[key]))
-            for key in _MATCH_FILTER_KEYS
-            if key in filters
-        ]
-
-    def _build_bool_conditions(self, filters: dict[str, Any]) -> list[FieldCondition]:
-        """Construit les conditions booleennes (has_table, has_image, etc.)."""
-        return [
-            FieldCondition(key=key, match=MatchValue(value=True))
-            for key in _BOOL_FILTER_KEYS
-            if filters.get(key)
-        ]
-
-    def _build_range_condition(self, filters: dict[str, Any]) -> FieldCondition | None:
-        """Construit la condition de filtre page_range."""
-        if "page_range" not in filters:
-            return None
-        start, end = filters["page_range"]
-        return FieldCondition(
-            key="start_page",
-            range=Range(gte=start, lte=end),
-        )
-
-    def _build_text_search_condition(self, filters: dict[str, Any]) -> FieldCondition | None:
-        """Construit la condition de recherche full-text."""
-        if "text_search" not in filters:
-            return None
-        return FieldCondition(
-            key="content",
-            match=MatchText(text=filters["text_search"]),
-        )
 
     async def delete_document(self, document_id: str) -> int:
         """Supprime tous les chunks d'un document.
