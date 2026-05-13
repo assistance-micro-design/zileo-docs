@@ -79,7 +79,17 @@ class SearchDocumentsParams(BaseModel):
     query: Annotated[str, Field(description="Requete de recherche")]
     top_k: Annotated[int, Field(default=5, ge=1, le=100, description="Nombre de resultats")]
     score_threshold: Annotated[
-        float, Field(default=0.7, ge=0.0, le=1.0, description="Score minimum de similarite")
+        float | None,
+        Field(
+            default=None,
+            ge=0.0,
+            le=1.0,
+            description=(
+                "Score minimum (opt-in). En semantic: similarite cosinus (defaut 0.7 si omis). "
+                "En hybrid: score RRF (typiquement 0.1-0.5, plus bas que cosinus); aucun "
+                "filtrage si omis."
+            ),
+        ),
     ]
     filters: dict[str, Any] | None = Field(
         default=None,

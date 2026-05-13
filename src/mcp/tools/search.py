@@ -60,8 +60,11 @@ class SearchDocumentsTool(VectorStoreMCPTool):
             },
             "score_threshold": {
                 "type": "number",
-                "description": "Score minimum de similarite (0.0-1.0, defaut: 0.7). Baisser pour plus de resultats.",
-                "default": 0.7,
+                "description": (
+                    "Score minimum (opt-in). En semantic: similarite cosinus (defaut 0.7 si "
+                    "omis). En hybrid: score RRF (typiquement 0.1-0.5, plus bas que cosinus); "
+                    "aucun filtrage si omis. Retourne liste vide si rien ne depasse le seuil."
+                ),
                 "minimum": 0.0,
                 "maximum": 1.0,
             },
@@ -136,23 +139,28 @@ class SearchDocumentsTool(VectorStoreMCPTool):
         params: SearchDocumentsParams,
         query_embedding: list[float],
     ) -> list[dict[str, Any]]:
-        """Dispatch la recherche selon le mode (semantic ou hybrid)."""
+        """Dispatch la recherche selon le mode (semantic ou hybrid).
+
+        score_threshold:
+        - semantic: defaut 0.7 si non fourni (similarite cosinus)
+        - hybrid: opt-in, transmis tel quel a Qdrant (echelle RRF, pas cosinus)
+        """
         if params.search_mode == "semantic":
+            threshold = params.score_threshold if params.score_threshold is not None else 0.7
             return await self._vector_store.search(
                 query_embedding=query_embedding,
                 top_k=params.top_k,
                 filters=params.filters,
-                score_threshold=params.score_threshold,
+                score_threshold=threshold,
             )
         # Mode hybrid: generer sparse embedding BM25 et fusion RRF
         sparse_data = await self._sparse_embedder.embed_query(params.query)
-        # score_threshold non transmis en hybrid — les scores RRF
-        # ne sont pas sur la meme echelle que cosine similarity
         return await self._vector_store.hybrid_search(
             query_embedding=query_embedding,
             sparse_embedding=sparse_data,
             top_k=params.top_k,
             filters=params.filters,
+            score_threshold=params.score_threshold,
         )
 
     async def _do_execute(self, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -187,7 +195,7 @@ class SearchDocumentsTool(VectorStoreMCPTool):
             raise EmptyQueryError()
 
         logger.info(
-            "Recherche: query_len=%d (top_k=%d, threshold=%.2f, filter_keys=%s)",
+            "Recherche: query_len=%d (top_k=%d, threshold=%s, filter_keys=%s)",
             len(params.query),
             params.top_k,
             params.score_threshold,

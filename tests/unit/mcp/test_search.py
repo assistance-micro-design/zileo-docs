@@ -240,3 +240,100 @@ class TestSearchModeHybrid:
         props = SearchDocumentsTool.input_schema["properties"]
         assert "search_mode" in props
         assert props["search_mode"]["default"] == "hybrid"
+
+
+class TestScoreThreshold:
+    """Tests pour score_threshold opt-in en hybrid + defaut 0.7 en semantic."""
+
+    @pytest.mark.asyncio
+    async def test_hybrid_transmits_score_threshold_when_provided(
+        self,
+        mock_vector_store: AsyncMock,
+        mock_embedder: AsyncMock,
+        mock_sparse_embedder: AsyncMock,
+        search_results: list[dict[str, Any]],
+    ) -> None:
+        """Le mode hybrid transmet score_threshold a hybrid_search quand fourni."""
+        tool = SearchDocumentsTool(
+            vector_store=mock_vector_store,
+            embedder=mock_embedder,
+            sparse_embedder=mock_sparse_embedder,
+        )
+        mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
+        tool._initialized = True
+
+        await tool.execute({"query": "test", "score_threshold": 0.4})
+
+        call_kwargs = mock_vector_store.hybrid_search.call_args.kwargs
+        assert call_kwargs["score_threshold"] == 0.4
+
+    @pytest.mark.asyncio
+    async def test_hybrid_no_threshold_by_default(
+        self,
+        mock_vector_store: AsyncMock,
+        mock_embedder: AsyncMock,
+        mock_sparse_embedder: AsyncMock,
+        search_results: list[dict[str, Any]],
+    ) -> None:
+        """Sans score_threshold, hybrid_search recoit None (pas de filtrage)."""
+        tool = SearchDocumentsTool(
+            vector_store=mock_vector_store,
+            embedder=mock_embedder,
+            sparse_embedder=mock_sparse_embedder,
+        )
+        mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
+        tool._initialized = True
+
+        await tool.execute({"query": "test"})
+
+        call_kwargs = mock_vector_store.hybrid_search.call_args.kwargs
+        assert call_kwargs["score_threshold"] is None
+
+    @pytest.mark.asyncio
+    async def test_semantic_uses_default_07_when_threshold_omitted(
+        self,
+        mock_vector_store: AsyncMock,
+        mock_embedder: AsyncMock,
+        mock_sparse_embedder: AsyncMock,
+        search_results: list[dict[str, Any]],
+    ) -> None:
+        """En mode semantic sans score_threshold explicite, le defaut 0.7 s'applique."""
+        tool = SearchDocumentsTool(
+            vector_store=mock_vector_store,
+            embedder=mock_embedder,
+            sparse_embedder=mock_sparse_embedder,
+        )
+        mock_vector_store.search = AsyncMock(return_value=search_results)
+        tool._initialized = True
+
+        await tool.execute({"query": "test", "search_mode": "semantic"})
+
+        call_kwargs = mock_vector_store.search.call_args.kwargs
+        assert call_kwargs["score_threshold"] == 0.7
+
+    @pytest.mark.asyncio
+    async def test_semantic_uses_explicit_threshold_when_provided(
+        self,
+        mock_vector_store: AsyncMock,
+        mock_embedder: AsyncMock,
+        mock_sparse_embedder: AsyncMock,
+        search_results: list[dict[str, Any]],
+    ) -> None:
+        """En mode semantic avec score_threshold explicite, la valeur est transmise."""
+        tool = SearchDocumentsTool(
+            vector_store=mock_vector_store,
+            embedder=mock_embedder,
+            sparse_embedder=mock_sparse_embedder,
+        )
+        mock_vector_store.search = AsyncMock(return_value=search_results)
+        tool._initialized = True
+
+        await tool.execute({"query": "test", "search_mode": "semantic", "score_threshold": 0.85})
+
+        call_kwargs = mock_vector_store.search.call_args.kwargs
+        assert call_kwargs["score_threshold"] == 0.85
+
+    def test_input_schema_score_threshold_has_no_default(self) -> None:
+        """score_threshold n'a plus de default dans le schema (opt-in)."""
+        props = SearchDocumentsTool.input_schema["properties"]
+        assert "default" not in props["score_threshold"]
