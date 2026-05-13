@@ -10,6 +10,7 @@ from typing import Any, ClassVar
 from src.core.exceptions import DocumentNotFoundError
 from src.mcp.tools.base import VectorStoreMCPTool
 from src.models.api import ReadDocumentContentParams
+from src.services.vector.payload import extract_doc_summary
 
 
 logger = logging.getLogger(__name__)
@@ -99,12 +100,12 @@ class ReadDocumentContentTool(VectorStoreMCPTool):
             raise DocumentNotFoundError(params.document_id)
 
         chunks_sorted = sorted(chunks, key=lambda c: c.get("chunk_index", 0))
-        first_chunk = chunks_sorted[0]
-        total_pages = first_chunk.get("doc_total_pages", 0)
+        summary = extract_doc_summary(chunks_sorted[0])
+        total_pages = summary["total_pages"] or 0
 
         chunks_filtered = self._filter_by_pages(chunks_sorted, params, total_pages)
 
-        result = self._build_response(params, chunks_sorted, chunks_filtered, first_chunk)
+        result = self._build_response(params, chunks_sorted, chunks_filtered, summary)
 
         if params.include_chunks_detail:
             result["chunks_detail"] = self._build_chunks_detail(chunks_filtered)
@@ -130,7 +131,7 @@ class ReadDocumentContentTool(VectorStoreMCPTool):
         params: ReadDocumentContentParams,
         chunks_sorted: list[dict[str, Any]],
         chunks_filtered: list[dict[str, Any]],
-        first_chunk: dict[str, Any],
+        summary: dict[str, Any],
     ) -> dict[str, Any]:
         """Construit la reponse avec stats et contenu."""
         total_tokens = sum(c.get("token_count", 0) for c in chunks_sorted)
@@ -153,8 +154,8 @@ class ReadDocumentContentTool(VectorStoreMCPTool):
 
         return {
             "document_id": params.document_id,
-            "filename": first_chunk.get("doc_filename"),
-            "total_pages": first_chunk.get("doc_total_pages", 0),
+            "filename": summary["filename"],
+            "total_pages": summary["total_pages"] or 0,
             "total_chunks": len(chunks_sorted),
             "total_tokens": total_tokens,
             "total_chars": sum(c.get("char_count", 0) for c in chunks_sorted),

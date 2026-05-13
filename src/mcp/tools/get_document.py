@@ -10,6 +10,7 @@ from typing import Any, ClassVar
 from src.core.exceptions import DocumentNotFoundError
 from src.mcp.tools.base import VectorStoreMCPTool
 from src.models.api import GetDocumentParams
+from src.services.vector.payload import extract_doc_summary
 
 
 logger = logging.getLogger(__name__)
@@ -83,8 +84,7 @@ class GetDocumentTool(VectorStoreMCPTool):
         if not chunks:
             raise DocumentNotFoundError(params.document_id)
 
-        # Extraire les metadonnees du premier chunk
-        first_chunk = chunks[0]
+        summary = extract_doc_summary(chunks[0])
 
         # Calculer des statistiques
         total_tokens = sum(c.get("token_count", 0) for c in chunks)
@@ -100,15 +100,15 @@ class GetDocumentTool(VectorStoreMCPTool):
         # Construire la reponse
         return {
             "document_id": params.document_id,
-            "filename": first_chunk.get("doc_filename"),
-            "title": first_chunk.get("doc_title"),
-            "author": first_chunk.get("doc_author"),
-            "total_pages": first_chunk.get("doc_total_pages"),
+            "filename": summary["filename"],
+            "title": summary["title"],
+            "author": summary["author"],
+            "total_pages": summary["total_pages"],
             "total_chunks": len(chunks),
             "total_tokens": total_tokens,
             "content_types": content_types,
-            "ingested_at": first_chunk.get("ingested_at"),
-            "file_hash": first_chunk.get("doc_file_hash"),
+            "ingested_at": summary["ingested_at"],
+            "file_hash": summary["file_hash"],
             "chunks": [
                 {
                     "chunk_id": c.get("chunk_id"),
