@@ -402,3 +402,221 @@ class TestPathTraversalProtection:
 
                 with pytest.raises(SourceFileNotFoundError):
                     await tool_with_mocks.execute({"file_path": "/app/documents/test.pdf"})
+
+
+class TestFileModifiedResponse:
+    """Tests pour _build_file_modified_response (hash different)."""
+
+    @pytest.mark.asyncio
+    async def test_different_hash_returns_file_modified(
+        self, tool_with_mocks: IndexDocumentTool
+    ) -> None:
+        """Quand stored_hash != current_hash, retourne file_modified=True."""
+        tool_with_mocks._vector_store.find_document_by_filename = AsyncMock(
+            return_value={
+                "document_id": "existing-id",
+                "filename": "data.xlsx",
+                "total_chunks": 7,
+                "ingested_at": "2026-01-01T00:00:00+00:00",
+                "file_hash": "OLD_HASH",
+            }
+        )
+
+        with patch("src.mcp.tools.index_document.Path") as mock_path:
+            mock_file = MagicMock()
+            mock_file.exists.return_value = True
+            mock_file.name = "data.xlsx"
+            mock_file.suffix = ".xlsx"
+            mock_file.resolve.return_value = MagicMock()
+            mock_file.resolve.return_value.is_relative_to.return_value = True
+            mock_path.return_value = mock_file
+
+            with (
+                patch("src.mcp.tools.index_document.validate_file_magic", return_value=True),
+                patch("src.mcp.tools.index_document.compute_file_hash", return_value="NEW_HASH"),
+            ):
+                result = await tool_with_mocks.execute({"file_path": "/data/docs/data.xlsx"})
+
+        assert result["file_modified"] is True
+        assert result["document_id"] == "existing-id"
+        assert "delete_document" in result["message"]
+
+
+class TestIndexUnifiedExcelAndWord:
+    """Tests pour _index_unified (branches Excel et Word)."""
+
+    @pytest.mark.asyncio
+    async def test_index_unified_excel_returns_metadata(
+        self, tool_with_mocks: IndexDocumentTool
+    ) -> None:
+        """L'indexation Excel route via _router.extract et store_unified_chunks."""
+        from src.models.unified import StructuredData, UnifiedDocument, UnifiedMetadata
+
+        metadata = UnifiedMetadata(
+            document_id="excel-1",
+            filename="data.xlsx",
+            file_path="/data/docs/data.xlsx",
+            document_type=DocumentType.EXCEL,
+            original_format=".xlsx",
+            has_tables=True,
+            has_formulas=True,
+            sheet_names=["Sheet1"],
+            title="Donnees",
+        )
+        unified_doc = UnifiedDocument(
+            metadata=metadata,
+            content_markdown="contenu Excel",
+            structured_data=StructuredData(),
+        )
+
+        tool_with_mocks._router.extract = AsyncMock(return_value=unified_doc)
+        tool_with_mocks._router.detect_type = MagicMock(return_value=DocumentType.EXCEL)
+        tool_with_mocks._vector_store.find_document_by_filename = AsyncMock(return_value=None)
+        tool_with_mocks._vector_store.store_unified_chunks = AsyncMock(
+            return_value={"stored_chunks": 1}
+        )
+
+        with patch("src.mcp.tools.index_document.Path") as mock_path:
+            mock_file = MagicMock()
+            mock_file.exists.return_value = True
+            mock_file.name = "data.xlsx"
+            mock_file.suffix = ".xlsx"
+            mock_file.resolve.return_value = MagicMock()
+            mock_file.resolve.return_value.is_relative_to.return_value = True
+            mock_path.return_value = mock_file
+
+            with (
+                patch("src.mcp.tools.index_document.validate_file_magic", return_value=True),
+                patch("src.mcp.tools.index_document.compute_file_hash", return_value="h"),
+                patch(
+                    "src.mcp.tools.index_document.embed_dense_and_sparse",
+                    AsyncMock(side_effect=lambda chunks, _e, _s: chunks),
+                ),
+            ):
+                result = await tool_with_mocks.execute({"file_path": "/data/docs/data.xlsx"})
+
+        assert result["document_type"] == "excel"
+        assert result["has_formulas"] is True
+        assert result["sheet_names"] == ["Sheet1"]
+        tool_with_mocks._vector_store.store_unified_chunks.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_index_unified_word_returns_metadata(
+        self, tool_with_mocks: IndexDocumentTool
+    ) -> None:
+        """L'indexation Word route via _router.extract."""
+        from src.models.unified import StructuredData, UnifiedDocument, UnifiedMetadata
+
+        metadata = UnifiedMetadata(
+            document_id="word-1",
+            filename="doc.docx",
+            file_path="/data/docs/doc.docx",
+            document_type=DocumentType.WORD,
+            original_format=".docx",
+            has_tables=False,
+            has_images=True,
+            word_count=42,
+        )
+        unified_doc = UnifiedDocument(
+            metadata=metadata,
+            content_markdown="contenu Word",
+            structured_data=StructuredData(),
+        )
+
+        tool_with_mocks._router.extract = AsyncMock(return_value=unified_doc)
+        tool_with_mocks._router.detect_type = MagicMock(return_value=DocumentType.WORD)
+        tool_with_mocks._vector_store.find_document_by_filename = AsyncMock(return_value=None)
+        tool_with_mocks._vector_store.store_unified_chunks = AsyncMock(
+            return_value={"stored_chunks": 1}
+        )
+
+        with patch("src.mcp.tools.index_document.Path") as mock_path:
+            mock_file = MagicMock()
+            mock_file.exists.return_value = True
+            mock_file.name = "doc.docx"
+            mock_file.suffix = ".docx"
+            mock_file.resolve.return_value = MagicMock()
+            mock_file.resolve.return_value.is_relative_to.return_value = True
+            mock_path.return_value = mock_file
+
+            with (
+                patch("src.mcp.tools.index_document.validate_file_magic", return_value=True),
+                patch("src.mcp.tools.index_document.compute_file_hash", return_value="h"),
+                patch(
+                    "src.mcp.tools.index_document.embed_dense_and_sparse",
+                    AsyncMock(side_effect=lambda chunks, _e, _s: chunks),
+                ),
+            ):
+                result = await tool_with_mocks.execute({"file_path": "/data/docs/doc.docx"})
+
+        assert result["document_type"] == "word"
+        assert result["has_images"] is True
+        assert result["metadata"]["word_count"] == 42
+
+
+class TestCreateOverflowChunks:
+    """Tests pour _create_overflow_chunks (contenu > 8000 chars)."""
+
+    def test_returns_empty_when_content_under_8000(self) -> None:
+        """Pas de chunks supplementaires si content_markdown <= 8000 chars."""
+        from src.models.unified import StructuredData, UnifiedDocument, UnifiedMetadata
+
+        doc = UnifiedDocument(
+            metadata=UnifiedMetadata(
+                document_id="d",
+                filename="f.xlsx",
+                file_path="/tmp/f.xlsx",
+                document_type=DocumentType.EXCEL,
+                original_format=".xlsx",
+            ),
+            content_markdown="a" * 500,
+            structured_data=StructuredData(),
+        )
+        tool = IndexDocumentTool()
+
+        assert tool._create_overflow_chunks(doc, start_index=0) == []
+
+    def test_creates_chunks_for_content_over_8000(self) -> None:
+        """Au-dela de 8000 chars, des chunks de 4000 sont produits avec overlap."""
+        from src.models.unified import StructuredData, UnifiedDocument, UnifiedMetadata
+
+        doc = UnifiedDocument(
+            metadata=UnifiedMetadata(
+                document_id="d",
+                filename="f.xlsx",
+                file_path="/tmp/f.xlsx",
+                document_type=DocumentType.EXCEL,
+                original_format=".xlsx",
+            ),
+            content_markdown="x" * 20000,
+            structured_data=StructuredData(),
+        )
+        tool = IndexDocumentTool()
+
+        chunks = tool._create_overflow_chunks(doc, start_index=1)
+
+        assert len(chunks) > 1
+        assert all(c.metadata.document_id == "d" for c in chunks)
+        assert chunks[0].metadata.chunk_index == 1
+
+
+class TestFormatFormulasForChunk:
+    """Tests pour _format_formulas_for_chunk (formules Excel)."""
+
+    def test_empty_formulas_returns_empty_string(self) -> None:
+        """Liste vide -> chaine vide."""
+        tool = IndexDocumentTool()
+        assert tool._format_formulas_for_chunk([]) == ""
+
+    def test_more_than_50_formulas_adds_summary(self) -> None:
+        """Au-dela de 50 formules, un suffixe '... et N autres' est ajoute."""
+        from src.models.unified import FormulaData
+
+        tool = IndexDocumentTool()
+        formulas = [
+            FormulaData(cell=f"A{i}", sheet="S1", formula="=1+1", result="2") for i in range(60)
+        ]
+
+        result = tool._format_formulas_for_chunk(formulas)
+
+        assert "10 autres formules" in result

@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.core.exceptions import VectorStoreConnectionError
 from src.services.vector.qdrant_store import QdrantVectorStore
 
 
@@ -429,3 +430,250 @@ class TestCreateCollection:
             if field_name == "content":
                 found_text_index = True
         assert found_text_index, "TEXT index on 'content' needed for text_search filter"
+
+
+class TestUpsertPointsErrors:
+    """Tests pour la propagation d'erreurs dans _upsert_points."""
+
+    @pytest.mark.asyncio
+    async def test_upsert_propagates_exception_from_client(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """Une exception client est propagee (VectorStoreConnectionError ou autre)."""
+        store_with_mock_client.client.upsert = MagicMock(
+            side_effect=VectorStoreConnectionError(host="qdrant", port=6333)
+        )
+
+        with pytest.raises(VectorStoreConnectionError):
+            await store_with_mock_client._upsert_points([MagicMock()])
+
+
+class TestFindDocumentByFilenameEdgeCases:
+    """Tests pour les branches edge de find_document_by_filename."""
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_chunks_when_count_is_empty(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """count.count=0 -> total_chunks=0 dans le resultat."""
+        mock_point = MagicMock()
+        mock_point.payload = {
+            "document_id": "doc-empty",
+            "doc_filename": "empty.pdf",
+            "doc_file_hash": "h",
+            "ingested_at": "2026-01-01T00:00:00+00:00",
+        }
+
+        mock_count = MagicMock()
+        mock_count.count = 0
+
+        store_with_mock_client.client.scroll = MagicMock(return_value=([mock_point], None))
+        store_with_mock_client.client.count = MagicMock(return_value=mock_count)
+
+        result = await store_with_mock_client.find_document_by_filename("empty.pdf")
+
+        assert result is not None
+        assert result["total_chunks"] == 0
+
+
+class TestScrollAllPoints:
+    """Tests pour _scroll_all_points (terminaison sur next_offset=None)."""
+
+    @pytest.mark.asyncio
+    async def test_scroll_terminates_when_next_offset_none(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """Le scroll s'arrete quand next_offset est None."""
+        point = MagicMock()
+        point.payload = {"document_id": "doc-1"}
+
+        store_with_mock_client.client.scroll = MagicMock(return_value=([point], None))
+
+        result = await store_with_mock_client._scroll_all_points(payload_fields=["document_id"])
+
+        assert len(result) == 1
+        assert store_with_mock_client.client.scroll.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_scroll_continues_until_offset_exhausted(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """Le scroll continue tant que next_offset est non-None."""
+        p1 = MagicMock()
+        p1.payload = {"document_id": "doc-1"}
+        p2 = MagicMock()
+        p2.payload = {"document_id": "doc-2"}
+
+        store_with_mock_client.client.scroll = MagicMock(
+            side_effect=[([p1], "offset-2"), ([p2], None)]
+        )
+
+        result = await store_with_mock_client._scroll_all_points(payload_fields=["document_id"])
+
+        assert len(result) == 2
+        assert store_with_mock_client.client.scroll.call_count == 2
+
+
+class TestGetStats:
+    """Tests pour get_stats: stats de collection."""
+
+    @pytest.mark.asyncio
+    async def test_returns_collection_stats(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """get_stats() retourne points_count, indexed_vectors_count, status."""
+        info = MagicMock()
+        info.points_count = 100
+        info.indexed_vectors_count = 95
+        info.status = "green"
+
+        store_with_mock_client.client.get_collection = MagicMock(return_value=info)
+
+        stats = await store_with_mock_client.get_stats()
+
+        assert stats["points_count"] == 100
+        assert stats["indexed_vectors_count"] == 95
+        assert "green" in stats["status"]
+
+
+class TestDeleteAndGetChunks:
+    """Tests pour delete_document et get_document_chunks."""
+
+    @pytest.mark.asyncio
+    async def test_delete_document_returns_one_on_success(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """delete_document() retourne 1 quand le client retourne un status valide."""
+        result = MagicMock()
+        result.status = "completed"
+        store_with_mock_client.client.delete = MagicMock(return_value=result)
+
+        count = await store_with_mock_client.delete_document("doc-1")
+
+        assert count == 1
+
+    @pytest.mark.asyncio
+    async def test_get_document_chunks_returns_payloads(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """get_document_chunks() retourne les payloads non vides."""
+        p1 = MagicMock()
+        p1.payload = {"chunk_id": "c1"}
+        p2 = MagicMock()
+        p2.payload = None  # filtré
+
+        store_with_mock_client.client.scroll = MagicMock(return_value=([p1, p2], None))
+
+        chunks = await store_with_mock_client.get_document_chunks("doc-1")
+
+        assert len(chunks) == 1
+        assert chunks[0]["chunk_id"] == "c1"
+
+
+class TestListDocumentsGrouping:
+    """Tests pour list_documents et _group_documents_from_points."""
+
+    @pytest.mark.asyncio
+    async def test_list_documents_groups_chunks_by_document_id(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """list_documents() agrege les chunks par document_id."""
+        p1 = MagicMock()
+        p1.payload = {
+            "document_id": "doc-a",
+            "doc_filename": "a.pdf",
+            "doc_total_pages": 5,
+        }
+        p2 = MagicMock()
+        p2.payload = {
+            "document_id": "doc-a",
+            "doc_filename": "a.pdf",
+        }
+        p3 = MagicMock()
+        p3.payload = None  # ignore
+
+        store_with_mock_client.client.scroll = MagicMock(return_value=([p1, p2, p3], None))
+
+        docs = await store_with_mock_client.list_documents()
+
+        assert len(docs) == 1
+        assert docs[0]["document_id"] == "doc-a"
+        assert docs[0]["total_chunks"] == 2
+
+    def test_group_documents_skips_points_without_document_id(self) -> None:
+        """_group_documents_from_points ignore les points sans document_id."""
+        point = MagicMock()
+        point.payload = {"doc_filename": "orphan.pdf"}
+
+        result = QdrantVectorStore._group_documents_from_points([point])
+
+        assert result == []
+
+
+class TestStoreChunksWithMockClient:
+    """Tests pour store_chunks et store_unified_chunks (smoke test pipeline)."""
+
+    @pytest.mark.asyncio
+    async def test_store_chunks_returns_stats(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """store_chunks() retourne stored_chunks, skipped_chunks, document_id."""
+        from datetime import UTC, datetime
+
+        from src.models.chunk import ChunkMetadata, DocumentChunk
+        from src.models.document import DocumentMetadata
+        from src.services.embedding.sparse_embedder import SparseEmbeddingData
+
+        chunk = DocumentChunk(
+            content="hello",
+            metadata=ChunkMetadata(chunk_id="c1", document_id="d1"),
+            embedding=[0.1] * 1024,
+            sparse_embedding=SparseEmbeddingData(indices=[1], values=[0.5]),
+        )
+        doc_meta = DocumentMetadata(
+            document_id="d1",
+            file_hash="h",
+            filename="f.pdf",
+            file_size_bytes=10,
+            ingested_at=datetime(2026, 5, 1, tzinfo=UTC),
+        )
+        store_with_mock_client.client.upsert = MagicMock(return_value=MagicMock(status="ok"))
+
+        stats = await store_with_mock_client.store_chunks([chunk], doc_meta)
+
+        assert stats["stored_chunks"] == 1
+        assert stats["skipped_chunks"] == 0
+        assert stats["document_id"] == "d1"
+
+    @pytest.mark.asyncio
+    async def test_store_unified_chunks_returns_stats(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """store_unified_chunks() retourne les stats pour un doc Excel/Word."""
+        from datetime import UTC, datetime
+
+        from src.models.chunk import ChunkMetadata, DocumentChunk
+        from src.models.unified import DocumentType, UnifiedMetadata
+        from src.services.embedding.sparse_embedder import SparseEmbeddingData
+
+        chunk = DocumentChunk(
+            content="hello",
+            metadata=ChunkMetadata(chunk_id="c1", document_id="d1"),
+            embedding=[0.1] * 1024,
+            sparse_embedding=SparseEmbeddingData(indices=[1], values=[0.5]),
+        )
+        unified = UnifiedMetadata(
+            document_id="d1",
+            filename="data.xlsx",
+            file_path="/tmp/data.xlsx",
+            document_type=DocumentType.EXCEL,
+            original_format=".xlsx",
+            file_hash="h",
+            indexed_at=datetime(2026, 5, 1, tzinfo=UTC),
+        )
+        store_with_mock_client.client.upsert = MagicMock(return_value=MagicMock(status="ok"))
+
+        stats = await store_with_mock_client.store_unified_chunks([chunk], unified)
+
+        assert stats["stored_chunks"] == 1
+        assert stats["document_id"] == "d1"

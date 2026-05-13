@@ -130,3 +130,195 @@ class TestDocumentRouterExtensions:
         assert ".xls" in exts
         assert ".docx" in exts
         assert len(exts) == 4
+
+
+class TestDocumentRouterInitialize:
+    """Tests pour initialize()."""
+
+    @pytest.mark.asyncio
+    async def test_initialize_creates_excel_and_word_extractors(self) -> None:
+        """initialize() instancie ExcelExtractor et WordExtractor."""
+        router = DocumentRouter()
+
+        await router.initialize()
+
+        assert router._initialized is True
+        assert DocumentType.EXCEL in router._extractors
+        assert DocumentType.WORD in router._extractors
+
+    @pytest.mark.asyncio
+    async def test_initialize_idempotent(self) -> None:
+        """Un deuxieme appel a initialize() ne reinstancie pas les extracteurs."""
+        router = DocumentRouter()
+
+        await router.initialize()
+        first_excel = router._extractors[DocumentType.EXCEL]
+
+        await router.initialize()
+
+        assert router._extractors[DocumentType.EXCEL] is first_excel
+
+
+class TestDocumentRouterExtractDispatch:
+    """Tests pour extract() (FileNotFoundError + dispatch par type)."""
+
+    @pytest.mark.asyncio
+    async def test_extract_raises_file_not_found(self, tmp_path: Path) -> None:
+        """extract() leve FileNotFoundError sur un chemin inexistant."""
+        router = DocumentRouter()
+        missing = tmp_path / "missing.pdf"
+
+        with pytest.raises(FileNotFoundError):
+            await router.extract(missing)
+
+    @pytest.mark.asyncio
+    async def test_extract_routes_pdf_to_extract_pdf(self, tmp_path: Path) -> None:
+        """extract() delegue les PDFs a _extract_pdf."""
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"%PDF-1.4 stub")
+
+        router = DocumentRouter()
+        sentinel = MagicMock()
+
+        with patch.object(router, "_extract_pdf", AsyncMock(return_value=sentinel)) as mock_pdf:
+            result = await router.extract(pdf)
+
+        mock_pdf.assert_awaited_once()
+        assert result is sentinel
+
+    @pytest.mark.asyncio
+    async def test_extract_routes_xlsx_to_extract_excel(self, tmp_path: Path) -> None:
+        """extract() delegue les Excel a _extract_excel."""
+        xlsx = tmp_path / "data.xlsx"
+        xlsx.write_bytes(b"PK\x03\x04 stub")
+
+        router = DocumentRouter()
+        sentinel = MagicMock()
+
+        with patch.object(router, "_extract_excel", AsyncMock(return_value=sentinel)) as mock_excel:
+            result = await router.extract(xlsx)
+
+        mock_excel.assert_awaited_once()
+        assert result is sentinel
+
+    @pytest.mark.asyncio
+    async def test_extract_routes_docx_to_extract_word(self, tmp_path: Path) -> None:
+        """extract() delegue les Word a _extract_word."""
+        docx = tmp_path / "report.docx"
+        docx.write_bytes(b"PK\x03\x04 stub")
+
+        router = DocumentRouter()
+        sentinel = MagicMock()
+
+        with patch.object(router, "_extract_word", AsyncMock(return_value=sentinel)) as mock_word:
+            result = await router.extract(docx)
+
+        mock_word.assert_awaited_once()
+        assert result is sentinel
+
+
+class TestDocumentRouterExtractPDF:
+    """Tests pour _extract_pdf (mock DocumentPipelineOrchestrator import local)."""
+
+    @pytest.mark.asyncio
+    async def test_extract_pdf_returns_unified_document(self) -> None:
+        """_extract_pdf() retourne un UnifiedDocument avec metadata renseignees."""
+        mock_result = MagicMock()
+        mock_result.total_pages = 7
+        mock_result.has_tables = True
+        mock_result.has_images = False
+        mock_result.ocr_applied = True
+        mock_result.get_all_content_markdown.return_value = "markdown body"
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.initialize = AsyncMock()
+        mock_orchestrator.process_document = AsyncMock(return_value=mock_result)
+
+        router = DocumentRouter()
+        path = MagicMock(spec=Path)
+        path.name = "doc.pdf"
+        path.absolute.return_value = Path("/data/docs/doc.pdf")
+
+        with patch(
+            "src.services.pipeline.orchestrator.DocumentPipelineOrchestrator",
+            return_value=mock_orchestrator,
+        ):
+            result = await router._extract_pdf(path)
+
+        assert result.metadata.document_type == DocumentType.PDF
+        assert result.metadata.page_count == 7
+        assert result.metadata.has_tables is True
+        assert result.metadata.has_ocr_content is True
+        assert result.content_markdown == "markdown body"
+
+    @pytest.mark.asyncio
+    async def test_extract_pdf_falls_back_to_content_attr(self) -> None:
+        """_extract_pdf() utilise result.content quand get_all_content_markdown manque."""
+        mock_result = MagicMock(spec=["content"])
+        mock_result.content = "raw content"
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.initialize = AsyncMock()
+        mock_orchestrator.process_document = AsyncMock(return_value=mock_result)
+
+        router = DocumentRouter()
+        path = MagicMock(spec=Path)
+        path.name = "doc.pdf"
+        path.absolute.return_value = Path("/data/docs/doc.pdf")
+
+        with patch(
+            "src.services.pipeline.orchestrator.DocumentPipelineOrchestrator",
+            return_value=mock_orchestrator,
+        ):
+            result = await router._extract_pdf(path)
+
+        assert result.content_markdown == "raw content"
+        assert result.metadata.has_ocr_content is False
+
+
+class TestDocumentRouterWordTablesEdgeCase:
+    """Tests pour les branches edge de _word_tables (extraction headers depuis rows[0])."""
+
+    @pytest.mark.asyncio
+    async def test_word_tables_extracts_headers_from_first_row_when_missing(self) -> None:
+        """_word_tables() construit les headers depuis la 1re ligne si absents."""
+        from src.models.unified import DocumentType
+
+        cell = MagicMock()
+        cell.text = "Header1"
+        cell2 = MagicMock()
+        cell2.text = "Header2"
+        cell3 = MagicMock()
+        cell3.text = "data1"
+        cell4 = MagicMock()
+        cell4.text = "data2"
+
+        table = MagicMock()
+        table.headers = []
+        table.rows = [[cell, cell2], [cell3, cell4]]
+
+        word_doc = MagicMock()
+        word_doc.filename = "doc.docx"
+        word_doc.file_path = "/data/docs/doc.docx"
+        word_doc.tables = [table]
+        word_doc.images = []
+        word_doc.word_count = 10
+        word_doc.metadata = {}
+        word_doc.to_markdown.return_value = "content"
+
+        mock_extractor = AsyncMock()
+        mock_extractor.extract = AsyncMock(return_value=word_doc)
+
+        router = DocumentRouter()
+        router._initialized = True
+        router._extractors[DocumentType.WORD] = mock_extractor
+
+        with patch(
+            "src.services.document.router.compute_file_hash",
+            return_value="hash",
+        ):
+            path = MagicMock(spec=Path)
+            path.name = "doc.docx"
+            result = await router._extract_word(path)
+
+        assert result.metadata.has_tables is True
