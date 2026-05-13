@@ -478,7 +478,3 @@ class MCPServer:
             Resultat formate en string JSON ou texte.
         """
         return json.dumps(result, indent=2, ensure_ascii=False, default=str)
-
-
-# Instance globale du serveur
-mcp_server = MCPServer()

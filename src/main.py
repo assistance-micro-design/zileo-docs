@@ -26,7 +26,7 @@ from src.api.routes import documents, health, search
 from src.core.config import settings
 from src.core.exceptions import MCPZileoError
 from src.core.logging import setup_logging
-from src.mcp.server import mcp_server
+from src.mcp.server import MCPServer
 
 
 if TYPE_CHECKING:
@@ -36,13 +36,13 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Gestion du cycle de vie de l'application.
 
     Initialise les services au demarrage et les nettoie a l'arret.
 
     Args:
-        app: Instance FastAPI.
+        app: Instance FastAPI (l'instance MCPServer est attachee a app.state).
 
     Yields:
         None pendant l'execution de l'application.
@@ -61,12 +61,14 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         msg = "API_KEY non configuree en mode production: les endpoints proteges sont ouverts"
         raise RuntimeError(msg)
 
-    # Initialiser le serveur MCP
+    # Instancier et initialiser le serveur MCP, l'attacher a app.state
+    mcp = MCPServer()
     try:
-        await mcp_server.initialize()
+        await mcp.initialize()
         logger.info("MCP Server initialized successfully")
     except Exception as e:
         logger.warning("MCP Server initialization failed: %s", e)
+    app.state.mcp_server = mcp
 
     yield
 
@@ -147,7 +149,8 @@ def _register_routes(app: FastAPI, limiter: Limiter) -> None:
                     "error": {"code": -32600, "message": "Body too large"},
                 }
             body = await request.json()
-            return await mcp_server.handle_request(body)
+            mcp: MCPServer = request.app.state.mcp_server
+            return await mcp.handle_request(body)
         except Exception as e:
             logger.exception("MCP request error: %s", e)
             return {
