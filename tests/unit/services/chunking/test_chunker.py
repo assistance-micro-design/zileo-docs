@@ -346,7 +346,13 @@ class TestPreserveTables:
 
 Texte apres"""
 
-        regions = chunker._identify_protected_regions(content)
+        from src.services.chunking.parsing import identify_protected_regions
+
+        regions = identify_protected_regions(
+            content,
+            preserve_tables=chunker.preserve_tables,
+            preserve_code=chunker.preserve_code,
+        )
 
         table_regions = [r for r in regions if r[2] == "table"]
         assert len(table_regions) == 1
@@ -461,7 +467,13 @@ def test():
 
 Texte apres"""
 
-        regions = chunker._identify_protected_regions(content)
+        from src.services.chunking.parsing import identify_protected_regions
+
+        regions = identify_protected_regions(
+            content,
+            preserve_tables=chunker.preserve_tables,
+            preserve_code=chunker.preserve_code,
+        )
 
         code_regions = [r for r in regions if r[2] == "code"]
         assert len(code_regions) == 1
@@ -479,7 +491,7 @@ Texte apres"""
 class TestSectionHierarchy:
     """Tests pour la detection de la hierarchie des sections."""
 
-    def test_parse_sections_simple(self, chunker: SmartChunker) -> None:
+    def test_parse_sections_simple(self, chunker: SmartChunker) -> None:  # noqa: ARG002
         """Test parsing des sections simples."""
         content = """# Titre 1
 
@@ -493,7 +505,9 @@ Plus de contenu.
 
 Encore du contenu."""
 
-        sections = chunker._parse_sections(content)
+        from src.services.chunking.parsing import parse_sections
+
+        sections = parse_sections(content)
 
         assert len(sections) == 3
 
@@ -509,7 +523,7 @@ Encore du contenu."""
         assert sections[2]["title"] == "Titre 3"
         assert sections[2]["hierarchy"] == ["Titre 1", "Titre 2", "Titre 3"]
 
-    def test_parse_sections_hierarchy_reset(self, chunker: SmartChunker) -> None:
+    def test_parse_sections_hierarchy_reset(self, chunker: SmartChunker) -> None:  # noqa: ARG002
         """Test que la hierarchie se reinitialise correctement."""
         content = """# Chapitre 1
 
@@ -523,7 +537,9 @@ Encore du contenu."""
 
 ## Section 2.1"""
 
-        sections = chunker._parse_sections(content)
+        from src.services.chunking.parsing import parse_sections
+
+        sections = parse_sections(content)
 
         # Verifier la hierarchie du Chapitre 2
         chapitre2 = next(s for s in sections if s["title"] == "Chapitre 2")
@@ -564,7 +580,9 @@ Encore du contenu."""
 ### Sous-section
 Contenu ici"""
 
-        sections = chunker._parse_sections(content)
+        from src.services.chunking.parsing import parse_sections
+
+        sections = parse_sections(content)
 
         # Position apres "### Sous-section"
         pos = content.find("Contenu ici")
@@ -779,7 +797,7 @@ class TestMergeNativeAndOCRContent:
         # Le contenu OCR de la page 3 DOIT etre present (pas de natif)
         assert "Page OCR Seul" in all_content or "OCR pour page" in all_content
 
-    def test_merge_content_order(self, chunker: SmartChunker) -> None:
+    def test_merge_content_order(self, chunker: SmartChunker) -> None:  # noqa: ARG002
         """Test de l'ordre de fusion des pages."""
         native = {
             0: ExtractedContent(
@@ -801,7 +819,9 @@ class TestMergeNativeAndOCRContent:
             ),
         }
 
-        merged, _page_mapping = chunker._merge_content(native, ocr, total_pages=3)
+        from src.services.chunking.parsing import merge_content
+
+        merged, _page_mapping = merge_content(native, ocr, total_pages=3)
 
         # Verifier l'ordre
         pos_page1 = merged.find("Contenu page 1")
@@ -810,7 +830,7 @@ class TestMergeNativeAndOCRContent:
 
         assert pos_page1 < pos_page2 < pos_page3
 
-    def test_merge_content_page_markers(self, chunker: SmartChunker) -> None:
+    def test_merge_content_page_markers(self, chunker: SmartChunker) -> None:  # noqa: ARG002
         """Test des marqueurs de page dans le contenu fusionne."""
         native = {
             0: ExtractedContent(
@@ -820,7 +840,9 @@ class TestMergeNativeAndOCRContent:
             ),
         }
 
-        merged, _ = chunker._merge_content(native, {}, total_pages=2)
+        from src.services.chunking.parsing import merge_content
+
+        merged, _ = merge_content(native, {}, total_pages=2)
 
         # Verifier la presence des marqueurs de page
         assert "<!-- Page 1 -->" in merged
@@ -945,7 +967,7 @@ class TestPageMapping:
             for page in chunk.metadata.page_numbers:
                 assert 1 <= page <= document_metadata.total_pages
 
-    def test_get_pages_for_chunk(self, chunker: SmartChunker) -> None:
+    def test_get_pages_for_chunk(self, chunker: SmartChunker) -> None:  # noqa: ARG002
         """Test de la methode _get_pages_for_chunk."""
         full_content = """<!-- Page 1 -->
 Contenu page 1.
@@ -964,7 +986,9 @@ Contenu page 3."""
         }
 
         # Chercher les pages pour "Contenu page 2"
-        pages = chunker._get_pages_for_chunk("Contenu page 2", full_content, page_mapping)
+        from src.services.chunking.page_mapping import get_pages_for_chunk
+
+        pages = get_pages_for_chunk("Contenu page 2", full_content, page_mapping)
 
         # Should return page 2 (1-indexed)
         assert 2 in pages
@@ -997,29 +1021,35 @@ Contenu page 3."""
 class TestHelperMethods:
     """Tests pour les methodes helper du chunker."""
 
-    def test_has_table(self, chunker: SmartChunker) -> None:
+    def test_has_table(self, chunker: SmartChunker) -> None:  # noqa: ARG002
         """Test detection des tableaux."""
+        from src.services.chunking.content_detection import has_table
+
         with_table = "| A | B |\n|---|---|\n| 1 | 2 |"
         without_table = "Texte simple sans tableau."
 
-        assert chunker._has_table(with_table) is True
-        assert chunker._has_table(without_table) is False
+        assert has_table(with_table) is True
+        assert has_table(without_table) is False
 
-    def test_has_image(self, chunker: SmartChunker) -> None:
+    def test_has_image(self, chunker: SmartChunker) -> None:  # noqa: ARG002
         """Test detection des images."""
+        from src.services.chunking.content_detection import has_image
+
         with_image = "Texte avec ![image](path.png) intègre."
         without_image = "Texte simple sans image."
 
-        assert chunker._has_image(with_image) is True
-        assert chunker._has_image(without_image) is False
+        assert has_image(with_image) is True
+        assert has_image(without_image) is False
 
-    def test_has_equation(self, chunker: SmartChunker) -> None:
+    def test_has_equation(self, chunker: SmartChunker) -> None:  # noqa: ARG002
         """Test detection des equations."""
+        from src.services.chunking.content_detection import has_equation
+
         with_equation = "La formule $E = mc^2$ est celebre."
         without_equation = "Texte simple sans equation."
 
-        assert chunker._has_equation(with_equation) is True
-        assert chunker._has_equation(without_equation) is False
+        assert has_equation(with_equation) is True
+        assert has_equation(without_equation) is False
 
     def test_should_save_chunk(self, chunker: SmartChunker) -> None:
         """Test de la decision de sauvegarde d'un chunk."""
@@ -1188,20 +1218,32 @@ class TestChunkerConfiguration:
 
     def test_preserve_tables_disabled(self) -> None:
         """Test avec preservation des tableaux desactivee."""
+        from src.services.chunking.parsing import identify_protected_regions
+
         chunker = SmartChunker(preserve_tables=False)
 
         content = "| A | B |\n|---|---|\n| 1 | 2 |"
-        regions = chunker._identify_protected_regions(content)
+        regions = identify_protected_regions(
+            content,
+            preserve_tables=chunker.preserve_tables,
+            preserve_code=chunker.preserve_code,
+        )
 
         table_regions = [r for r in regions if r[2] == "table"]
         assert len(table_regions) == 0
 
     def test_preserve_code_disabled(self) -> None:
         """Test avec preservation du code desactivee."""
+        from src.services.chunking.parsing import identify_protected_regions
+
         chunker = SmartChunker(preserve_code=False)
 
         content = "```python\ncode\n```"
-        regions = chunker._identify_protected_regions(content)
+        regions = identify_protected_regions(
+            content,
+            preserve_tables=chunker.preserve_tables,
+            preserve_code=chunker.preserve_code,
+        )
 
         code_regions = [r for r in regions if r[2] == "code"]
         assert len(code_regions) == 0
@@ -1213,14 +1255,18 @@ class TestChunkerConfiguration:
 class TestDisplayPageConversion:
     """Tests pour la centralisation de la conversion page 0-indexed -> 1-indexed."""
 
-    def test_to_display_page_zero(self, chunker: SmartChunker) -> None:
+    def test_to_display_page_zero(self, chunker: SmartChunker) -> None:  # noqa: ARG002
         """Page 0 interne -> page 1 affichee."""
-        assert chunker._to_display_page(0) == 1
+        from src.services.chunking.page_mapping import to_display_page
 
-    def test_to_display_page_positive(self, chunker: SmartChunker) -> None:
+        assert to_display_page(0) == 1
+
+    def test_to_display_page_positive(self, chunker: SmartChunker) -> None:  # noqa: ARG002
         """Page N interne -> page N+1 affichee."""
-        assert chunker._to_display_page(4) == 5
-        assert chunker._to_display_page(99) == 100
+        from src.services.chunking.page_mapping import to_display_page
+
+        assert to_display_page(4) == 5
+        assert to_display_page(99) == 100
 
 
 # --- Tests: Propagation des pages dans le chunking ---
@@ -1325,7 +1371,7 @@ class TestPagePropagationThroughChunking:
         assert 1 in all_pages
         assert 2 in all_pages
 
-    def test_merge_content_ocr_priority(self, chunker: SmartChunker) -> None:
+    def test_merge_content_ocr_priority(self, chunker: SmartChunker) -> None:  # noqa: ARG002
         """_merge_content donne priorite a l'OCR quand les 2 existent."""
         native = {
             0: ExtractedContent(
@@ -1343,12 +1389,14 @@ class TestPagePropagationThroughChunking:
             ),
         }
 
-        merged, _ = chunker._merge_content(native, ocr, total_pages=1)
+        from src.services.chunking.parsing import merge_content
+
+        merged, _ = merge_content(native, ocr, total_pages=1)
 
         assert "Contenu OCR" in merged
         assert "Contenu natif" not in merged
 
-    def test_merge_content_native_fallback(self, chunker: SmartChunker) -> None:
+    def test_merge_content_native_fallback(self, chunker: SmartChunker) -> None:  # noqa: ARG002
         """_merge_content utilise le natif quand pas d'OCR."""
         native = {
             0: ExtractedContent(
@@ -1358,6 +1406,8 @@ class TestPagePropagationThroughChunking:
             ),
         }
 
-        merged, _ = chunker._merge_content(native, {}, total_pages=1)
+        from src.services.chunking.parsing import merge_content
+
+        merged, _ = merge_content(native, {}, total_pages=1)
 
         assert "Contenu natif seul" in merged

@@ -19,14 +19,18 @@ import tiktoken
 
 from src.core.config import settings
 from src.models.chunk import ChunkMetadata, DocumentChunk
+from src.services.chunking.content_detection import has_equation, has_image, has_table
+from src.services.chunking.page_mapping import get_pages_at_position, get_pages_for_chunk
+from src.services.chunking.parsing import (
+    identify_protected_regions,
+    merge_content,
+    parse_sections,
+)
 
 
 if TYPE_CHECKING:
     from src.models.document import DocumentMetadata
     from src.models.extraction import ExtractedContent, OCRResult
-
-# Offset pour convertir les pages 0-indexed (interne) en 1-indexed (affichage/stockage)
-_PAGE_INDEX_OFFSET = 1
 
 
 class SmartChunker:
@@ -53,11 +57,7 @@ class SmartChunker:
         ... )
     """
 
-    # Patterns pour detection des regions protegees
-    TABLE_PATTERN = re.compile(r"\|.+\|\n\|[-:| ]+\|\n(?:\|.+\|\n?)+")
-    CODE_PATTERN = re.compile(r"```[\s\S]*?```")
-    EQUATION_BLOCK_PATTERN = re.compile(r"\$\$[\s\S]*?\$\$")
-    HEADER_PATTERN = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
+    # Pattern utilise dans le chunking recursif pour detecter les marqueurs
     PAGE_MARKER_PATTERN = re.compile(r"^<!-- Page \d+ -->$")
 
     def __init__(
@@ -118,15 +118,19 @@ class SmartChunker:
             ... )
         """
         # 1. Fusionner contenus dans l'ordre des pages
-        merged_content, page_mapping = self._merge_content(
+        merged_content, page_mapping = merge_content(
             native_content, ocr_content, metadata.total_pages
         )
 
         # 2. Identifier regions protegees (tableaux, code, equations)
-        protected_regions = self._identify_protected_regions(merged_content)
+        protected_regions = identify_protected_regions(
+            merged_content,
+            preserve_tables=self.preserve_tables,
+            preserve_code=self.preserve_code,
+        )
 
         # 3. Parser structure (sections et hierarchie)
-        sections = self._parse_sections(merged_content)
+        sections = parse_sections(merged_content)
 
         # 4. Chunking recursif semantique (avec propagation des pages)
         raw_chunks = self._recursive_chunk(
@@ -147,123 +151,6 @@ class SmartChunker:
             chunk.metadata.total_chunks = total_chunks
 
         return chunks
-
-    def _merge_content(
-        self,
-        native: dict[int, ExtractedContent],
-        ocr: dict[int, OCRResult],
-        total_pages: int,
-    ) -> tuple[str, dict[int, tuple[int, int, int]]]:
-        """Fusionne les contenus natif et OCR dans l'ordre des pages.
-
-        Priorite: contenu OCR > contenu natif (l'OCR traite texte + elements complexes).
-
-        Args:
-            native: Contenu natif indexe par page (0-indexed).
-            ocr: Contenu OCR indexe par page (0-indexed).
-            total_pages: Nombre total de pages du document.
-
-        Returns:
-            Tuple contenant:
-            - Le contenu fusionne en une seule chaine.
-            - Un mapping page_num -> (start_pos, end_pos, page_num).
-        """
-        parts: list[str] = []
-        page_mapping: dict[int, tuple[int, int, int]] = {}
-        current_pos = 0
-
-        for page_num in range(total_pages):
-            # Marqueur de page pour tracabilite
-            page_marker = f"\n<!-- Page {self._to_display_page(page_num)} -->\n"
-            parts.append(page_marker)
-            current_pos += len(page_marker)
-
-            # Le contenu OCR a la priorite sur le natif
-            content = ""
-            if page_num in ocr and ocr[page_num].markdown_content:
-                content = ocr[page_num].markdown_content
-            elif page_num in native and native[page_num].markdown_content:
-                content = native[page_num].markdown_content
-
-            if content:
-                start_pos = current_pos
-                parts.append(content)
-                parts.append("\n\n")
-                current_pos += len(content) + 2
-                end_pos = current_pos
-
-                # Mapping page_num -> (start, end, page) pour tracabilite
-                page_mapping[page_num] = (start_pos, end_pos, page_num)
-
-        return "".join(parts), page_mapping
-
-    def _identify_protected_regions(
-        self,
-        content: str,
-    ) -> list[tuple[int, int, str]]:
-        """Identifie les regions a ne pas couper (tableaux, code, equations).
-
-        Args:
-            content: Contenu textuel complet.
-
-        Returns:
-            Liste de tuples (start, end, type) pour chaque region protegee,
-            triee par position de debut.
-        """
-        regions: list[tuple[int, int, str]] = []
-
-        # Tableaux Markdown
-        if self.preserve_tables:
-            for match in self.TABLE_PATTERN.finditer(content):
-                regions.append((match.start(), match.end(), "table"))
-
-        # Blocs de code
-        if self.preserve_code:
-            for match in self.CODE_PATTERN.finditer(content):
-                regions.append((match.start(), match.end(), "code"))
-
-        # Equations en bloc ($$...$$)
-        for match in self.EQUATION_BLOCK_PATTERN.finditer(content):
-            regions.append((match.start(), match.end(), "equation"))
-
-        return sorted(regions, key=lambda x: x[0])
-
-    def _parse_sections(self, content: str) -> list[dict[str, object]]:
-        """Parse la hierarchie des sections depuis les headers Markdown.
-
-        Args:
-            content: Contenu textuel complet.
-
-        Returns:
-            Liste de dictionnaires avec les informations de section:
-            - level: Niveau du header (1-6)
-            - title: Titre de la section
-            - hierarchy: Liste des titres parents
-            - position: Position dans le texte
-        """
-        sections: list[dict[str, object]] = []
-        current_hierarchy: list[str] = []
-
-        for match in self.HEADER_PATTERN.finditer(content):
-            level = len(match.group(1))
-            title = match.group(2).strip()
-
-            # Ajuster la hierarchie selon le niveau
-            # On retire tous les elements de niveau >= au niveau actuel
-            while len(current_hierarchy) >= level:
-                current_hierarchy.pop()
-            current_hierarchy.append(title)
-
-            sections.append(
-                {
-                    "level": level,
-                    "title": title,
-                    "hierarchy": current_hierarchy.copy(),
-                    "position": match.start(),
-                }
-            )
-
-        return sections
 
     def _recursive_chunk(
         self,
@@ -299,7 +186,7 @@ class SmartChunker:
             if not para or self.PAGE_MARKER_PATTERN.match(para):
                 continue
 
-            para_pages = self._get_pages_at_position(content.find(para), len(para), page_mapping)
+            para_pages = get_pages_at_position(content.find(para), len(para), page_mapping)
             chunk, pages, section = self._dispatch_paragraph(
                 para,
                 chunks,
@@ -395,7 +282,7 @@ class SmartChunker:
             pages = (
                 sorted(propagated_pages)
                 if propagated_pages
-                else self._get_pages_for_chunk(content, merged_content, page_mapping)
+                else get_pages_for_chunk(content, merged_content, page_mapping)
             )
             preceding, following = self._extract_chunk_context(content, merged_content)
             chunk_metadata = self._build_chunk_metadata(
@@ -462,9 +349,9 @@ class SmartChunker:
             section_hierarchy=hierarchy,
             chunk_index=index,
             content_type=content_type,
-            has_table=self._has_table(content),
-            has_image=self._has_image(content),
-            has_equation=self._has_equation(content),
+            has_table=has_table(content),
+            has_image=has_image(content),
+            has_equation=has_equation(content),
             token_count=self._count_tokens(content),
             char_count=len(content),
             word_count=len(content.split()),
@@ -564,101 +451,6 @@ class SmartChunker:
 
         return hierarchy
 
-    def _get_pages_at_position(
-        self,
-        pos: int,
-        length: int,
-        page_mapping: dict[int, tuple[int, int, int]] | None,
-    ) -> set[int]:
-        """Determine les pages (1-indexed) couvrant une plage de positions.
-
-        Args:
-            pos: Position de debut dans le contenu fusionne.
-            length: Longueur du texte.
-            page_mapping: Mapping page_num -> (start_pos, end_pos, page_num).
-
-        Returns:
-            Ensemble de numeros de pages (1-indexed).
-        """
-        if not page_mapping or pos == -1:
-            return set()
-
-        pages: set[int] = set()
-        end_pos = pos + length
-        for page_num, (page_start, page_end, _) in page_mapping.items():
-            if pos < page_end and end_pos > page_start:
-                pages.add(self._to_display_page(page_num))
-
-        return pages
-
-    def _get_pages_for_chunk(
-        self,
-        chunk: str,
-        full_content: str,
-        page_mapping: dict[int, tuple[int, int, int]],
-    ) -> list[int]:
-        """Fallback: determine les pages couvertes par un chunk via position.
-
-        Utilise uniquement quand les pages n'ont pas ete propagees
-        par _recursive_chunk.
-
-        Args:
-            chunk: Contenu du chunk.
-            full_content: Contenu complet.
-            page_mapping: Mapping page_num -> (start_pos, end_pos, page_num).
-
-        Returns:
-            Liste des numeros de pages (1-indexed) triee.
-        """
-        chunk_start = full_content.find(chunk)
-        if chunk_start != -1:
-            pages = self._get_pages_at_position(chunk_start, len(chunk), page_mapping)
-            if pages:
-                return sorted(pages)
-
-        # Fallback: prefixe du chunk
-        if len(chunk) > 50:
-            chunk_start = full_content.find(chunk[:200])
-            if chunk_start != -1:
-                pages = self._get_pages_at_position(chunk_start, 200, page_mapping)
-                if pages:
-                    return sorted(pages)
-
-        return [1]
-
-    def _has_table(self, content: str) -> bool:
-        """Detecte la presence d'un tableau Markdown.
-
-        Args:
-            content: Contenu a analyser.
-
-        Returns:
-            True si un tableau est detecte.
-        """
-        return bool(re.search(r"\|.+\|.*\n\|[-:| ]+\|", content))
-
-    def _has_image(self, content: str) -> bool:
-        """Detecte la presence d'une image Markdown.
-
-        Args:
-            content: Contenu a analyser.
-
-        Returns:
-            True si une image est detectee.
-        """
-        return "![" in content
-
-    def _has_equation(self, content: str) -> bool:
-        """Detecte la presence d'une equation LaTeX.
-
-        Args:
-            content: Contenu a analyser.
-
-        Returns:
-            True si une equation est detectee.
-        """
-        return "$" in content
-
     def _count_tokens(self, text: str) -> int:
         """Compte le nombre de tokens dans un texte.
 
@@ -716,15 +508,3 @@ class SmartChunker:
             Nombre de tokens.
         """
         return self._count_tokens(text)
-
-    @staticmethod
-    def _to_display_page(page_num: int) -> int:
-        """Convertit un numero de page 0-indexed en 1-indexed.
-
-        Args:
-            page_num: Numero de page interne (0-indexed).
-
-        Returns:
-            Numero de page pour affichage/stockage (1-indexed).
-        """
-        return page_num + _PAGE_INDEX_OFFSET
