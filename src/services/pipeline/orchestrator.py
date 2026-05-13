@@ -108,8 +108,8 @@ class ProcessingResult:
         )
 
 
-class PDFPipelineOrchestrator:
-    """Orchestre le pipeline complet d'extraction et indexation PDF.
+class DocumentPipelineOrchestrator:
+    """Orchestre le pipeline complet d'extraction et indexation multi-format.
 
     Coordonne les 5 phases du pipeline:
     1. Analyse du document (classification des pages)
@@ -122,24 +122,33 @@ class PDFPipelineOrchestrator:
         settings: Configuration de l'application.
 
     Example:
-        >>> orchestrator = PDFPipelineOrchestrator()
+        >>> orchestrator = DocumentPipelineOrchestrator()
         >>> await orchestrator.initialize()
         >>> result = await orchestrator.process_and_index("document.pdf")
         >>> print(f"Indexed {result.chunks_stored} chunks")
     """
 
-    def __init__(self, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        vector_store: QdrantVectorStore | None = None,
+        embedder: MistralEmbedder | None = None,
+        sparse_embedder: SparseEmbedder | None = None,
+    ) -> None:
         """Initialise l'orchestrateur.
 
         Args:
             api_key: Cle API Mistral optionnelle pour OCR et embeddings.
+            vector_store: Vector store injecte (sinon, instance lazy locale).
+            embedder: Embedder dense injecte (sinon, instance lazy locale).
+            sparse_embedder: Embedder sparse injecte (sinon, instance lazy locale).
         """
         self._api_key = api_key or settings.MISTRAL_API_KEY
         self._ocr_processor: MistralOCRProcessor | None = None
-        self._embedder: MistralEmbedder | None = None
-        self._sparse_embedder: SparseEmbedder | None = None
+        self._embedder: MistralEmbedder | None = embedder
+        self._sparse_embedder: SparseEmbedder | None = sparse_embedder
         self._chunker: SmartChunker | None = None
-        self._vector_store: QdrantVectorStore | None = None
+        self._vector_store: QdrantVectorStore | None = vector_store
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -384,7 +393,7 @@ class PDFPipelineOrchestrator:
             ProcessingResult avec tout le contenu, chunks et stats.
 
         Example:
-            >>> orchestrator = PDFPipelineOrchestrator()
+            >>> orchestrator = DocumentPipelineOrchestrator()
             >>> await orchestrator.initialize()
             >>> result = await orchestrator.process_and_index("rapport.pdf")
             >>> print(f"Chunks: {result.chunks_generated}, Stored: {result.chunks_stored}")

@@ -160,10 +160,10 @@ class DocumentRouter:
             UnifiedMetadata,
         )
         from src.services.pipeline.orchestrator import (  # noqa: PLC0415
-            PDFPipelineOrchestrator,
+            DocumentPipelineOrchestrator,
         )
 
-        orchestrator = PDFPipelineOrchestrator()
+        orchestrator = DocumentPipelineOrchestrator()
         await orchestrator.initialize()
 
         result = await orchestrator.process_document(str(path))

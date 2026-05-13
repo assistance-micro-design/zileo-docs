@@ -15,18 +15,8 @@ from fastapi import Depends
 
 from src.services.embedding.mistral_embedder import MistralEmbedder
 from src.services.embedding.sparse_embedder import SparseEmbedder
-from src.services.pipeline.orchestrator import PDFPipelineOrchestrator
+from src.services.pipeline.orchestrator import DocumentPipelineOrchestrator
 from src.services.vector.qdrant_store import QdrantVectorStore
-
-
-@lru_cache
-def get_orchestrator() -> PDFPipelineOrchestrator:
-    """Retourne une instance singleton de l'orchestrateur.
-
-    Returns:
-        PDFPipelineOrchestrator configure avec les settings par defaut.
-    """
-    return PDFPipelineOrchestrator()
 
 
 @lru_cache
@@ -59,8 +49,22 @@ def get_sparse_embedder() -> SparseEmbedder:
     return SparseEmbedder()
 
 
+@lru_cache
+def get_orchestrator() -> DocumentPipelineOrchestrator:
+    """Retourne une instance singleton de l'orchestrateur avec DI partagee.
+
+    Returns:
+        DocumentPipelineOrchestrator partageant les singletons vector_store/embedders.
+    """
+    return DocumentPipelineOrchestrator(
+        vector_store=get_vector_store(),
+        embedder=get_embedder(),
+        sparse_embedder=get_sparse_embedder(),
+    )
+
+
 # Type aliases pour injection de dependances
-OrchestratorDep = Annotated[PDFPipelineOrchestrator, Depends(get_orchestrator)]
+OrchestratorDep = Annotated[DocumentPipelineOrchestrator, Depends(get_orchestrator)]
 VectorStoreDep = Annotated[QdrantVectorStore, Depends(get_vector_store)]
 EmbedderDep = Annotated[MistralEmbedder, Depends(get_embedder)]
 SparseEmbedderDep = Annotated[SparseEmbedder, Depends(get_sparse_embedder)]

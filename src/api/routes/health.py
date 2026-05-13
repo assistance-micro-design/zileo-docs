@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from fastapi import APIRouter, Depends
@@ -109,7 +108,7 @@ async def _check_qdrant(vector_store: VectorStoreDep) -> str:
         "healthy" si connecte, "unhealthy" sinon.
     """
     try:
-        await asyncio.to_thread(vector_store.client.get_collections)
+        await vector_store.ping()
         return "healthy"
     except Exception as e:
         logger.warning("Qdrant health check failed: %s", e)

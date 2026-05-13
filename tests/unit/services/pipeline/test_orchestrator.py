@@ -1,4 +1,4 @@
-"""Tests unitaires pour PDFPipelineOrchestrator."""
+"""Tests unitaires pour DocumentPipelineOrchestrator."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pytest
 
 from src.models.document import DocumentAnalysisResult, DocumentMetadata
 from src.models.extraction import ExtractedContent, OCRResult
-from src.services.pipeline.orchestrator import PDFPipelineOrchestrator, ProcessingResult
+from src.services.pipeline.orchestrator import DocumentPipelineOrchestrator, ProcessingResult
 
 
 if TYPE_CHECKING:
@@ -84,18 +84,18 @@ class TestProcessingResult:
         assert markdown.index("Page 2") < markdown.index("Page 3")
 
 
-class TestPDFPipelineOrchestrator:
-    """Tests pour PDFPipelineOrchestrator."""
+class TestDocumentPipelineOrchestrator:
+    """Tests pour DocumentPipelineOrchestrator."""
 
     def test_initialization(self) -> None:
         """Test initialisation de l'orchestrateur."""
-        orchestrator = PDFPipelineOrchestrator(api_key="test-key")
+        orchestrator = DocumentPipelineOrchestrator(api_key="test-key")
         assert orchestrator._api_key == "test-key"
         assert orchestrator._ocr_processor is None
 
     def test_lazy_ocr_processor_initialization(self) -> None:
         """Test initialisation lazy du processeur OCR."""
-        orchestrator = PDFPipelineOrchestrator(api_key="test-key")
+        orchestrator = DocumentPipelineOrchestrator(api_key="test-key")
 
         # Premier acces initialise le processeur
         processor = orchestrator.ocr_processor
@@ -110,7 +110,7 @@ class TestPDFPipelineOrchestrator:
         """Test analyse seule sans extraction."""
         pdf_path = next(iter([sample_text_pdf]))
 
-        orchestrator = PDFPipelineOrchestrator(api_key="test-key")
+        orchestrator = DocumentPipelineOrchestrator(api_key="test-key")
         result = await orchestrator.analyze_only(pdf_path)
 
         assert isinstance(result, DocumentAnalysisResult)
@@ -123,7 +123,7 @@ class TestPDFPipelineOrchestrator:
         """Test traitement document texte simple."""
         pdf_path = next(iter([sample_text_pdf]))
 
-        orchestrator = PDFPipelineOrchestrator(api_key="test-key")
+        orchestrator = DocumentPipelineOrchestrator(api_key="test-key")
 
         # Skip OCR pour ce test (pas de cle API)
         result = await orchestrator.process_document(
@@ -143,7 +143,7 @@ class TestPDFPipelineOrchestrator:
         """Test que les timestamps sont mis a jour."""
         pdf_path = next(iter([sample_text_pdf]))
 
-        orchestrator = PDFPipelineOrchestrator(api_key="test-key")
+        orchestrator = DocumentPipelineOrchestrator(api_key="test-key")
         result = await orchestrator.process_document(
             pdf_path,
             options={"skip_ocr": True},
@@ -160,7 +160,7 @@ class TestPDFPipelineOrchestrator:
         """Test force_ocr sur toutes les pages."""
         pdf_path = next(iter([sample_text_pdf]))
 
-        orchestrator = PDFPipelineOrchestrator(api_key="test-key")
+        orchestrator = DocumentPipelineOrchestrator(api_key="test-key")
 
         # Mock le processeur OCR
         mock_ocr = AsyncMock()
@@ -192,7 +192,7 @@ class TestPipelineOrchestratorMocked:
         """Test pipeline complet avec mocks."""
         pdf_path = next(iter([sample_text_pdf]))
 
-        orchestrator = PDFPipelineOrchestrator(api_key="test-key")
+        orchestrator = DocumentPipelineOrchestrator(api_key="test-key")
 
         # Le document texte simple ne necessite pas d'OCR
         result = await orchestrator.process_document(
@@ -213,7 +213,7 @@ class TestPipelineOrchestratorMocked:
         """Test gestion erreur extraction native."""
         pdf_path = next(iter([sample_text_pdf]))
 
-        orchestrator = PDFPipelineOrchestrator(api_key="test-key")
+        orchestrator = DocumentPipelineOrchestrator(api_key="test-key")
 
         # Mock pour simuler une erreur
         with patch(
@@ -239,7 +239,7 @@ class TestPipelineOrchestratorMocked:
         """Test extraction de pages specifiques."""
         pdf_path = next(iter([sample_multipage_pdf]))
 
-        orchestrator = PDFPipelineOrchestrator(api_key="test-key")
+        orchestrator = DocumentPipelineOrchestrator(api_key="test-key")
 
         # Extraire seulement les pages 0 et 2
         results = await orchestrator.extract_pages(
@@ -260,7 +260,7 @@ class TestPipelineOrchestratorMocked:
         """Test extraction pages avec force_ocr."""
         pdf_path = next(iter([sample_text_pdf]))
 
-        orchestrator = PDFPipelineOrchestrator(api_key="test-key")
+        orchestrator = DocumentPipelineOrchestrator(api_key="test-key")
 
         # Mock le processeur OCR
         mock_result = {

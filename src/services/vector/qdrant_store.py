@@ -149,6 +149,17 @@ class QdrantVectorStore:
         )
         self._initialized = False
 
+    async def ping(self) -> None:
+        """Verifie la connexion a Qdrant (utilise pour healthchecks).
+
+        Encapsule l'acces au client interne afin que les couches superieures
+        (API, MCP) ne dependent pas de l'implementation `qdrant_client`.
+
+        Raises:
+            Exception: Si la connexion echoue (propagee depuis le client Qdrant).
+        """
+        await asyncio.to_thread(self.client.get_collections)
+
     async def initialize(self) -> None:
         """Initialise la collection si elle n'existe pas.
 

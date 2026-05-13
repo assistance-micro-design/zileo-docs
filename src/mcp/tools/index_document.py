@@ -19,7 +19,7 @@ from src.models.unified import DocumentType, FormulaData, UnifiedDocument
 from src.services.document.router import DocumentRouter
 from src.services.embedding.mistral_embedder import MistralEmbedder
 from src.services.embedding.sparse_embedder import SparseEmbedder, embed_dense_and_sparse
-from src.services.pipeline.orchestrator import PDFPipelineOrchestrator
+from src.services.pipeline.orchestrator import DocumentPipelineOrchestrator
 from src.services.vector.qdrant_store import QdrantVectorStore
 
 
@@ -94,11 +94,15 @@ class IndexDocumentTool(BaseMCPTool):
             sparse_embedder: Instance partagee du sparse embedder (injection).
         """
         super().__init__()
-        self._pdf_orchestrator = PDFPipelineOrchestrator()
-        self._router = DocumentRouter()
+        self._vector_store = vector_store or QdrantVectorStore()
         self._embedder = embedder or MistralEmbedder()
         self._sparse_embedder = sparse_embedder or SparseEmbedder()
-        self._vector_store = vector_store or QdrantVectorStore()
+        self._pdf_orchestrator = DocumentPipelineOrchestrator(
+            vector_store=self._vector_store,
+            embedder=self._embedder,
+            sparse_embedder=self._sparse_embedder,
+        )
+        self._router = DocumentRouter()
 
     async def _do_initialize(self) -> None:
         """Initialise les services (vector store, router)."""

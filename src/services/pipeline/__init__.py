@@ -9,12 +9,12 @@ d'analyse, extraction native et OCR.
 from __future__ import annotations
 
 from src.services.pipeline.orchestrator import (
-    PDFPipelineOrchestrator,
+    DocumentPipelineOrchestrator,
     ProcessingResult,
 )
 
 
 __all__ = [
-    "PDFPipelineOrchestrator",
+    "DocumentPipelineOrchestrator",
     "ProcessingResult",
 ]

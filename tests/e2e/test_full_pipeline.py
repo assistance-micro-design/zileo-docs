@@ -24,7 +24,7 @@ from src.mcp.tools.get_document import GetDocumentTool
 from src.mcp.tools.index_document import IndexDocumentTool
 from src.mcp.tools.read_document_content import ReadDocumentContentTool
 from src.mcp.tools.search import SearchDocumentsTool
-from src.services.pipeline.orchestrator import PDFPipelineOrchestrator
+from src.services.pipeline.orchestrator import DocumentPipelineOrchestrator
 
 
 if TYPE_CHECKING:
@@ -659,7 +659,7 @@ class TestPipelineIntegration:
     @pytest.mark.asyncio
     async def test_full_pipeline_mock(self, sample_text_pdf: Path) -> None:
         """Test du pipeline complet avec mocks."""
-        orchestrator = PDFPipelineOrchestrator()
+        orchestrator = DocumentPipelineOrchestrator()
 
         # Patcher les services externes
         with (
