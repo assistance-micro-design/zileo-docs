@@ -107,7 +107,7 @@ class TestMistralEmbedderInit:
 
             embedder = MistralEmbedder(api_key="test-api-key")
 
-            mock_mistral.assert_called_once_with(api_key="test-api-key")
+            mock_mistral.assert_called_once_with(api_key="test-api-key", timeout_ms=30000)
             assert embedder.dimensions == 1024
             assert embedder.model_name == "mistral-embed"
 
@@ -121,10 +121,11 @@ class TestMistralEmbedderInit:
             mock_tiktoken.get_encoding.return_value = MagicMock()
             mock_settings.MISTRAL_API_KEY = "settings-api-key"
             mock_settings.MISTRAL_EMBED_MODEL = "custom-embed-model"
+            mock_settings.MISTRAL_TIMEOUT_S = 30
 
             embedder = MistralEmbedder()
 
-            mock_mistral.assert_called_once_with(api_key="settings-api-key")
+            mock_mistral.assert_called_once_with(api_key="settings-api-key", timeout_ms=30000)
             assert embedder.model_name == "custom-embed-model"
 
     def test_init_raises_without_api_key(self) -> None:

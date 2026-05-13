@@ -19,6 +19,7 @@ from src.core.exceptions import (
     ExcelFileNotFoundError,
     ExcelSheetNotFoundError,
 )
+from src.core.file_validation import validate_decompressed_size
 from src.models.api import EditExcelParams, EditExcelResult
 from src.models.excel_edit import (
     AddChartOp,
@@ -97,6 +98,7 @@ class ExcelEditor:
         if not file_path.exists():
             raise ExcelFileNotFoundError(safe_filename)
 
+        validate_decompressed_size(file_path, settings.MAX_DECOMPRESSED_MB)
         wb = load_workbook(str(file_path))
         applied, skipped = self._apply_operations(wb, params.operations)
         file_size = self._generator.save_and_verify(wb, file_path, safe_filename)

@@ -13,6 +13,8 @@ from typing import Any
 
 from docx2python import docx2python
 
+from src.core.config import settings
+from src.core.file_validation import validate_decompressed_size
 from src.models.word import (
     ContentBlock,
     ContentType,
@@ -27,6 +29,8 @@ from src.models.word import (
 
 
 logger = logging.getLogger(__name__)
+
+_MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 
 class WordExtractor:
@@ -75,6 +79,7 @@ class WordExtractor:
 
     def _extract_docx_sync(self, path: Path) -> WordDocument:
         """Extraction synchrone d'un fichier .docx (appelé via to_thread)."""
+        validate_decompressed_size(path, settings.MAX_DECOMPRESSED_MB)
         doc = docx2python(str(path))
 
         content_blocks: list[ContentBlock] = []
@@ -275,6 +280,16 @@ class WordExtractor:
             WordImage ou None si les données sont vides.
         """
         if not data:
+            return None
+
+        max_bytes = _MAX_IMAGE_BYTES
+        if len(data) > max_bytes:
+            logger.warning(
+                "Image Word '%s' ignoree: %d octets depassent la limite %d",
+                name,
+                len(data),
+                max_bytes,
+            )
             return None
 
         # Détecter le type MIME via dict dispatch

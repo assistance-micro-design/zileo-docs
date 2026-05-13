@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     )
     MISTRAL_OCR_MODEL: str = "mistral-ocr-latest"
     MISTRAL_EMBED_MODEL: str = "mistral-embed"
+    MISTRAL_TIMEOUT_S: int = Field(
+        default=30,
+        ge=1,
+        le=600,
+        description="Timeout en secondes pour les appels Mistral (embeddings et OCR)",
+    )
 
     # === Qdrant ===
     QDRANT_HOST: str = "localhost"
@@ -105,6 +111,12 @@ class Settings(BaseSettings):
         ge=1,
         le=50,
         description="Taille max du body JSON-RPC sur /mcp (DoS protection)",
+    )
+    MAX_DECOMPRESSED_MB: int = Field(
+        default=200,
+        ge=10,
+        le=2000,
+        description="Taille max decompressee pour .xlsx/.docx (anti zip-bomb)",
     )
 
     # === Authentication ===

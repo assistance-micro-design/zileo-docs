@@ -67,7 +67,10 @@ class MistralOCRProcessor:
             api_key: Cle API Mistral. Utilise settings si non fournie.
         """
         self._api_key = api_key or settings.MISTRAL_API_KEY
-        self.client = Mistral(api_key=self._api_key)
+        self.client = Mistral(
+            api_key=self._api_key,
+            timeout_ms=settings.MISTRAL_TIMEOUT_S * 1000,
+        )
         self._max_concurrent = settings.OCR_MAX_CONCURRENT
         self._dpi = settings.OCR_DPI
         self._ocr_model = settings.MISTRAL_OCR_MODEL

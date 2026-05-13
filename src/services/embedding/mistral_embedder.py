@@ -65,7 +65,10 @@ class MistralEmbedder:
                 "Configurez-la via la variable d'environnement ou le parametre api_key."
             )
 
-        self.client = Mistral(api_key=resolved_api_key)
+        self.client = Mistral(
+            api_key=resolved_api_key,
+            timeout_ms=settings.MISTRAL_TIMEOUT_S * 1000,
+        )
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
         self._model = settings.MISTRAL_EMBED_MODEL or self.MODEL
 

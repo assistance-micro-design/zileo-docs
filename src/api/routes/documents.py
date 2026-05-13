@@ -24,8 +24,9 @@ from src.core.exceptions import (
     PDFTooManyPagesError,
     SourceFileNotFoundError,
 )
-from src.core.file_validation import validate_file_magic
+from src.core.file_validation import validate_file_magic, validate_filename_safety
 from src.models.api import DeleteResult, ProcessingStatus
+from src.services.vector.payload import extract_doc_summary
 
 
 _UPLOAD_CHUNK_BYTES = 64 * 1024
@@ -116,11 +117,16 @@ async def index_pdf(
 
 
 def _validate_upload_filename(filename: str | None) -> None:
-    """Verifie que le nom de fichier termine en .pdf."""
+    """Verifie l'extension .pdf et l'absence de path traversal."""
     if not filename or not filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Le fichier doit etre un PDF",
+        )
+    if not validate_filename_safety(filename):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nom de fichier invalide (path traversal)",
         )
 
 
@@ -201,17 +207,16 @@ async def get_document(
         if not chunks:
             raise DocumentNotFoundError(document_id)
 
-        # Extraire les metadonnees du premier chunk
-        first_chunk = chunks[0]
+        summary = extract_doc_summary(chunks[0])
 
         return {
             "document_id": document_id,
-            "filename": first_chunk.get("doc_filename"),
-            "title": first_chunk.get("doc_title"),
-            "author": first_chunk.get("doc_author"),
-            "total_pages": first_chunk.get("doc_total_pages"),
+            "filename": summary["filename"],
+            "title": summary["title"],
+            "author": summary["author"],
+            "total_pages": summary["total_pages"],
             "total_chunks": len(chunks),
-            "ingested_at": first_chunk.get("ingested_at"),
+            "ingested_at": summary["ingested_at"],
             "chunks": [
                 {
                     "chunk_id": c.get("chunk_id"),

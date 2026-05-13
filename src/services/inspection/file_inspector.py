@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from src.core.config import settings
-from src.core.file_validation import validate_filename_safety
+from src.core.file_validation import validate_decompressed_size, validate_filename_safety
 
 
 logger = logging.getLogger(__name__)
@@ -77,6 +77,7 @@ class FileInspector:
         from openpyxl import load_workbook  # noqa: PLC0415
 
         try:
+            validate_decompressed_size(file_path, settings.MAX_DECOMPRESSED_MB)
             wb_formulas = load_workbook(file_path, data_only=False)
             wb_values = load_workbook(file_path, data_only=True)
         except Exception as exc:

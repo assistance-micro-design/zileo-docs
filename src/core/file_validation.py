@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import hashlib
+import zipfile
 from pathlib import Path
 
 
@@ -45,6 +46,30 @@ def validate_file_magic(file_path: Path) -> bool:
         header = f.read(4)
 
     return any(header.startswith(magic) for magic in expected_magics)
+
+
+def validate_decompressed_size(file_path: Path, max_mb: int) -> None:
+    """Verifie qu'un archive ZIP ne depasse pas une taille decompressee max.
+
+    Protege contre les zip-bombs (.xlsx/.docx sont des ZIP).
+
+    Args:
+        file_path: Chemin vers le fichier ZIP (.xlsx, .docx).
+        max_mb: Taille decompressee max en MB.
+
+    Raises:
+        ValueError: Si la taille decompressee depasse max_mb.
+    """
+    with zipfile.ZipFile(file_path) as zf:
+        total_uncompressed = sum(info.file_size for info in zf.infolist())
+    max_bytes = max_mb * 1024 * 1024
+    if total_uncompressed <= max_bytes:
+        return
+    msg = (
+        f"Taille decompressee {total_uncompressed} octets depasse la limite "
+        f"de {max_mb} MB (anti zip-bomb)"
+    )
+    raise ValueError(msg)
 
 
 def compute_file_hash(file_path: Path) -> str:

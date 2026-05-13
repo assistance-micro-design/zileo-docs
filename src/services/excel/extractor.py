@@ -16,6 +16,8 @@ from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
+from src.core.config import settings
+from src.core.file_validation import validate_decompressed_size
 from src.models.excel import (
     CellType,
     ExcelCell,
@@ -85,6 +87,7 @@ class ExcelExtractor:
 
     def _extract_xlsx_sync(self, path: Path) -> ExcelDocument:
         """Extraction synchrone d'un fichier .xlsx (appelé via to_thread)."""
+        validate_decompressed_size(path, settings.MAX_DECOMPRESSED_MB)
         # Charger deux fois : une pour les formules, une pour les valeurs
         wb_formulas = load_workbook(path, data_only=False)
         wb_values = load_workbook(path, data_only=True)
