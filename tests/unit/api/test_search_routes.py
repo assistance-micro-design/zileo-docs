@@ -61,6 +61,7 @@ def app(mock_embedder, mock_vector_store, mock_sparse_embedder, search_results):
     """Application avec mocks."""
     app = create_app()
 
+    from src.api.auth import verify_api_key
     from src.api.dependencies import get_embedder, get_sparse_embedder, get_vector_store
 
     mock_vector_store.search = AsyncMock(return_value=search_results)
@@ -68,6 +69,7 @@ def app(mock_embedder, mock_vector_store, mock_sparse_embedder, search_results):
     app.dependency_overrides[get_embedder] = lambda: mock_embedder
     app.dependency_overrides[get_vector_store] = lambda: mock_vector_store
     app.dependency_overrides[get_sparse_embedder] = lambda: mock_sparse_embedder
+    app.dependency_overrides[verify_api_key] = lambda: None
     return app
 
 

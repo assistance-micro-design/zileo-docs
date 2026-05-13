@@ -46,10 +46,12 @@ def app(mock_orchestrator, mock_vector_store):
     """Application FastAPI avec mocks."""
     app = create_app()
 
+    from src.api.auth import verify_api_key
     from src.api.dependencies import get_orchestrator, get_vector_store
 
     app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
     app.dependency_overrides[get_vector_store] = lambda: mock_vector_store
+    app.dependency_overrides[verify_api_key] = lambda: None
     return app
 
 

@@ -13,7 +13,11 @@ from src.main import create_app
 @pytest.fixture
 def app():
     """Application FastAPI de test."""
-    return create_app()
+    from src.api.auth import verify_api_key
+
+    app = create_app()
+    app.dependency_overrides[verify_api_key] = lambda: None
+    return app
 
 
 @pytest.fixture
