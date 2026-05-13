@@ -187,8 +187,8 @@ class SearchDocumentsTool(VectorStoreMCPTool):
             raise EmptyQueryError()
 
         logger.info(
-            "Recherche: '%s' (top_k=%d, threshold=%.2f, filter_keys=%s)",
-            params.query[:50],
+            "Recherche: query_len=%d (top_k=%d, threshold=%.2f, filter_keys=%s)",
+            len(params.query),
             params.top_k,
             params.score_threshold,
             sorted(params.filters.keys()) if params.filters else [],
