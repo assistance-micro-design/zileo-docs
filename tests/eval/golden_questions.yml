@@ -1,0 +1,140 @@
+# Golden set pour evaluation RAG offline.
+#
+# Calibre sur 3 documents indexes (cf. ids ci-dessous).
+# Chaque entree definit:
+#   - id: identifiant stable de la question
+#   - query: requete utilisateur
+#   - type: precise | ambigue | hors_domaine
+#   - expected_doc: nom du document attendu (None pour hors_domaine)
+#   - expected_pages: pages ou la reponse se trouve (vide pour hors_domaine)
+#
+# Metriques cibles:
+#   - precise: recall@1 doit etre 1.0 (doc cible en position 1)
+#   - ambigue: recall@5 doit etre 1.0 (doc cible dans top 5)
+#   - hors_domaine: false_positive_rate doit etre 0.0 (aucun resultat)
+
+documents:
+  cnil:
+    filename: cnil_guide_securite_personnelle.pdf
+    document_id: c675a2cd-3937-4d4c-a1c4-6869517a79d5
+    summary: Guide CNIL securite donnees personnelles (32p, 65 chunks)
+
+  brochure:
+    filename: Brochure Triflex ProDetail.pdf
+    document_id: 4096fce0-766d-4553-a138-6e5020eccf95
+    summary: Brochure produit Triflex ProDetail etancheite (12p, 23 chunks)
+
+  metalcoat:
+    filename: Triflex Metal Coat Guide systeme.pdf
+    document_id: 1973b3fa-3a3b-43e5-9538-f20c0f296e56
+    summary: Guide systeme Triflex Metal Coat protection metal (13p, 22 chunks)
+
+questions:
+  # === CNIL precises ===
+  - id: cnil_p1
+    query: regles pour un mot de passe robuste
+    type: precise
+    expected_doc: cnil
+    expected_pages: [9, 10]
+
+  - id: cnil_p2
+    query: comment proteger les locaux contre les intrusions
+    type: precise
+    expected_doc: cnil
+    expected_pages: [26]
+
+  - id: cnil_p3
+    query: chiffrement et signature des donnees
+    type: precise
+    expected_doc: cnil
+    expected_pages: [28, 29]
+
+  # === CNIL ambigues ===
+  - id: cnil_a1
+    query: comment proteger les informations sensibles de mes clients
+    type: ambigue
+    expected_doc: cnil
+    expected_pages: [6, 7, 8, 9, 10]
+
+  - id: cnil_a2
+    query: bonnes pratiques de securite informatique
+    type: ambigue
+    expected_doc: cnil
+    expected_pages: []
+
+  # === Brochure precises ===
+  - id: brochure_p1
+    query: application Triflex ProDetail etancheite joints
+    type: precise
+    expected_doc: brochure
+    expected_pages: []
+
+  - id: brochure_p2
+    query: consommation kilogrammes par metre carre ProDetail
+    type: precise
+    expected_doc: brochure
+    expected_pages: []
+
+  # === Brochure ambigues ===
+  - id: brochure_a1
+    query: comment etancher les joints d une toiture
+    type: ambigue
+    expected_doc: brochure
+    expected_pages: []
+
+  - id: brochure_a2
+    query: produit pour reparer une fuite
+    type: ambigue
+    expected_doc: brochure
+    expected_pages: []
+
+  # === MetalCoat precises ===
+  - id: metalcoat_p1
+    query: application Metal Coat aerosol couche
+    type: precise
+    expected_doc: metalcoat
+    expected_pages: []
+
+  - id: metalcoat_p2
+    query: preparation surface metallique avant application
+    type: precise
+    expected_doc: metalcoat
+    expected_pages: []
+
+  # === MetalCoat ambigues ===
+  - id: metalcoat_a1
+    query: comment proteger une surface metallique de la corrosion
+    type: ambigue
+    expected_doc: metalcoat
+    expected_pages: []
+
+  - id: metalcoat_a2
+    query: revetement protecteur pour metal
+    type: ambigue
+    expected_doc: metalcoat
+    expected_pages: []
+
+  # === Hors-domaine (pieges) ===
+  - id: hors_1
+    query: recette des pates carbonara avec lardons
+    type: hors_domaine
+    expected_doc: null
+    expected_pages: []
+
+  - id: hors_2
+    query: quel est le prix du Bitcoin aujourd hui
+    type: hors_domaine
+    expected_doc: null
+    expected_pages: []
+
+  - id: hors_3
+    query: histoire de la revolution francaise
+    type: hors_domaine
+    expected_doc: null
+    expected_pages: []
+
+  - id: hors_4
+    query: comment cultiver des tomates au potager
+    type: hors_domaine
+    expected_doc: null
+    expected_pages: []

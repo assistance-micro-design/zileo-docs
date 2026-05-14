@@ -74,6 +74,16 @@ class SearchDocumentsTool(VectorStoreMCPTool):
                 "default": "hybrid",
                 "enum": ["hybrid", "semantic"],
             },
+            "min_cosine_relevance": {
+                "type": "number",
+                "description": (
+                    "Garde-fou de pertinence (opt-in, 0.0-1.0). Si le top-1 en similarite "
+                    "cosinus dense ne depasse pas ce seuil, retourne liste vide. Evite les "
+                    "faux positifs hors-domaine en hybrid (calibre empirique: 0.72)."
+                ),
+                "minimum": 0.0,
+                "maximum": 1.0,
+            },
             "filters": {
                 "type": "object",
                 "description": "Filtres optionnels pour affiner la recherche",
@@ -204,6 +214,21 @@ class SearchDocumentsTool(VectorStoreMCPTool):
 
         # Generer l'embedding de la requete
         query_embedding = await self._embedder.embed_query(params.query)
+
+        # Garde-fou cosinus (opt-in): coupe les queries hors-domaine
+        if params.min_cosine_relevance is not None:
+            guard = await self._vector_store.search(
+                query_embedding=query_embedding,
+                top_k=1,
+                filters=params.filters,
+                score_threshold=params.min_cosine_relevance,
+            )
+            if not guard:
+                logger.info(
+                    "Garde-fou cosinus: top-1 < %.2f, retour liste vide",
+                    params.min_cosine_relevance,
+                )
+                return {"query": params.query, "total_results": 0, "results": []}
 
         # Rechercher selon le mode
         results = await self._execute_search(params, query_embedding)

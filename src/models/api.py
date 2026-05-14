@@ -102,6 +102,19 @@ class SearchDocumentsParams(BaseModel):
             description="Mode: 'hybrid' (vecteur+full-text) ou 'semantic' (vecteur seul)",
         ),
     ]
+    min_cosine_relevance: Annotated[
+        float | None,
+        Field(
+            default=None,
+            ge=0.0,
+            le=1.0,
+            description=(
+                "Garde-fou de pertinence (opt-in): si le top-1 en similarite cosinus dense "
+                "ne depasse pas ce seuil, retourne liste vide. Utile pour eviter les faux "
+                "positifs hors-domaine en mode hybrid (calibre empirique: 0.72)."
+            ),
+        ),
+    ]
 
 
 class GetDocumentParams(BaseModel):

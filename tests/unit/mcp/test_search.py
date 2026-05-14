@@ -337,3 +337,116 @@ class TestScoreThreshold:
         """score_threshold n'a plus de default dans le schema (opt-in)."""
         props = SearchDocumentsTool.input_schema["properties"]
         assert "default" not in props["score_threshold"]
+
+
+class TestMinCosineRelevanceGuard:
+    """Tests pour le garde-fou cosinus pre-hybrid (option B du brief)."""
+
+    @pytest.mark.asyncio
+    async def test_guard_blocks_query_when_top_cosine_below_threshold(
+        self,
+        mock_vector_store: AsyncMock,
+        mock_embedder: AsyncMock,
+        mock_sparse_embedder: AsyncMock,
+    ) -> None:
+        """Si le top-1 dense ne depasse pas min_cosine_relevance, retourne liste vide."""
+        tool = SearchDocumentsTool(
+            vector_store=mock_vector_store,
+            embedder=mock_embedder,
+            sparse_embedder=mock_sparse_embedder,
+        )
+        # Le garde-fou cosinus voit []: aucun chunk au-dessus du seuil
+        mock_vector_store.search = AsyncMock(return_value=[])
+        mock_vector_store.hybrid_search = AsyncMock(return_value=[])
+        tool._initialized = True
+
+        result = await tool.execute({"query": "carbonara", "min_cosine_relevance": 0.72})
+
+        assert result["total_results"] == 0
+        assert result["results"] == []
+        # hybrid_search ne doit PAS avoir ete appele (court-circuit)
+        mock_vector_store.hybrid_search.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_guard_allows_query_when_top_cosine_above_threshold(
+        self,
+        mock_vector_store: AsyncMock,
+        mock_embedder: AsyncMock,
+        mock_sparse_embedder: AsyncMock,
+        search_results: list[dict[str, Any]],
+    ) -> None:
+        """Si le top-1 dense passe le garde-fou, la recherche hybride normale s'execute."""
+        tool = SearchDocumentsTool(
+            vector_store=mock_vector_store,
+            embedder=mock_embedder,
+            sparse_embedder=mock_sparse_embedder,
+        )
+        # Garde-fou: retourne 1 chunk (donc le seuil cosinus est passe)
+        mock_vector_store.search = AsyncMock(return_value=search_results)
+        mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
+        tool._initialized = True
+
+        await tool.execute({"query": "test", "min_cosine_relevance": 0.72})
+
+        # Le garde-fou doit avoir ete appele avec top_k=1 et score_threshold=0.72
+        guard_call = mock_vector_store.search.call_args
+        assert guard_call.kwargs["top_k"] == 1
+        assert guard_call.kwargs["score_threshold"] == 0.72
+        # Puis hybrid_search doit avoir ete appele
+        mock_vector_store.hybrid_search.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_guard_skipped_when_min_cosine_none(
+        self,
+        mock_vector_store: AsyncMock,
+        mock_embedder: AsyncMock,
+        mock_sparse_embedder: AsyncMock,
+        search_results: list[dict[str, Any]],
+    ) -> None:
+        """Sans min_cosine_relevance, le garde-fou n'est pas execute (compat)."""
+        tool = SearchDocumentsTool(
+            vector_store=mock_vector_store,
+            embedder=mock_embedder,
+            sparse_embedder=mock_sparse_embedder,
+        )
+        mock_vector_store.search = AsyncMock(return_value=search_results)
+        mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
+        tool._initialized = True
+
+        await tool.execute({"query": "test"})
+
+        # En mode hybrid sans guard: seul hybrid_search est appele
+        mock_vector_store.search.assert_not_called()
+        mock_vector_store.hybrid_search.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_guard_propagates_filters(
+        self,
+        mock_vector_store: AsyncMock,
+        mock_embedder: AsyncMock,
+        mock_sparse_embedder: AsyncMock,
+        search_results: list[dict[str, Any]],
+    ) -> None:
+        """Le garde-fou cosinus doit appliquer les memes filtres que la recherche hybrid."""
+        tool = SearchDocumentsTool(
+            vector_store=mock_vector_store,
+            embedder=mock_embedder,
+            sparse_embedder=mock_sparse_embedder,
+        )
+        mock_vector_store.search = AsyncMock(return_value=search_results)
+        mock_vector_store.hybrid_search = AsyncMock(return_value=search_results)
+        tool._initialized = True
+
+        filters = {"doc_filename": "guide.pdf"}
+        await tool.execute({"query": "test", "min_cosine_relevance": 0.72, "filters": filters})
+
+        guard_call = mock_vector_store.search.call_args
+        assert guard_call.kwargs["filters"] == filters
+
+    def test_input_schema_exposes_min_cosine_relevance(self) -> None:
+        """Le schema d'entree expose min_cosine_relevance avec bornes 0-1."""
+        props = SearchDocumentsTool.input_schema["properties"]
+        assert "min_cosine_relevance" in props
+        assert props["min_cosine_relevance"]["minimum"] == 0.0
+        assert props["min_cosine_relevance"]["maximum"] == 1.0
+        assert "description" in props["min_cosine_relevance"]
