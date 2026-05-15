@@ -4,7 +4,7 @@ Ces tests verifient le fonctionnement de bout en bout pour les documents Word:
 - Extraction via WordExtractor
 - Conversion vers UnifiedDocument
 - Indexation via index_document tool
-- Recherche via search_documents tool
+- Recherche via search_semantic tool
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import pytest
 from src.core.config import settings
 from src.mcp.tools.index_document import IndexDocumentTool
 from src.mcp.tools.list_available_documents import ListAvailableDocumentsTool
-from src.mcp.tools.search import SearchDocumentsTool
+from src.mcp.tools.search_semantic import SearchSemanticTool
 from src.models.unified import (
     DocumentType,
     ImageData,
@@ -265,16 +265,16 @@ class TestSearchDocumentsWord:
     """Tests pour la recherche dans les documents Word."""
 
     @pytest.fixture
-    def search_tool(self) -> SearchDocumentsTool:
+    def search_tool(self) -> SearchSemanticTool:
         """Instance du tool avec mocks."""
-        tool = SearchDocumentsTool()
+        tool = SearchSemanticTool()
         tool._initialized = True
         return tool
 
     @pytest.mark.asyncio
     async def test_search_with_word_filter(
         self,
-        search_tool: SearchDocumentsTool,
+        search_tool: SearchSemanticTool,
     ) -> None:
         """Test la recherche avec filtre document_type=word."""
         mock_results = [
@@ -311,7 +311,7 @@ class TestSearchDocumentsWord:
     @pytest.mark.asyncio
     async def test_search_word_with_table_filter(
         self,
-        search_tool: SearchDocumentsTool,
+        search_tool: SearchSemanticTool,
     ) -> None:
         """Test la recherche Word avec filtre has_table."""
         mock_results = [
@@ -412,16 +412,16 @@ class TestCrossFormatScenarios:
     """Tests pour scenarios multi-formats."""
 
     @pytest.fixture
-    def search_tool(self) -> SearchDocumentsTool:
+    def search_tool(self) -> SearchSemanticTool:
         """Instance du tool avec mocks."""
-        tool = SearchDocumentsTool()
+        tool = SearchSemanticTool()
         tool._initialized = True
         return tool
 
     @pytest.mark.asyncio
     async def test_search_across_all_formats(
         self,
-        search_tool: SearchDocumentsTool,
+        search_tool: SearchSemanticTool,
     ) -> None:
         """Test la recherche dans tous les formats sans filtre."""
         mock_results = [

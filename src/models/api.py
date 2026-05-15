@@ -5,9 +5,9 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.core.file_validation import validate_filename_safety
 from src.models.excel_edit import EditOp
@@ -66,42 +66,24 @@ class HealthResponse(BaseModel):
 # === MCP Tool Schemas ===
 
 
-class SearchDocumentsParams(BaseModel):
-    """Parametres du tool MCP search_documents.
+class SearchHybridParams(BaseModel):
+    """Parametres du tool MCP search_hybrid (recherche dense + BM25 + RRF).
 
     Attributes:
         query: Requete de recherche.
         top_k: Nombre de resultats.
-        score_threshold: Score minimum de similarite.
         filters: Filtres optionnels.
+        min_cosine_relevance: Garde-fou cosinus anti hors-domaine.
     """
 
-    query: Annotated[str, Field(description="Requete de recherche")]
+    model_config = ConfigDict(extra="forbid")
+
+    query: Annotated[str, Field(min_length=1, max_length=2000, description="Requete de recherche")]
     top_k: Annotated[int, Field(default=5, ge=1, le=100, description="Nombre de resultats")]
-    score_threshold: Annotated[
-        float | None,
-        Field(
-            default=None,
-            ge=0.0,
-            le=1.0,
-            description=(
-                "Score minimum (opt-in). En semantic: similarite cosinus (defaut 0.7 si omis). "
-                "En hybrid: score RRF (typiquement 0.1-0.5, plus bas que cosinus); aucun "
-                "filtrage si omis."
-            ),
-        ),
-    ]
     filters: dict[str, Any] | None = Field(
         default=None,
         description="Filtres optionnels",
     )
-    search_mode: Annotated[
-        Literal["hybrid", "semantic"],
-        Field(
-            default="hybrid",
-            description="Mode: 'hybrid' (vecteur+full-text) ou 'semantic' (vecteur seul)",
-        ),
-    ]
     min_cosine_relevance: Annotated[
         float | None,
         Field(
@@ -109,9 +91,41 @@ class SearchDocumentsParams(BaseModel):
             ge=0.0,
             le=1.0,
             description=(
-                "Garde-fou de pertinence (opt-in): si le top-1 en similarite cosinus dense "
-                "ne depasse pas ce seuil, retourne liste vide. Utile pour eviter les faux "
-                "positifs hors-domaine en mode hybrid (calibre empirique: 0.72)."
+                "Garde-fou cosinus (opt-in, 0.0-1.0). Si le top-1 en similarite cosinus "
+                "dense ne depasse pas ce seuil, retourne liste vide. Evite les faux positifs "
+                "hors-domaine (calibre empirique: 0.72)."
+            ),
+        ),
+    ]
+
+
+class SearchSemanticParams(BaseModel):
+    """Parametres du tool MCP search_semantic (cosinus pur).
+
+    Attributes:
+        query: Requete de recherche.
+        top_k: Nombre de resultats.
+        filters: Filtres optionnels.
+        score_threshold: Seuil de similarite cosinus (defaut 0.7).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: Annotated[str, Field(min_length=1, max_length=2000, description="Requete de recherche")]
+    top_k: Annotated[int, Field(default=5, ge=1, le=100, description="Nombre de resultats")]
+    filters: dict[str, Any] | None = Field(
+        default=None,
+        description="Filtres optionnels",
+    )
+    score_threshold: Annotated[
+        float,
+        Field(
+            default=0.7,
+            ge=0.0,
+            le=1.0,
+            description=(
+                "Seuil de similarite cosinus (0.0-1.0, defaut 0.7). Les chunks dont le score "
+                "ne depasse pas ce seuil sont filtres."
             ),
         ),
     ]

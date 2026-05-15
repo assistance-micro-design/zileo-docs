@@ -227,14 +227,15 @@ curl -X POST http://localhost:8000/mcp \
   }'
 ```
 
-## Outils disponibles (12)
+## Outils disponibles (13)
 
-### Indexation et recherche (7)
+### Indexation et recherche (8)
 
 | Outil | Rôle |
 |-------|------|
 | `index_document` | Indexer PDF / Excel / Word |
-| `search_documents` | Recherche hybride (défaut) ou sémantique |
+| `search_hybrid` | Recherche hybride (dense + BM25 RRF) + garde-fou cosinus |
+| `search_semantic` | Recherche sémantique pure (cosinus dense, défaut 0.7) |
 | `get_document` | Métadonnées + aperçu chunks |
 | `delete_document` | Supprimer de l'index |
 | `list_indexed_documents` | Lister documents indexés |

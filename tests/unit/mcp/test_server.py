@@ -75,17 +75,18 @@ class TestToolsList:
         assert response["jsonrpc"] == "2.0"
         assert response["id"] == 42
         names = {t["name"] for t in response["result"]["tools"]}
-        # 12 tools attendus dans l'inventory
-        assert len(names) == 12
-        assert "search_documents" in names
+        # 13 tools attendus dans l'inventory (search splitte en hybrid + semantic)
+        assert len(names) == 13
+        assert "search_hybrid" in names
+        assert "search_semantic" in names
         assert "index_document" in names
 
 
 class TestServerRegistry:
     """Test que les helpers de construction restent coherents."""
 
-    def test_build_tools_returns_12_entries(self, server: MCPServer) -> None:
-        assert len(server.tools) == 12
+    def test_build_tools_returns_13_entries(self, server: MCPServer) -> None:
+        assert len(server.tools) == 13
 
     def test_method_handlers_cover_initialize_list_call(self, server: MCPServer) -> None:
         assert set(server._method_handlers.keys()) == {

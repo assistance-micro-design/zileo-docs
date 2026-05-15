@@ -30,7 +30,8 @@ from src.mcp.tools.inspect_generated_file import InspectGeneratedFileTool
 from src.mcp.tools.list_available_documents import ListAvailableDocumentsTool
 from src.mcp.tools.list_indexed_documents import ListIndexedDocumentsTool
 from src.mcp.tools.read_document_content import ReadDocumentContentTool
-from src.mcp.tools.search import SearchDocumentsTool
+from src.mcp.tools.search_hybrid import SearchHybridTool
+from src.mcp.tools.search_semantic import SearchSemanticTool
 from src.mcp.types import RequestId
 from src.services.embedding.mistral_embedder import MistralEmbedder
 from src.services.embedding.sparse_embedder import SparseEmbedder
@@ -127,7 +128,8 @@ class MCPServer:
 
     Ce serveur expose des outils MCP via le protocole JSON-RPC 2.0:
     - index_document: Extraire et indexer un document dans la base vectorielle
-    - search_documents: Recherche semantique dans les documents indexes
+    - search_hybrid: Recherche hybride (dense+BM25 RRF) avec garde-fou cosinus
+    - search_semantic: Recherche semantique pure (similarite cosinus dense)
     - get_document: Obtenir les informations d'un document indexe
     - delete_document: Supprimer un document de l'index vectoriel
     - list_indexed_documents: Lister tous les documents indexes
@@ -186,7 +188,10 @@ class MCPServer:
             "index_document": IndexDocumentTool(
                 vector_store=vs, embedder=emb, sparse_embedder=sparse
             ),
-            "search_documents": SearchDocumentsTool(
+            "search_hybrid": SearchHybridTool(
+                vector_store=vs, embedder=emb, sparse_embedder=sparse
+            ),
+            "search_semantic": SearchSemanticTool(
                 vector_store=vs, embedder=emb, sparse_embedder=sparse
             ),
             "get_document": GetDocumentTool(vector_store=vs),

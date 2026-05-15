@@ -63,7 +63,7 @@ result = HANDLERS.get(doc_type, handle_default)()
 
 | Contexte | Suffixe | Exemple |
 |----------|---------|---------|
-| Paramètres MCP tool | `*Params` | `SearchDocumentsParams` |
+| Paramètres MCP tool | `*Params` | `SearchHybridParams`, `SearchSemanticParams` |
 | Request API REST | `*Request` | `IndexDocumentRequest` |
 | Résultat opération | `*Result` | `IndexResult` |
 | Réponse HTTP | `*Response` | `SearchResponse` |

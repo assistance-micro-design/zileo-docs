@@ -8,7 +8,7 @@ Workflows pour indexer, rechercher et lire des documents (PDF, Excel, Word) via 
 1. list_available_documents     → Quels fichiers sont disponibles ?
 2. list_indexed_documents       → Quels documents sont déjà indexés ?
 3. index_document (si besoin)   → Indexer ce qui ne l'est pas
-4. search_documents             → Trouver les passages pertinents
+4. search_hybrid / search_semantic → Trouver les passages pertinents
 5. read_document_content        → Lire le contexte complet
 6. get_excel_formulas           → (Excel) Récupérer formules + résultats
 ```
@@ -49,25 +49,22 @@ Workflows pour indexer, rechercher et lire des documents (PDF, Excel, Word) via 
 
 Retour : `document_id`, `document_type`, `chunks_stored`, `has_tables`, `has_formulas`, `has_images`, `processing_time_seconds`.
 
-## Recherche : `search_documents`
+## Recherche : `search_hybrid` et `search_semantic`
 
-### Modes de recherche
+Depuis 0.3.0, l'ancien `search_documents` est split en deux tools dédiés. Le choix dépend du type de requête :
 
-| Mode | Comportement | `score_threshold` |
-|------|--------------|-------------------|
-| `hybrid` (défaut) | Vecteur dense (Mistral) + sparse BM25, fusion RRF native Qdrant | Ignoré (échelles différentes) |
-| `semantic` | Vecteur dense seul (cosine similarity) | Appliqué (0.0-1.0) |
+| Tool | Comportement | Quand l'utiliser |
+|------|--------------|------------------|
+| `search_hybrid` (recommandé) | Vecteur dense (Mistral) + sparse BM25, fusion RRF native Qdrant. Garde-fou cosinus optionnel via `min_cosine_relevance` (calibre empirique 0.72) | Cas général. Mix concepts + noms exacts. Active le garde-fou pour couper les queries hors-domaine. |
+| `search_semantic` | Vecteur dense seul (cosine similarity), seuil `score_threshold` (défaut 0.7) | Questions abstraites/conceptuelles où la similarité cosinus pure suffit. |
 
-`hybrid` est plus robuste pour les requêtes mixant concepts et noms exacts. `semantic` est utile quand on veut filtrer strictement sur la similarité conceptuelle.
-
-### Paramètres
+### Paramètres `search_hybrid`
 
 ```json
 {
   "query": "prévisions chiffre d'affaires 2026",
   "top_k": 5,
-  "score_threshold": 0.7,
-  "search_mode": "hybrid",
+  "min_cosine_relevance": 0.72,
   "filters": {"document_type": "pdf", "has_table": true}
 }
 ```
@@ -76,8 +73,25 @@ Retour : `document_id`, `document_type`, `chunks_stored`, `has_tables`, `has_for
 |-------|--------|-------------|
 | `query` | — | Requête en langage naturel (obligatoire) |
 | `top_k` | 5 | 1-100 |
-| `score_threshold` | 0.7 | Mode `semantic` uniquement |
-| `search_mode` | `hybrid` | `hybrid` ou `semantic` |
+| `min_cosine_relevance` | — | Opt-in (0.0-1.0). Si le top-1 cosinus dense < seuil, retourne `[]`. Évite les faux positifs hors-domaine (calibre empirique : 0.72) |
+| `filters` | — | Voir ci-dessous |
+
+### Paramètres `search_semantic`
+
+```json
+{
+  "query": "politique de rémunération",
+  "top_k": 5,
+  "score_threshold": 0.7,
+  "filters": {"document_type": "pdf"}
+}
+```
+
+| Param | Défaut | Description |
+|-------|--------|-------------|
+| `query` | — | Requête en langage naturel (obligatoire) |
+| `top_k` | 5 | 1-100 |
+| `score_threshold` | 0.7 | Seuil cosinus (0.0-1.0) |
 | `filters` | — | Voir ci-dessous |
 
 ### Filtres
@@ -102,9 +116,9 @@ Retour : `document_id`, `document_type`, `chunks_stored`, `has_tables`, `has_for
 | Données chiffrées | `has_table: true` ou `has_formula: true` |
 | Document spécifique | `document_id` ou `doc_filename` |
 | Excel : feuille connue | `sheet_name` + `document_type: "excel"` |
-| Noms propres dans Excel | `search_mode: "hybrid"` (défaut) ou bien `semantic` avec `score_threshold: 0.3` + `text_search` |
+| Noms propres dans Excel | `search_hybrid` (combine BM25 + dense) ou bien `search_semantic` avec `score_threshold: 0.3` + `text_search` |
 
-### Réglage `score_threshold` (mode `semantic`)
+### Réglage `score_threshold` (`search_semantic`)
 
 | Seuil | Usage |
 |-------|-------|
@@ -112,6 +126,16 @@ Retour : `document_id`, `document_type`, `chunks_stored`, `has_tables`, `has_for
 | 0.7 (défaut) | Équilibre |
 | 0.5 - 0.7 | Recherche exploratoire |
 | < 0.5 | Trop de bruit (rarement utile) |
+
+### Réglage `min_cosine_relevance` (`search_hybrid`)
+
+Garde-fou anti hors-domaine : avant la recherche hybride, on vérifie que le top-1 en similarité cosinus dense dépasse ce seuil. Si non, retourne `[]` (utile pour distinguer "rien de pertinent" d'"hits faiblement pertinents").
+
+| Seuil | Effet |
+|-------|-------|
+| Absent | Aucun garde-fou (recherche hybride brute) |
+| 0.72 | Calibre empirique : 0% faux positifs hors-domaine, recall préservé sur le golden set |
+| 0.80 | Filtre plus strict, recall partiellement réduit |
 
 ## Lire le contenu : `read_document_content`
 
@@ -162,8 +186,8 @@ Supprime de l'index Qdrant uniquement. **Ne touche pas au fichier source.** Util
 | Taille | Pages | Stratégie |
 |--------|-------|-----------|
 | Petit | 1-5 | `read_document_content` complet |
-| Moyen | 6-50 | `search_documents` (top_k=10) → `read_document_content` ciblé |
-| Grand | 51+ | `search_documents` uniquement, lire 3 pages autour des hits (score ≥ 0.85) |
+| Moyen | 6-50 | `search_hybrid` (top_k=10) → `read_document_content` ciblé |
+| Grand | 51+ | `search_hybrid` uniquement, lire 3 pages autour des hits (score ≥ 0.85) |
 
 Toujours appeler `get_document` d'abord pour connaître `total_pages`.
 
@@ -175,14 +199,14 @@ Toujours appeler `get_document` d'abord pour connaître `total_pages`.
 3. get_document                 → connaître la taille
 4. (selon taille)
    - Petit : read_document_content (tout)
-   - Moyen/grand : search_documents("résumé objectifs conclusions") + read_document_content sur les hits
+   - Moyen/grand : search_hybrid("résumé objectifs conclusions") + read_document_content sur les hits
 5. Synthétiser
 ```
 
 ## Workflow type — recherche thématique
 
 ```
-1. search_documents(query, top_k=10)
+1. search_hybrid(query, top_k=10)
 2. Pour chaque hit (score ≥ 0.8) :
    read_document_content(document_id, page_start=p, page_end=p+1)
 3. Synthétiser avec sources (document, page)

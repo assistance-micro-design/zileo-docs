@@ -20,7 +20,7 @@
 1. Vous montez un dossier de documents dans le container Docker
 2. Le LLM (Claude, etc.) appelle `index_document` pour extraire et vectoriser un fichier
 3. Le contenu est decoupe en chunks, converti en embeddings via Mistral, et stocke dans Qdrant
-4. Le LLM peut ensuite chercher dans les documents indexes via `search_documents`
+4. Le LLM peut ensuite chercher dans les documents indexes via `search_hybrid` (defaut) ou `search_semantic` (cosinus pur)
 5. Le LLM peut aussi creer et editer des fichiers Excel via les outils de generation
 
 ## Formats supportes
@@ -141,7 +141,8 @@ Le transport utilise HTTP POST avec des requetes JSON-RPC 2.0. Pas de SSE, pas d
 | Outil | Description |
 |-------|-------------|
 | `index_document` | Extraire et indexer un PDF, Excel ou Word dans Qdrant |
-| `search_documents` | Recherche semantique dans les documents indexes |
+| `search_hybrid` | Recherche hybride (dense + BM25 RRF) avec garde-fou cosinus anti hors-domaine |
+| `search_semantic` | Recherche semantique pure (cosinus dense, defaut 0.7) |
 | `get_document` | Recuperer les metadonnees et chunks d'un document |
 | `delete_document` | Supprimer un document de l'index (pas le fichier source) |
 | `list_indexed_documents` | Lister les documents deja indexes |

@@ -3,7 +3,8 @@
 """Evaluation offline du RAG sur le golden set.
 
 Usage:
-    uv run --frozen python3 scripts/eval_rag.py [--threshold 0.5] [--mode hybrid|semantic]
+    uv run --frozen python3 scripts/eval_rag.py [--tool search_hybrid|search_semantic]
+                                                 [--threshold 0.5] [--min-cosine 0.72]
 
 Metriques produites:
   - recall@1: pour les questions precises/ambigues, le doc attendu est-il en top 1
@@ -30,28 +31,30 @@ import yaml
 
 MCP_URL = "http://localhost:8000/mcp"
 
+VALID_TOOLS = ("search_hybrid", "search_semantic")
+
 
 def call_search(
     query: str,
     *,
     api_key: str,
+    tool: str,
     top_k: int = 5,
     threshold: float | None = None,
-    mode: str = "hybrid",
     min_cosine: float | None = None,
 ) -> list[dict[str, Any]]:
-    """Appelle search_documents via le endpoint MCP."""
-    args: dict[str, Any] = {"query": query, "top_k": top_k, "search_mode": mode}
-    if threshold is not None:
+    """Appelle le tool MCP de recherche (search_hybrid ou search_semantic)."""
+    args: dict[str, Any] = {"query": query, "top_k": top_k}
+    if tool == "search_semantic" and threshold is not None:
         args["score_threshold"] = threshold
-    if min_cosine is not None:
+    if tool == "search_hybrid" and min_cosine is not None:
         args["min_cosine_relevance"] = min_cosine
 
     payload = {
         "jsonrpc": "2.0",
         "id": 1,
         "method": "tools/call",
-        "params": {"name": "search_documents", "arguments": args},
+        "params": {"name": tool, "arguments": args},
     }
     req = urllib.request.Request(
         MCP_URL,
@@ -80,8 +83,8 @@ def evaluate(
     docs: dict[str, dict[str, Any]],
     *,
     api_key: str,
+    tool: str,
     threshold: float | None,
-    mode: str,
     top_k: int = 5,
     min_cosine: float | None = None,
 ) -> dict[str, Any]:
@@ -93,9 +96,9 @@ def evaluate(
         results = call_search(
             q["query"],
             api_key=api_key,
+            tool=tool,
             top_k=top_k,
             threshold=threshold,
-            mode=mode,
             min_cosine=min_cosine,
         )
 
@@ -129,7 +132,7 @@ def evaluate(
 
     summary: dict[str, Any] = {
         "config": {
-            "mode": mode,
+            "tool": tool,
             "threshold": threshold,
             "min_cosine": min_cosine,
             "top_k": top_k,
@@ -166,14 +169,24 @@ def _avg(records: list[dict[str, Any]], key: str) -> float:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Eval RAG offline")
-    parser.add_argument("--threshold", type=float, default=None, help="score_threshold")
+    parser.add_argument(
+        "--tool",
+        choices=VALID_TOOLS,
+        default="search_hybrid",
+        help="Tool MCP a evaluer (search_hybrid ou search_semantic)",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help="score_threshold (search_semantic uniquement, defaut 0.7 cote tool)",
+    )
     parser.add_argument(
         "--min-cosine",
         type=float,
         default=None,
-        help="min_cosine_relevance (garde-fou pre-hybrid)",
+        help="min_cosine_relevance (search_hybrid uniquement, garde-fou cosinus)",
     )
-    parser.add_argument("--mode", choices=["hybrid", "semantic"], default="hybrid")
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--api-key", default=None, help="X-API-Key (sinon depuis env)")
     parser.add_argument(
@@ -199,8 +212,8 @@ def main() -> int:
         data["questions"],
         data["documents"],
         api_key=api_key,
+        tool=args.tool,
         threshold=args.threshold,
-        mode=args.mode,
         top_k=args.top_k,
         min_cosine=args.min_cosine,
     )
@@ -212,7 +225,7 @@ def main() -> int:
     s = result["summary"]
     cfg = s["config"]
     print(
-        f"\n=== Eval RAG | mode={cfg['mode']} threshold={cfg['threshold']} "
+        f"\n=== Eval RAG | tool={cfg['tool']} threshold={cfg['threshold']} "
         f"min_cosine={cfg['min_cosine']} ===\n"
     )
     print(f"{'type':<14}{'n':>4}{'recall@1':>12}{'recall@5':>12}{'mrr':>8}{'fpr':>8}")

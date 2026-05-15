@@ -7,6 +7,27 @@ et ce projet adhere au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-15
+
+### BREAKING CHANGES
+- Tool MCP `search_documents` supprime. Remplace par deux tools dedies avec schemas non-ambigus :
+  - `search_hybrid` : `query` + `top_k` + `filters` + `min_cosine_relevance` (echelle RRF masquee, garde-fou cosinus 0.72 anti hors-domaine)
+  - `search_semantic` : `query` + `top_k` + `filters` + `score_threshold` (similarite cosinus pure, defaut 0.7)
+- Model Pydantic `SearchDocumentsParams` supprime ; remplace par `SearchHybridParams` + `SearchSemanticParams`
+- Methode `DocumentPipelineOrchestrator.search_documents` supprimee (code mort, non utilise)
+
+### Added
+- Classe abstraite `BaseSearchTool(VectorStoreMCPTool)` dans `src/mcp/tools/search_base.py` factorise la logique partagee (DI, validation Pydantic, embedding query, formatage reponse)
+- Eval `scripts/eval_rag.py` accepte desormais `--tool search_hybrid|search_semantic` (remplace `--mode`)
+
+### Changed
+- API REST `POST /api/v1/search` **inchangee** : conserve `search_mode` comme parametre bas niveau. L'asymetrie REST/MCP est volontaire (REST = bas niveau, MCP = orientee agent)
+- Message d'erreur du tool `index_document` (deja indexe) reference desormais `search_hybrid`/`search_semantic`
+
+### Migration
+- Caller MCP : remplacer `search_documents` (mode hybrid) par `search_hybrid` ; remplacer `search_documents` (mode semantic) par `search_semantic`
+- Le format de reponse est identique (chunk_id, score, page_numbers, etc.) — seuls le nom et le schema d'entree changent
+
 ## [0.2.0] - 2026-04-28
 
 ### Added

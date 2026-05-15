@@ -23,7 +23,7 @@ from src.mcp.server import MCPServer
 from src.mcp.tools.get_document import GetDocumentTool
 from src.mcp.tools.index_document import IndexDocumentTool
 from src.mcp.tools.read_document_content import ReadDocumentContentTool
-from src.mcp.tools.search import SearchDocumentsTool
+from src.mcp.tools.search_hybrid import SearchHybridTool
 from src.services.pipeline.orchestrator import DocumentPipelineOrchestrator
 
 
@@ -287,16 +287,18 @@ class TestMCPServer:
         """Test l'initialisation du serveur MCP."""
         assert mcp_server_instance.name is not None
         assert mcp_server_instance.version is not None
-        assert len(mcp_server_instance.tools) == 11
+        assert len(mcp_server_instance.tools) == 13
 
     def test_mcp_tools_registered(self, mcp_server_instance: MCPServer) -> None:
         """Test que tous les tools sont enregistres."""
         expected_tools = [
             "create_excel_document",
+            "create_word_document",
             "edit_excel_document",
             "inspect_generated_file",
             "index_document",
-            "search_documents",
+            "search_hybrid",
+            "search_semantic",
             "get_document",
             "delete_document",
             "list_indexed_documents",
@@ -357,7 +359,7 @@ class TestMCPServer:
         )
         assert "result" in response
         assert "tools" in response["result"]
-        assert len(response["result"]["tools"]) == 11
+        assert len(response["result"]["tools"]) == 13
 
     @pytest.mark.asyncio
     async def test_mcp_initialize(self, mcp_server_instance: MCPServer) -> None:
@@ -466,7 +468,7 @@ class TestMCPTools:
     @pytest.mark.asyncio
     async def test_search_tool_empty_query(self) -> None:
         """Test que search rejette une requete vide."""
-        tool = SearchDocumentsTool()
+        tool = SearchHybridTool()
         with patch.object(tool, "_vector_store"):
             tool._initialized = True
             with pytest.raises(EmptyQueryError):

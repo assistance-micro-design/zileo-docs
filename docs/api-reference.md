@@ -59,21 +59,31 @@ Indexe PDF / Excel / Word. Idempotent (hash dédup). Si fichier modifié : `file
 
 Retour : `document_id`, `document_type`, `filename`, `chunks_stored`, `has_tables`, `has_formulas`, `has_images`, `processing_time_seconds`.
 
-### `search_documents`
+### `search_hybrid`
 
-Recherche hybride (vecteur dense + BM25 sparse, fusion RRF) ou sémantique pure.
+Recherche hybride : vecteur dense (Mistral 1024d) + BM25 sparse, fusion RRF native Qdrant. Échelle de score RRF masquée au caller (non-interprétable cross-corpus).
 
 | Param | Type | Défaut | Description |
 |-------|------|--------|-------------|
 | `query` | string | — | Requête en langage naturel |
 | `top_k` | int | 5 | 1-100 |
-| `score_threshold` | float | 0.7 | 0.0-1.0 (ignoré en `hybrid`) |
-| `search_mode` | string | `hybrid` | `hybrid` ou `semantic` |
+| `min_cosine_relevance` | float | — | Opt-in (0.0-1.0). Garde-fou anti hors-domaine : si le top-1 cosinus dense < seuil, retourne `[]`. Calibre empirique : 0.72 |
 | `filters` | object | — | Voir ci-dessous |
 
 **Filtres** : `document_id`, `doc_filename`, `document_type` (`pdf`/`excel`/`word`), `has_table`, `has_image`, `has_formula`, `text_search`, `sheet_name`.
 
-> En mode `hybrid`, `score_threshold` n'est pas appliqué (les scores RRF ne sont pas sur l'échelle cosine).
+### `search_semantic`
+
+Recherche sémantique pure : similarité cosinus dense uniquement (Mistral 1024d).
+
+| Param | Type | Défaut | Description |
+|-------|------|--------|-------------|
+| `query` | string | — | Requête en langage naturel |
+| `top_k` | int | 5 | 1-100 |
+| `score_threshold` | float | 0.7 | Seuil cosinus (0.0-1.0) |
+| `filters` | object | — | Mêmes filtres que `search_hybrid` |
+
+> Choix : utilise `search_hybrid` par défaut (mix concepts + mots-clés). `search_semantic` est utile pour les questions purement conceptuelles ou pour calibrer un seuil cosinus strict.
 
 ### `get_document`, `delete_document`, `list_indexed_documents`
 

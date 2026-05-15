@@ -76,16 +76,18 @@ Chunking simple, basé sur la taille en caractères. Pas d'analyse Markdown, pas
 
 ## Recherche
 
-`SearchDocumentsTool` accepte deux modes via `search_mode` :
+Deux tools MCP dédiés (depuis 0.3.0) héritent de `BaseSearchTool(VectorStoreMCPTool)` :
 
-| Mode | Comportement | Score |
-|------|--------------|-------|
-| `hybrid` (défaut) | Prefetch Qdrant natif : dense (Mistral) + sparse (BM25), fusion RRF | RRF, pas de threshold appliqué |
-| `semantic` | Vecteur dense seul (cosine similarity) | 0.0–1.0, `score_threshold` appliqué |
+| Tool | Comportement | Garde-fou |
+|------|--------------|-----------|
+| `search_hybrid` | Prefetch Qdrant natif : dense (Mistral) + sparse (BM25), fusion RRF | `min_cosine_relevance` opt-in (calibre empirique 0.72 — anti hors-domaine) |
+| `search_semantic` | Vecteur dense seul (cosine similarity) | `score_threshold` (défaut 0.7) |
 
-Filtres Qdrant : `document_id`, `doc_filename`, `document_type`, `has_table`, `has_image`, `has_formula`, `text_search`, `sheet_name`.
+L'API REST `POST /api/v1/search` conserve le paramètre `search_mode` (asymétrie REST/MCP volontaire : REST = bas niveau, MCP = orientée agent).
 
-## Outils MCP (12)
+Filtres Qdrant communs : `document_id`, `doc_filename`, `document_type`, `has_table`, `has_image`, `has_formula`, `text_search`, `sheet_name`.
+
+## Outils MCP (13)
 
 Tous héritent de `BaseMCPTool` (`src/mcp/tools/base.py`). Les outils ayant besoin de Qdrant héritent de `VectorStoreMCPTool`. Toutes les dépendances (vector store, embedder, sparse embedder) sont injectées par `MCPServer.__init__()`.
 
@@ -94,7 +96,8 @@ Tous héritent de `BaseMCPTool` (`src/mcp/tools/base.py`). Les outils ayant beso
 | Outil | Classe parente | Rôle |
 |-------|----------------|------|
 | `index_document` | `BaseMCPTool` | Indexer PDF/Excel/Word (DI complète) |
-| `search_documents` | `VectorStoreMCPTool` | Recherche hybride/sémantique |
+| `search_hybrid` | `BaseSearchTool` | Recherche hybride (dense+BM25 RRF) + garde-fou cosinus |
+| `search_semantic` | `BaseSearchTool` | Recherche sémantique pure (cosinus dense, défaut 0.7) |
 | `get_document` | `VectorStoreMCPTool` | Métadonnées + aperçu chunks |
 | `delete_document` | `VectorStoreMCPTool` | Supprimer de l'index (pas du disque) |
 | `list_indexed_documents` | `VectorStoreMCPTool` | Lister documents indexés |

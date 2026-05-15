@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # === Application ===
     APP_NAME: str = "MCP Zileo RAG"
-    APP_VERSION: str = "0.2.0"
+    APP_VERSION: str = "0.3.0"
     DEBUG: bool = False
 
     # === Mistral API ===

@@ -507,44 +507,6 @@ class DocumentPipelineOrchestrator:
             errors=errors,
         )
 
-    async def search_documents(
-        self,
-        query: str,
-        top_k: int = 5,
-        filters: dict[str, Any] | None = None,
-        score_threshold: float = 0.7,
-    ) -> list[dict[str, Any]]:
-        """Recherche semantique dans les documents indexes.
-
-        Args:
-            query: Requete de recherche en langage naturel.
-            top_k: Nombre maximum de resultats. Defaut 5.
-            filters: Filtres optionnels (document_id, content_type, etc.).
-            score_threshold: Score minimum de similarite. Defaut 0.7.
-
-        Returns:
-            Liste des chunks correspondants avec scores.
-
-        Example:
-            >>> results = await orchestrator.search_documents(
-            ...     "comment configurer l'authentification?",
-            ...     top_k=10,
-            ...     filters={"document_id": "doc-123"},
-            ... )
-            >>> for r in results:
-            ...     print(f"{r['score']:.2f}: {r['content_preview']}")
-        """
-        # Generer embedding de la requete
-        query_embedding = await self.embedder.embed_query(query)
-
-        # Rechercher dans Qdrant
-        return await self.vector_store.search(
-            query_embedding=query_embedding,
-            top_k=top_k,
-            filters=filters,
-            score_threshold=score_threshold,
-        )
-
     async def delete_document(self, document_id: str) -> int:
         """Supprime un document de l'index vectoriel.
 

@@ -18,7 +18,8 @@ from src.mcp.tools.inspect_generated_file import InspectGeneratedFileTool
 from src.mcp.tools.list_available_documents import ListAvailableDocumentsTool
 from src.mcp.tools.list_indexed_documents import ListIndexedDocumentsTool
 from src.mcp.tools.read_document_content import ReadDocumentContentTool
-from src.mcp.tools.search import SearchDocumentsTool
+from src.mcp.tools.search_hybrid import SearchHybridTool
+from src.mcp.tools.search_semantic import SearchSemanticTool
 
 
 __all__ = [
@@ -33,5 +34,6 @@ __all__ = [
     "ListAvailableDocumentsTool",
     "ListIndexedDocumentsTool",
     "ReadDocumentContentTool",
-    "SearchDocumentsTool",
+    "SearchHybridTool",
+    "SearchSemanticTool",
 ]

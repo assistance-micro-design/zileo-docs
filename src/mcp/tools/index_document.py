@@ -218,7 +218,7 @@ class IndexDocumentTool(BaseMCPTool):
             "ingested_at": existing["ingested_at"],
             "message": (
                 "Ce document est deja indexe. "
-                "Utilisez le document_id pour search_documents. "
+                "Utilisez le document_id pour search_hybrid ou search_semantic. "
                 "Pour re-indexer, supprimez d'abord avec delete_document."
             ),
         }

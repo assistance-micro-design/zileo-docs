@@ -9,7 +9,8 @@ from src.models.api import (
     GetDocumentParams,
     HealthResponse,
     ProcessingStatus,
-    SearchDocumentsParams,
+    SearchHybridParams,
+    SearchSemanticParams,
 )
 from src.models.chunk import ChunkMetadata, DocumentChunk
 from src.models.document import (
@@ -57,11 +58,12 @@ __all__ = [
     "PageAnalysis",
     "PageType",
     "ProcessingStatus",
-    "SearchDocumentsParams",
     "SearchFilters",
+    "SearchHybridParams",
     "SearchQuery",
     "SearchResponse",
     "SearchResultItem",
+    "SearchSemanticParams",
     "TableData",
     "TablePlaceholder",
 ]

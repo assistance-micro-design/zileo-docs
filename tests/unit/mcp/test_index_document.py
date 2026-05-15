@@ -195,7 +195,7 @@ class TestDuplicateIndexationGuard:
     async def test_already_indexed_message_guides_llm(
         self, tool_with_mocks: IndexDocumentTool
     ) -> None:
-        """Le message guide le LLM vers search_documents et delete_document."""
+        """Le message guide le LLM vers search_hybrid/search_semantic et delete_document."""
         tool_with_mocks._vector_store.find_document_by_filename = AsyncMock(
             return_value={
                 "document_id": "existing-doc-id",
@@ -216,7 +216,7 @@ class TestDuplicateIndexationGuard:
             ):
                 result = await tool_with_mocks.execute({"file_path": "/data/docs/rapport.pdf"})
 
-        assert "search_documents" in result["message"]
+        assert "search_hybrid" in result["message"]
         assert "delete_document" in result["message"]
 
     @pytest.mark.asyncio

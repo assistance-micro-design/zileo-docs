@@ -15,7 +15,7 @@ def test_defaults_loaded() -> None:
     settings = Settings()
 
     assert settings.APP_NAME == "MCP Zileo RAG"
-    assert settings.APP_VERSION == "0.2.0"
+    assert settings.APP_VERSION == "0.3.0"
     assert settings.QDRANT_PORT == 6333
     assert settings.QDRANT_COLLECTION == "documents"
     assert settings.CHUNK_SIZE == 512

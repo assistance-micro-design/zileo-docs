@@ -4,7 +4,7 @@ Ces tests verifient le fonctionnement de bout en bout pour les documents Excel:
 - Extraction via ExcelExtractor
 - Conversion vers UnifiedDocument
 - Indexation via index_document tool
-- Recherche via search_documents tool
+- Recherche via search_semantic tool
 - Recuperation des formules via get_excel_formulas tool
 """
 
@@ -19,7 +19,7 @@ from src.core.config import settings
 from src.mcp.tools.get_excel_formulas import GetExcelFormulasTool
 from src.mcp.tools.index_document import IndexDocumentTool
 from src.mcp.tools.list_available_documents import ListAvailableDocumentsTool
-from src.mcp.tools.search import SearchDocumentsTool
+from src.mcp.tools.search_semantic import SearchSemanticTool
 from src.models.unified import (
     DocumentType,
     FormulaData,
@@ -380,20 +380,20 @@ class TestListAvailableDocumentsTool:
 # =============================================================================
 
 
-class TestSearchDocumentsExcel:
+class TestSearchSemanticExcel:
     """Tests pour la recherche avec filtres Excel."""
 
     @pytest.fixture
-    def search_tool(self) -> SearchDocumentsTool:
+    def search_tool(self) -> SearchSemanticTool:
         """Instance du tool avec mocks."""
-        tool = SearchDocumentsTool()
+        tool = SearchSemanticTool()
         tool._initialized = True
         return tool
 
     @pytest.mark.asyncio
     async def test_search_with_document_type_filter(
         self,
-        search_tool: SearchDocumentsTool,
+        search_tool: SearchSemanticTool,
     ) -> None:
         """Test la recherche avec filtre document_type."""
         mock_results = [
@@ -429,7 +429,7 @@ class TestSearchDocumentsExcel:
     @pytest.mark.asyncio
     async def test_search_with_has_formula_filter(
         self,
-        search_tool: SearchDocumentsTool,
+        search_tool: SearchSemanticTool,
     ) -> None:
         """Test la recherche avec filtre has_formula."""
         mock_results = [
