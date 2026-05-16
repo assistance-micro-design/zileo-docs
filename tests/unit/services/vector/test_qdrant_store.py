@@ -536,6 +536,64 @@ class TestGetStats:
         assert "green" in stats["status"]
 
 
+class TestFormatSearchResults:
+    """Tests pour _format_search_results (mapping payload -> resultat de recherche)."""
+
+    @pytest.mark.asyncio
+    async def test_propagates_unified_fields_from_payload(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """document_type, has_formula et sheet_names doivent etre propages depuis le payload."""
+        hit = MagicMock()
+        hit.score = 0.91
+        hit.payload = {
+            "chunk_id": "c1",
+            "content": "hello",
+            "content_preview": "hello",
+            "document_id": "doc-word",
+            "page_numbers": [],
+            "section_title": "Intro",
+            "content_type": "text",
+            "doc_filename": "rapport.docx",
+            "document_type": "word",
+            "has_formula": False,
+            "sheet_names": [],
+        }
+
+        formatted = store_with_mock_client._format_search_results([hit])
+
+        assert formatted[0]["document_type"] == "word"
+        assert formatted[0]["has_formula"] is False
+        assert formatted[0]["sheet_names"] == []
+
+    @pytest.mark.asyncio
+    async def test_propagates_excel_specific_fields(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """sheet_names et has_formula refletent un payload Excel."""
+        hit = MagicMock()
+        hit.score = 0.85
+        hit.payload = {
+            "chunk_id": "c2",
+            "content": "data",
+            "content_preview": "data",
+            "document_id": "doc-xlsx",
+            "page_numbers": [],
+            "section_title": "Sheet1",
+            "content_type": "table",
+            "doc_filename": "budget.xlsx",
+            "document_type": "excel",
+            "has_formula": True,
+            "sheet_names": ["Budget", "Notes"],
+        }
+
+        formatted = store_with_mock_client._format_search_results([hit])
+
+        assert formatted[0]["document_type"] == "excel"
+        assert formatted[0]["has_formula"] is True
+        assert formatted[0]["sheet_names"] == ["Budget", "Notes"]
+
+
 class TestDeleteAndGetChunks:
     """Tests pour delete_document et get_document_chunks."""
 

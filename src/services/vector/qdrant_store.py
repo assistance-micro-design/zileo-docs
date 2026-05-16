@@ -442,6 +442,9 @@ class QdrantVectorStore:
                 "section_title": hit.payload.get("section_title") if hit.payload else None,
                 "content_type": hit.payload.get("content_type") if hit.payload else None,
                 "doc_filename": hit.payload.get("doc_filename") if hit.payload else None,
+                "document_type": hit.payload.get("document_type") if hit.payload else None,
+                "has_formula": hit.payload.get("has_formula", False) if hit.payload else False,
+                "sheet_names": hit.payload.get("sheet_names", []) if hit.payload else [],
             }
             for hit in points
         ]
