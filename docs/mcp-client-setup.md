@@ -74,7 +74,7 @@ Redémarrer le container : `docker compose up -d`.
 ```json
 {
   "mcpServers": {
-    "zileo-rag": {
+    "zileo-docs": {
       "url": "http://localhost:8000/mcp",
       "transport": "http",
       "headers": {
@@ -107,7 +107,7 @@ Redémarrer Claude Desktop. Les **12 outils** apparaissent dans l'icône d'outil
 ```json
 {
   "mcpServers": {
-    "zileo-rag": {
+    "zileo-docs": {
       "url": "http://localhost:8000/mcp",
       "transport": "http",
       "headers": {
@@ -125,8 +125,8 @@ Si Zileo Chat tourne dans Docker sur la même machine, utiliser le nom du contai
 ```json
 {
   "mcpServers": {
-    "zileo-rag": {
-      "url": "http://mcp-zileo-rag:8000/mcp",
+    "zileo-docs": {
+      "url": "http://zileo-docs:8000/mcp",
       "transport": "http",
       "headers": {
         "X-API-Key": "ta_cle_api_ici"
@@ -136,16 +136,16 @@ Si Zileo Chat tourne dans Docker sur la même machine, utiliser le nom du contai
 }
 ```
 
-Et brancher Zileo Chat sur le réseau de MCP Zileo RAG (dans son `docker-compose.yml`) :
+Et brancher Zileo Chat sur le réseau de Zileo Docs (dans son `docker-compose.yml`) :
 
 ```yaml
 services:
   zileo-chat:
     networks:
-      - mcp-zileo-rag_mcp-network
+      - zileo-docs_mcp-network
 
 networks:
-  mcp-zileo-rag_mcp-network:
+  zileo-docs_mcp-network:
     external: true
 ```
 
@@ -156,7 +156,7 @@ Le nom du réseau externe est `<projet>_mcp-network` (préfixe Docker Compose + 
 ```json
 {
   "mcpServers": {
-    "zileo-rag": {
+    "zileo-docs": {
       "url": "http://192.168.1.X:8000/mcp",
       "transport": "http",
       "headers": {
@@ -167,7 +167,7 @@ Le nom du réseau externe est `<projet>_mcp-network` (préfixe Docker Compose + 
 }
 ```
 
-Remplacer `192.168.1.X` par l'IP de la machine qui héberge MCP Zileo RAG.
+Remplacer `192.168.1.X` par l'IP de la machine qui héberge Zileo Docs.
 
 ## Autres clients MCP
 

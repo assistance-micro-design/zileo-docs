@@ -22,8 +22,8 @@ docker compose up -d
 ```
 
 Deux services demarrent :
-- **app** (`mcp-zileo-rag`) : Application FastAPI sur le port 8000
-- **qdrant** (`mcp-zileo-rag-qdrant`) : Base vectorielle sur les ports 6333 (HTTP) et 6334 (gRPC, reseau interne uniquement)
+- **app** (`zileo-docs`) : Application FastAPI sur le port 8000
+- **qdrant** (`zileo-docs-qdrant`) : Base vectorielle sur les ports 6333 (HTTP) et 6334 (gRPC, reseau interne uniquement)
 
 Les services communiquent via un reseau Docker interne (`mcp-network`). L'application attend que Qdrant soit healthy avant de demarrer (`depends_on: condition: service_healthy`).
 
