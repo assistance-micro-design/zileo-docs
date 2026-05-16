@@ -131,6 +131,9 @@ class TestIndexDocumentExcel:
         """Instance du tool avec mocks."""
         tool = IndexDocumentTool()
         tool._initialized = True
+        mock_sparse = MagicMock()
+        mock_sparse.embed_chunks = AsyncMock(side_effect=lambda chunks, **_: chunks)
+        tool._sparse_embedder = mock_sparse
         return tool
 
     @pytest.mark.asyncio
@@ -164,6 +167,7 @@ class TestIndexDocumentExcel:
             patch.object(settings, "DOCUMENTS_PATH", "/app/documents"),
             patch("pathlib.Path.exists", return_value=True),
             patch("src.mcp.tools.index_document.validate_file_magic", return_value=True),
+            patch("src.mcp.tools.index_document.compute_file_hash", return_value="hash-mock"),
         ):
             result = await index_tool.execute({"file_path": "/app/documents/test.xlsx"})
 
@@ -207,6 +211,7 @@ class TestIndexDocumentExcel:
             patch.object(settings, "DOCUMENTS_PATH", "/app/documents"),
             patch("pathlib.Path.exists", return_value=True),
             patch("src.mcp.tools.index_document.validate_file_magic", return_value=True),
+            patch("src.mcp.tools.index_document.compute_file_hash", return_value="hash-mock"),
         ):
             await index_tool.execute({"file_path": "/app/documents/test.xlsx"})
 
