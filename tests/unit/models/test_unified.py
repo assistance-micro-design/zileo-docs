@@ -10,11 +10,11 @@ from src.models.chunk import ChunkMetadata
 from src.models.unified import (
     DocumentType,
     FormulaData,
-    ImageData,
     StructuredData,
-    TableData,
     UnifiedDocument,
+    UnifiedImageData,
     UnifiedMetadata,
+    UnifiedTableData,
 )
 from src.services.document.router import DocumentRouter
 
@@ -37,11 +37,11 @@ class TestDocumentType:
         assert DocumentType.PDF == "pdf"
 
 
-class TestTableData:
-    """Tests pour TableData."""
+class TestUnifiedTableData:
+    """Tests pour UnifiedTableData."""
 
     def test_to_markdown_with_headers(self) -> None:
-        table = TableData(
+        table = UnifiedTableData(
             headers=["A", "B", "C"],
             rows=[
                 [1, 2, 3],
@@ -58,7 +58,7 @@ class TestTableData:
 
     def test_to_markdown_without_headers(self) -> None:
         """Auto-génère des headers si non fournis."""
-        table = TableData(
+        table = UnifiedTableData(
             rows=[[1, 2], [3, 4]],
         )
 
@@ -67,12 +67,12 @@ class TestTableData:
         assert "| Col1 | Col2 |" in md
 
     def test_to_markdown_empty(self) -> None:
-        table = TableData()
+        table = UnifiedTableData()
         assert table.to_markdown() == ""
 
     def test_to_markdown_with_none_values(self) -> None:
         """Les valeurs None sont converties en chaînes vides."""
-        table = TableData(
+        table = UnifiedTableData(
             headers=["X", "Y"],
             rows=[[1, None], [None, 2]],
         )
@@ -83,7 +83,7 @@ class TestTableData:
         assert "|  | 2 |" in md
 
     def test_to_dict(self) -> None:
-        table = TableData(
+        table = UnifiedTableData(
             headers=["X"],
             rows=[[1], [None]],
             source_location="Sheet1",
@@ -96,7 +96,7 @@ class TestTableData:
         assert d["source_location"] == "Sheet1"
 
     def test_to_dict_none_location(self) -> None:
-        table = TableData(headers=["A"], rows=[[1]])
+        table = UnifiedTableData(headers=["A"], rows=[[1]])
         d = table.to_dict()
         assert d["source_location"] is None
 
@@ -157,11 +157,11 @@ class TestFormulaData:
         assert formula.dependencies == []
 
 
-class TestImageData:
-    """Tests pour ImageData."""
+class TestUnifiedImageData:
+    """Tests pour UnifiedImageData."""
 
     def test_creation(self) -> None:
-        image = ImageData(
+        image = UnifiedImageData(
             filename="logo.png",
             content_type="image/png",
             size_kb=150.5,
@@ -178,7 +178,7 @@ class TestImageData:
         assert image.source_location == "Page 1"
 
     def test_defaults(self) -> None:
-        image = ImageData(
+        image = UnifiedImageData(
             filename="test.jpg",
             content_type="image/jpeg",
             size_kb=100.0,
@@ -201,13 +201,13 @@ class TestStructuredData:
 
     def test_counts(self) -> None:
         data = StructuredData(
-            tables=[TableData(headers=["A"])],
+            tables=[UnifiedTableData(headers=["A"])],
             formulas=[
                 FormulaData(cell="A1", sheet="S1", formula="=1"),
                 FormulaData(cell="A2", sheet="S1", formula="=2"),
             ],
             images=[
-                ImageData(filename="a.png", content_type="image/png", size_kb=10),
+                UnifiedImageData(filename="a.png", content_type="image/png", size_kb=10),
             ],
         )
 
@@ -217,7 +217,7 @@ class TestStructuredData:
 
     def test_to_dict(self) -> None:
         data = StructuredData(
-            tables=[TableData(headers=["X"], rows=[[1]])],
+            tables=[UnifiedTableData(headers=["X"], rows=[[1]])],
             formulas=[FormulaData(cell="B1", sheet="Data", formula="=A1*2", result=10)],
         )
 
@@ -328,7 +328,7 @@ class TestUnifiedDocument:
             ),
             content_markdown="# Rapport\n\nContenu du rapport...",
             structured_data=StructuredData(
-                tables=[TableData(headers=["A", "B"], rows=[[1, 2]])],
+                tables=[UnifiedTableData(headers=["A", "B"], rows=[[1, 2]])],
                 formulas=[
                     FormulaData(
                         cell="B1",

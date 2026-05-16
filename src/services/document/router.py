@@ -12,11 +12,11 @@ from src.core.file_validation import compute_file_hash
 from src.models.unified import (
     DocumentType,
     FormulaData,
-    ImageData,
     StructuredData,
-    TableData,
     UnifiedDocument,
+    UnifiedImageData,
     UnifiedMetadata,
+    UnifiedTableData,
 )
 
 
@@ -258,9 +258,9 @@ class DocumentRouter:
 
     @staticmethod
     def _excel_tables(excel_doc: object) -> list[object]:
-        """Convertit les tableaux d'un classeur Excel en TableData."""
+        """Convertit les tableaux d'un classeur Excel en UnifiedTableData."""
         return [
-            TableData(
+            UnifiedTableData(
                 headers=table.headers,
                 rows=table.data,
                 source_location=f"Feuille: {sheet.name}",
@@ -285,13 +285,13 @@ class DocumentRouter:
 
     @staticmethod
     def _word_tables(word_doc: object) -> list[object]:
-        """Convertit les tableaux d'un document Word en TableData."""
+        """Convertit les tableaux d'un document Word en UnifiedTableData."""
         result: list[object] = []
         for table in word_doc.tables:  # type: ignore[attr-defined]
             headers = table.headers or ([c.text for c in table.rows[0]] if table.rows else [])
             data_rows = table.rows[1:] if table.rows and not table.headers else table.rows
             result.append(
-                TableData(
+                UnifiedTableData(
                     headers=headers,
                     rows=[[c.text for c in row] for row in data_rows],
                 )
@@ -300,9 +300,9 @@ class DocumentRouter:
 
     @staticmethod
     def _word_images(word_doc: object) -> list[object]:
-        """Convertit les images d'un document Word en ImageData."""
+        """Convertit les images d'un document Word en UnifiedImageData."""
         return [
-            ImageData(
+            UnifiedImageData(
                 filename=img.filename,
                 content_type=img.content_type,
                 size_kb=img.size_kb,

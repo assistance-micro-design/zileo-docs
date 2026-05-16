@@ -22,8 +22,12 @@ class DocumentType(str, Enum):
     WORD = "word"
 
 
-class TableData(BaseModel):
-    """Tableau normalisé (commun à tous les formats)."""
+class UnifiedTableData(BaseModel):
+    """Tableau normalisé (commun à tous les formats).
+
+    Distinct de `src.models.extraction.TableData` (qui modélise un tableau
+    PDF natif). Renomme A2 audit 2026-05-15: levee la collision de nom.
+    """
 
     headers: list[str] = Field(default_factory=list)
     rows: list[list[CellValue]] = Field(default_factory=list)
@@ -80,8 +84,12 @@ class FormulaData(BaseModel):
         }
 
 
-class ImageData(BaseModel):
-    """Image normalisée."""
+class UnifiedImageData(BaseModel):
+    """Image normalisée (commun a tous les formats).
+
+    Distinct de `src.models.extraction.ImageData` (image PDF native).
+    Renomme A2 audit 2026-05-15.
+    """
 
     filename: str
     content_type: str
@@ -97,12 +105,12 @@ class ImageData(BaseModel):
 class StructuredData(BaseModel):
     """Données structurées extraites du document."""
 
-    tables: list[TableData] = Field(default_factory=list)
+    tables: list[UnifiedTableData] = Field(default_factory=list)
     formulas: list[FormulaData] = Field(
         default_factory=list,
         description="Formules Excel uniquement",
     )
-    images: list[ImageData] = Field(default_factory=list)
+    images: list[UnifiedImageData] = Field(default_factory=list)
 
     @property
     def tables_count(self) -> int:
