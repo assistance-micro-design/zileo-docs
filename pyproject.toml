@@ -199,11 +199,13 @@ addopts = [
     "-v",
     "--tb=short",
     "--strict-markers",
+    "-m",
+    "not e2e",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
-    "e2e: marks tests as end-to-end tests",
+    "e2e: marks tests as end-to-end tests (require live Qdrant — run with '-m e2e')",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
