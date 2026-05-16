@@ -184,3 +184,35 @@ class TestCreateApp:
         result = create_app()
 
         assert isinstance(result, FastAPI)
+
+
+class TestCorsMiddleware:
+    """Tests pour le middleware CORS (S1: actif en DEBUG, retire en prod)."""
+
+    def test_cors_middleware_active_in_debug(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """En mode DEBUG, le middleware CORS est present dans la stack."""
+        from fastapi.middleware.cors import CORSMiddleware
+
+        from src.main import settings
+
+        monkeypatch.setattr(settings, "DEBUG", True)
+        monkeypatch.setattr(settings, "API_KEY", "")
+
+        test_app = create_app()
+
+        middleware_classes = [m.cls for m in test_app.user_middleware]
+        assert CORSMiddleware in middleware_classes
+
+    def test_cors_middleware_absent_in_prod(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Hors mode DEBUG, le middleware CORS est absent (pas mount)."""
+        from fastapi.middleware.cors import CORSMiddleware
+
+        from src.main import settings
+
+        monkeypatch.setattr(settings, "DEBUG", False)
+        monkeypatch.setattr(settings, "API_KEY", "fake-key")
+
+        test_app = create_app()
+
+        middleware_classes = [m.cls for m in test_app.user_middleware]
+        assert CORSMiddleware not in middleware_classes

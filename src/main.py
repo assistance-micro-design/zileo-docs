@@ -105,13 +105,20 @@ def create_app() -> FastAPI:
 
 
 def _configure_middleware(app: FastAPI, limiter: Limiter) -> None:
-    """Configure les middlewares (rate limiting, CORS)."""
+    """Configure les middlewares (rate limiting, CORS).
+
+    CORS n'est monte qu'en mode DEBUG. En production, le serveur est destine
+    a etre consomme par des clients backend (MCP, scripts), pas des navigateurs.
+    """
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+    if not settings.DEBUG:
+        return
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if settings.DEBUG else [],
+        allow_origins=["*"],
         allow_credentials=False,
         allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Content-Type", "X-API-Key"],
