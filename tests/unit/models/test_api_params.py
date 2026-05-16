@@ -5,7 +5,18 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from src.models.api import InspectGeneratedFileParams, ListAvailableDocumentsParams
+from src.models.api import (
+    CreateExcelParams,
+    CreateWordParams,
+    DeleteDocumentParams,
+    EditExcelParams,
+    GetDocumentParams,
+    GetExcelFormulasParams,
+    InspectGeneratedFileParams,
+    ListAvailableDocumentsParams,
+    ReadDocumentContentParams,
+    UnifiedIndexDocumentParams,
+)
 
 
 class TestListAvailableDocumentsParams:
@@ -68,3 +79,62 @@ class TestInspectGeneratedFileParams:
     def test_max_rows_bounds_max(self) -> None:
         with pytest.raises(ValidationError):
             InspectGeneratedFileParams(filename="test.xlsx", max_rows_per_sheet=101)
+
+
+class TestParamsExtraForbid:
+    """Tests Q1 audit 2026-05-15: tous les *Params MCP rejettent les champs inconnus.
+
+    Garantit fail-fast cote LLM si un client envoie un champ ignore par erreur.
+    """
+
+    def test_get_document_params_rejects_unknown_field(self) -> None:
+        with pytest.raises(ValidationError, match="extra"):
+            GetDocumentParams(document_id="doc-1", extra_field="oops")  # type: ignore[call-arg]
+
+    def test_delete_document_params_rejects_unknown_field(self) -> None:
+        with pytest.raises(ValidationError, match="extra"):
+            DeleteDocumentParams(document_id="doc-1", extra_field="oops")  # type: ignore[call-arg]
+
+    def test_read_document_content_params_rejects_unknown_field(self) -> None:
+        with pytest.raises(ValidationError, match="extra"):
+            ReadDocumentContentParams(document_id="doc-1", extra_field="oops")  # type: ignore[call-arg]
+
+    def test_unified_index_document_params_rejects_unknown_field(self) -> None:
+        with pytest.raises(ValidationError, match="extra"):
+            UnifiedIndexDocumentParams(file_path="/tmp/x.pdf", extra_field="oops")  # type: ignore[call-arg]
+
+    def test_get_excel_formulas_params_rejects_unknown_field(self) -> None:
+        with pytest.raises(ValidationError, match="extra"):
+            GetExcelFormulasParams(document_id="doc-1", extra_field="oops")  # type: ignore[call-arg]
+
+    def test_create_excel_params_rejects_unknown_field(self) -> None:
+        with pytest.raises(ValidationError, match="extra"):
+            CreateExcelParams(  # type: ignore[call-arg]
+                filename="r.xlsx",
+                sheets=[{"name": "S1"}],
+                extra_field="oops",
+            )
+
+    def test_edit_excel_params_rejects_unknown_field(self) -> None:
+        with pytest.raises(ValidationError, match="extra"):
+            EditExcelParams(  # type: ignore[call-arg]
+                filename="r.xlsx",
+                operations=[{"op": "delete_rows", "sheet": "S1", "start_row": 1, "end_row": 1}],
+                extra_field="oops",
+            )
+
+    def test_create_word_params_rejects_unknown_field(self) -> None:
+        with pytest.raises(ValidationError, match="extra"):
+            CreateWordParams(  # type: ignore[call-arg]
+                filename="r.docx",
+                content="# Test",
+                extra_field="oops",
+            )
+
+    def test_list_available_documents_params_rejects_unknown_field(self) -> None:
+        with pytest.raises(ValidationError, match="extra"):
+            ListAvailableDocumentsParams(extra_field="oops")  # type: ignore[call-arg]
+
+    def test_inspect_generated_file_params_rejects_unknown_field(self) -> None:
+        with pytest.raises(ValidationError, match="extra"):
+            InspectGeneratedFileParams(filename="r.xlsx", extra_field="oops")  # type: ignore[call-arg]

@@ -138,6 +138,8 @@ class GetDocumentParams(BaseModel):
         document_id: ID du document.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     document_id: Annotated[str, Field(description="ID du document")]
 
 
@@ -147,6 +149,8 @@ class DeleteDocumentParams(BaseModel):
     Attributes:
         document_id: ID du document a supprimer de l'index.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     document_id: Annotated[str, Field(description="ID du document a supprimer")]
 
@@ -160,6 +164,8 @@ class ReadDocumentContentParams(BaseModel):
         page_end: Page de fin (1-indexed, inclus).
         include_chunks_detail: Inclure metadonnees par chunk.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     document_id: Annotated[
         str,
@@ -191,6 +197,8 @@ class UnifiedIndexDocumentParams(BaseModel):
         table_format: Format de sortie des tableaux.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     file_path: Annotated[
         str, Field(description="Chemin absolu vers le document. Ex: /data/docs/rapport.xlsx")
     ]
@@ -217,6 +225,8 @@ class GetExcelFormulasParams(BaseModel):
         cell_range: Filtrer par plage de cellules.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     document_id: Annotated[
         str, Field(description="ID du document Excel (retourné par index_document)")
     ]
@@ -239,8 +249,9 @@ class CreateExcelParams(BaseModel):
         author: Auteur du classeur (metadonnee).
     """
 
-    model_config = {
-        "json_schema_extra": {
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
             "examples": [
                 {
                     "filename": "report.xlsx",
@@ -261,8 +272,8 @@ class CreateExcelParams(BaseModel):
                     ],
                 }
             ]
-        }
-    }
+        },
+    )
 
     filename: Annotated[
         str,
@@ -307,8 +318,9 @@ class EditExcelParams(BaseModel):
         operations: Liste ordonnee d'operations a appliquer.
     """
 
-    model_config = {
-        "json_schema_extra": {
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
             "examples": [
                 {
                     "filename": "report.xlsx",
@@ -327,8 +339,8 @@ class EditExcelParams(BaseModel):
                     ],
                 }
             ]
-        }
-    }
+        },
+    )
 
     filename: Annotated[
         str,
@@ -373,8 +385,9 @@ class CreateWordParams(BaseModel):
         author: Auteur du document (metadonnee).
     """
 
-    model_config = {
-        "json_schema_extra": {
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
             "examples": [
                 {
                     "filename": "report.docx",
@@ -383,8 +396,8 @@ class CreateWordParams(BaseModel):
                     "author": "Zileo",
                 }
             ]
-        }
-    }
+        },
+    )
 
     filename: Annotated[
         str,
@@ -433,6 +446,8 @@ class ListAvailableDocumentsParams(BaseModel):
         recursive: Explorer récursivement.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     source: Annotated[
         str,
         Field(default="documents", description="Source des fichiers a lister"),
@@ -478,6 +493,8 @@ class InspectGeneratedFileParams(BaseModel):
         filename: Nom du fichier dans OUTPUT_PATH.
         max_rows_per_sheet: Nombre max de lignes a afficher par feuille Excel.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     filename: Annotated[
         str,
