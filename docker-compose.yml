@@ -23,6 +23,8 @@ services:
       - QDRANT_PORT=6333
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-documents}
       - MAX_MCP_BODY_MB=${MAX_MCP_BODY_MB:-5}
+      - MISTRAL_TIMEOUT_S=${MISTRAL_TIMEOUT_S:-30}
+      - MAX_DECOMPRESSED_MB=${MAX_DECOMPRESSED_MB:-200}
     volumes:
       - ./data:/app/data
       - ${DOCUMENTS_PATH:-./data/documents}:/app/documents:ro
