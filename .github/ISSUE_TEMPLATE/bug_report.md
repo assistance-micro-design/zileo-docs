@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in MCP Zileo RAG
+about: Report a bug in Zileo Docs
 title: '[BUG] '
 labels: bug
 assignees: ''
@@ -23,13 +23,13 @@ What actually happened. Include the JSON-RPC error payload or REST response if r
 ## Environment
 - OS: [e.g., Ubuntu 22.04, Fedora 43, macOS 14, Windows 11 + WSL2]
 - Docker version: [e.g., Docker 27.x]
-- MCP Zileo RAG version: [e.g., v0.2.0]
+- Zileo Docs version: [e.g., v0.4.0]
 - Python version (if running outside Docker): [e.g., 3.11.9]
 - MCP client: [e.g., Claude Desktop, Zileo Chat, custom]
 
 ## Logs
 ```
-docker compose logs mcp-zileo-rag --tail 100
+docker compose logs zileo-docs --tail 100
 ```
 
 ## Additional Context
