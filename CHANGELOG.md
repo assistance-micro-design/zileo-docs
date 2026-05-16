@@ -7,6 +7,24 @@ et ce projet adhere au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+### Securite
+- CORS : middleware retire en mode production (allow_origins=[] etait ambigu — config technique active sans domaines autorises)
+- Rate limiting etendu a `GET/DELETE /api/v1/documents/{id}`, `GET /api/v1/documents`, `GET /health` (RATE_LIMIT_DEFAULT) ; `/health/live` et `/health/ready` restent volontairement nus (probes Kubernetes/Docker)
+- Lifespan fail-fast : `MCPServer.initialize()` ne tolere plus les erreurs silencieusement (un Qdrant down ou Mistral mal configure empeche desormais le demarrage)
+- Variables anti-DoS exposees : `MISTRAL_TIMEOUT_S` et `MAX_DECOMPRESSED_MB` dans `.env.example` et `docker-compose.yml`
+- `_orchestrator_error_to_http` ne leak plus `str(exc)` au client : les exceptions inconnues sont loggees cote serveur et le client recoit `"Internal server error"`
+
+### Qualite
+- **BREAKING (cote LLM)** : `extra="forbid"` applique aux 10 modeles `*Params` MCP (`GetDocumentParams`, `DeleteDocumentParams`, `ReadDocumentContentParams`, `UnifiedIndexDocumentParams`, `GetExcelFormulasParams`, `CreateExcelParams`, `EditExcelParams`, `CreateWordParams`, `ListAvailableDocumentsParams`, `InspectGeneratedFileParams`). Un client envoyant un champ inconnu recoit desormais `VALIDATION_ERROR` au lieu d'un silence.
+- `model_config` uniformise via `ConfigDict(...)` typesafe sur `CreateExcelParams`, `EditExcelParams`, `CreateWordParams` (etaient en dict brut)
+- `BaseDocumentGenerator.persist_and_verify(callable, path, filename)` factorise le pattern "ecrire puis verifier la taille" partage entre Excel et Word ; `__init__` redondants de `ExcelGenerator`/`WordGenerator` supprimes (heritent directement)
+
+### Architecture
+- **BREAKING (import)** : `TableData`/`ImageData` de `src/models/unified.py` renommes en `UnifiedTableData`/`UnifiedImageData` pour lever la collision avec les versions PDF natif de `src/models/extraction.py`
+- `src/services/document/router.py` : 8 imports lazy `models.unified` hoistes au top du fichier (pas d'import circulaire reel) ; commentaire et `noqa PLC0415` retires
+- `src/services/vector/payload.py` renomme `payload_reader.py` (distinguer de `payload_builder.py`)
+- Nouveau `tests/unit/services/vector/test_payload_reader.py` couvre `extract_doc_summary` (cas nominal, payload incomplet, dict vide)
+
 ## [0.3.0] - 2026-05-15
 
 ### BREAKING CHANGES
