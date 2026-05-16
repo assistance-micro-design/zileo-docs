@@ -9,12 +9,12 @@ import json
 from src.core.exceptions import (
     EmptyQueryError,
     ExcelFormulaInjectionError,
-    ZileoDocsError,
     OCRRateLimitError,
     PDFError,
     SourceFileNotFoundError,
     ValidationError,
     VectorStoreConnectionError,
+    ZileoDocsError,
 )
 
 

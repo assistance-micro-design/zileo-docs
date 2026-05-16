@@ -9,7 +9,6 @@ from src.core.exceptions import (
     DocumentNotFoundError,
     EmbeddingAPIError,
     EmbeddingError,
-    ZileoDocsError,
     OCRAPIError,
     OCRError,
     OCRRateLimitError,
@@ -21,6 +20,7 @@ from src.core.exceptions import (
     ValidationError,
     VectorStoreConnectionError,
     VectorStoreError,
+    ZileoDocsError,
 )
 from src.core.logging import setup_logging
 
@@ -29,7 +29,6 @@ __all__ = [
     "DocumentNotFoundError",
     "EmbeddingAPIError",
     "EmbeddingError",
-    "ZileoDocsError",
     "OCRAPIError",
     "OCRError",
     "OCRRateLimitError",
@@ -42,6 +41,7 @@ __all__ = [
     "ValidationError",
     "VectorStoreConnectionError",
     "VectorStoreError",
+    "ZileoDocsError",
     "settings",
     "setup_logging",
 ]

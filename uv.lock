@@ -1108,74 +1108,6 @@ wheels = [
 ]
 
 [[package]]
-name = "mcp-zileo-rag"
-version = "0.2.0"
-source = { editable = "." }
-dependencies = [
-    { name = "docx2python" },
-    { name = "fastapi" },
-    { name = "fastembed" },
-    { name = "mcp" },
-    { name = "mistralai" },
-    { name = "openpyxl" },
-    { name = "pillow" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "pymupdf" },
-    { name = "pymupdf4llm" },
-    { name = "python-docx" },
-    { name = "python-multipart" },
-    { name = "qdrant-client" },
-    { name = "slowapi" },
-    { name = "structlog" },
-    { name = "tenacity" },
-    { name = "tiktoken" },
-    { name = "uvicorn", extra = ["standard"] },
-    { name = "xlrd" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "httpx" },
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "docx2python", specifier = ">=2.0.0" },
-    { name = "fastapi", specifier = ">=0.110.0" },
-    { name = "fastembed", specifier = ">=0.4.0" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.0" },
-    { name = "mcp", specifier = ">=1.0.0" },
-    { name = "mistralai", specifier = ">=1.0.0,<2.0.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
-    { name = "openpyxl", specifier = ">=3.1.0" },
-    { name = "pillow", specifier = ">=10.0.0" },
-    { name = "pydantic", specifier = ">=2.6.0" },
-    { name = "pydantic-settings", specifier = ">=2.2.0" },
-    { name = "pymupdf", specifier = ">=1.24.0" },
-    { name = "pymupdf4llm", specifier = ">=0.0.10" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
-    { name = "python-docx", specifier = ">=1.0.0" },
-    { name = "python-multipart", specifier = ">=0.0.9" },
-    { name = "qdrant-client", specifier = ">=1.9.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3.0" },
-    { name = "slowapi", specifier = ">=0.1.9" },
-    { name = "structlog", specifier = ">=24.1.0" },
-    { name = "tenacity", specifier = ">=8.2.0" },
-    { name = "tiktoken", specifier = ">=0.7.0" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
-    { name = "xlrd", specifier = ">=2.0.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "mdurl"
 version = "0.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3059,6 +2991,74 @@ sdist = { url = "https://files.pythonhosted.org/packages/07/5a/377161c2d3538d199
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1a/62/c8d562e7766786ba6587d09c5a8ba9f718ed3fa8af7f4553e8f91c36f302/xlrd-2.0.2-py2.py3-none-any.whl", hash = "sha256:ea762c3d29f4cca48d82df517b6d89fbce4db3107f9d78713e48cd321d5c9aa9", size = 96555, upload-time = "2025-06-14T08:46:37.766Z" },
 ]
+
+[[package]]
+name = "zileo-docs"
+version = "0.4.0"
+source = { editable = "." }
+dependencies = [
+    { name = "docx2python" },
+    { name = "fastapi" },
+    { name = "fastembed" },
+    { name = "mcp" },
+    { name = "mistralai" },
+    { name = "openpyxl" },
+    { name = "pillow" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pymupdf" },
+    { name = "pymupdf4llm" },
+    { name = "python-docx" },
+    { name = "python-multipart" },
+    { name = "qdrant-client" },
+    { name = "slowapi" },
+    { name = "structlog" },
+    { name = "tenacity" },
+    { name = "tiktoken" },
+    { name = "uvicorn", extra = ["standard"] },
+    { name = "xlrd" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "docx2python", specifier = ">=2.0.0" },
+    { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "fastembed", specifier = ">=0.4.0" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.0" },
+    { name = "mcp", specifier = ">=1.0.0" },
+    { name = "mistralai", specifier = ">=1.0.0,<2.0.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
+    { name = "openpyxl", specifier = ">=3.1.0" },
+    { name = "pillow", specifier = ">=10.0.0" },
+    { name = "pydantic", specifier = ">=2.6.0" },
+    { name = "pydantic-settings", specifier = ">=2.2.0" },
+    { name = "pymupdf", specifier = ">=1.24.0" },
+    { name = "pymupdf4llm", specifier = ">=0.0.10" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
+    { name = "python-docx", specifier = ">=1.0.0" },
+    { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "qdrant-client", specifier = ">=1.9.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3.0" },
+    { name = "slowapi", specifier = ">=0.1.9" },
+    { name = "structlog", specifier = ">=24.1.0" },
+    { name = "tenacity", specifier = ">=8.2.0" },
+    { name = "tiktoken", specifier = ">=0.7.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
+    { name = "xlrd", specifier = ">=2.0.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "zipp"
