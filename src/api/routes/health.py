@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import VectorStoreDep
@@ -16,6 +18,7 @@ from src.models.api import HealthResponse
 
 logger = logging.getLogger(__name__)
 
+limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/health", tags=["Health"])
 
 
@@ -26,7 +29,8 @@ router = APIRouter(prefix="/health", tags=["Health"])
     description="Verifie l'etat de sante du service et de ses dependances. Auth requise.",
     dependencies=[Depends(verify_api_key)],
 )
-async def health_check(vector_store: VectorStoreDep) -> HealthResponse:
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)  # type: ignore[untyped-decorator]
+async def health_check(request: Request, vector_store: VectorStoreDep) -> HealthResponse:
     """Verifie l'etat de sante du service.
 
     Returns:

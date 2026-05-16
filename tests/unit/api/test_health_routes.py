@@ -99,3 +99,22 @@ class TestHealthRoutes:
 
         assert response.status_code == 200
         assert response.json()["status"] == "degraded"
+
+
+class TestHealthRateLimit:
+    """Tests S2a: GET /health doit etre rate-limite, /live et /ready ne le sont pas."""
+
+    def test_health_check_has_rate_limit(self) -> None:
+        from src.api.routes.health import limiter
+
+        assert "src.api.routes.health.health_check" in limiter._route_limits
+
+    def test_liveness_not_rate_limited(self) -> None:
+        from src.api.routes.health import limiter
+
+        assert "src.api.routes.health.liveness" not in limiter._route_limits
+
+    def test_readiness_not_rate_limited(self) -> None:
+        from src.api.routes.health import limiter
+
+        assert "src.api.routes.health.readiness" not in limiter._route_limits

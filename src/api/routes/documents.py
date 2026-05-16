@@ -185,7 +185,9 @@ def _orchestrator_error_to_http(exc: Exception) -> HTTPException:
     summary="Obtenir les informations d'un document",
     description="Retourne les informations et chunks d'un document indexe.",
 )
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)  # type: ignore[untyped-decorator]
 async def get_document(
+    request: Request,
     document_id: Annotated[str, PathParam(min_length=1, max_length=255, pattern=r"^[\w\-]+$")],
     vector_store: VectorStoreDep,
 ) -> dict[str, Any]:
@@ -242,7 +244,9 @@ async def get_document(
     summary="Supprimer un document",
     description="Supprime un document et tous ses chunks de l'index.",
 )
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)  # type: ignore[untyped-decorator]
 async def delete_document(
+    request: Request,
     document_id: Annotated[str, PathParam(min_length=1, max_length=255, pattern=r"^[\w\-]+$")],
     vector_store: VectorStoreDep,
 ) -> DeleteResult:
@@ -269,7 +273,9 @@ async def delete_document(
     summary="Lister les statistiques",
     description="Retourne les statistiques de la collection de documents.",
 )
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)  # type: ignore[untyped-decorator]
 async def list_stats(
+    request: Request,
     vector_store: VectorStoreDep,
 ) -> dict[str, Any]:
     """Retourne les statistiques de la collection.

@@ -144,3 +144,22 @@ class TestListStats:
 
         assert response.status_code == 200
         assert response.json()["status"] == "unavailable"
+
+
+class TestRateLimitDecorators:
+    """Tests S2a: GET/DELETE et list_stats doivent etre rate-limites."""
+
+    def test_get_document_has_rate_limit(self) -> None:
+        from src.api.routes.documents import limiter
+
+        assert "src.api.routes.documents.get_document" in limiter._route_limits
+
+    def test_delete_document_has_rate_limit(self) -> None:
+        from src.api.routes.documents import limiter
+
+        assert "src.api.routes.documents.delete_document" in limiter._route_limits
+
+    def test_list_stats_has_rate_limit(self) -> None:
+        from src.api.routes.documents import limiter
+
+        assert "src.api.routes.documents.list_stats" in limiter._route_limits
