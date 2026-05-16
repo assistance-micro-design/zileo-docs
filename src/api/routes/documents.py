@@ -26,7 +26,7 @@ from src.core.exceptions import (
 )
 from src.core.file_validation import validate_file_magic, validate_filename_safety
 from src.models.api import DeleteResult, ProcessingStatus
-from src.services.vector.payload import extract_doc_summary
+from src.services.vector.payload_reader import extract_doc_summary
 
 
 _UPLOAD_CHUNK_BYTES = 64 * 1024
@@ -163,6 +163,10 @@ async def _stream_upload_to_temp(file: UploadFile, max_size_mb: int) -> Path:
 def _orchestrator_error_to_http(exc: Exception) -> HTTPException:
     """Mappe une erreur d'orchestration sur un code HTTP.
 
+    Les erreurs metier connues (4xx) exposent leur message clair au client.
+    Les autres exceptions sont loggees cote serveur et le client recoit
+    un message generique (L5.a audit 2026-05-15: pas de leak d'internal state).
+
     Args:
         exc: Exception levee par l'orchestrateur.
 
@@ -177,7 +181,11 @@ def _orchestrator_error_to_http(exc: Exception) -> HTTPException:
         )
     if isinstance(exc, PDFCorruptedError):
         return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message)
-    return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    logger.exception("Unhandled orchestrator error", exc_info=exc)
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Internal server error",
+    )
 
 
 @router.get(

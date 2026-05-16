@@ -10,7 +10,7 @@ from typing import Any, ClassVar
 from src.core.exceptions import DocumentNotFoundError
 from src.mcp.tools.base import VectorStoreMCPTool
 from src.models.api import ReadDocumentContentParams
-from src.services.vector.payload import extract_doc_summary
+from src.services.vector.payload_reader import extract_doc_summary
 
 
 logger = logging.getLogger(__name__)
