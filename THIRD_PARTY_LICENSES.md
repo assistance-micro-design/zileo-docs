@@ -14,13 +14,13 @@ All other dependencies use permissive licenses (MIT, BSD-3-Clause, Apache-2.0, H
 |---------|---------|---------|--------|
 | **PyMuPDF** | 1.27.x | AGPL-3.0 | https://github.com/pymupdf/PyMuPDF |
 | **pymupdf4llm** | 1.27.x | AGPL-3.0 | https://github.com/pymupdf/RAG |
-| fastapi | 0.135.x | MIT | https://github.com/fastapi/fastapi |
-| uvicorn | 0.43.x | BSD-3-Clause | https://github.com/encode/uvicorn |
-| pydantic | 2.12.x | MIT | https://github.com/pydantic/pydantic |
-| pydantic-settings | 2.13.x | MIT | https://github.com/pydantic/pydantic-settings |
+| fastapi | 0.136.x | MIT | https://github.com/fastapi/fastapi |
+| uvicorn | 0.46.x | BSD-3-Clause | https://github.com/encode/uvicorn |
+| pydantic | 2.13.x | MIT | https://github.com/pydantic/pydantic |
+| pydantic-settings | 2.14.x | MIT | https://github.com/pydantic/pydantic-settings |
 | mcp | 1.27.x | MIT | https://github.com/modelcontextprotocol/python-sdk |
 | mistralai | 1.12.x | Apache-2.0 | https://github.com/mistralai/client-python |
-| qdrant-client | 1.17.x | Apache-2.0 | https://github.com/qdrant/qdrant-client |
+| qdrant-client | 1.18.x | Apache-2.0 | https://github.com/qdrant/qdrant-client |
 | fastembed | 0.8.x | Apache-2.0 | https://github.com/qdrant/fastembed |
 | slowapi | 0.1.x | MIT | https://github.com/laurentS/slowapi |
 | tiktoken | 0.12.x | MIT | https://github.com/openai/tiktoken |
