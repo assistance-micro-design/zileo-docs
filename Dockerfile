@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # =============================================================================
-# MCP Zileo RAG - Dockerfile
+# Zileo Docs - Dockerfile
 # Multi-stage build pour une image optimisee
 # =============================================================================
 
@@ -38,7 +38,7 @@ WORKDIR /app
 ARG APP_VERSION=0.2.0
 
 # Labels
-LABEL org.opencontainers.image.title="MCP Zileo RAG"
+LABEL org.opencontainers.image.title="Zileo Docs"
 LABEL org.opencontainers.image.description="MCP Server for document processing (PDF, Excel, Word) with OCR and vector search"
 LABEL org.opencontainers.image.version="${APP_VERSION}"
 
@@ -49,7 +49,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Variables d'environnement par defaut
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    APP_NAME="MCP Zileo RAG" \
+    APP_NAME="Zileo Docs" \
     APP_VERSION="${APP_VERSION}" \
     LOG_LEVEL="INFO" \
     LOG_FORMAT="json"
