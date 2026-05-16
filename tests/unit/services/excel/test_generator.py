@@ -197,12 +197,12 @@ class TestExcelGeneratorCore:
         params = CreateExcelParams(
             filename="author.xlsx",
             sheets=[SheetDef(name="F1")],
-            author="MCP Zileo RAG",
+            author="Zileo Docs",
         )
         result = await generator.generate(params)
 
         wb = load_workbook(result.file_path)
-        assert wb.properties.creator == "MCP Zileo RAG"
+        assert wb.properties.creator == "Zileo Docs"
         wb.close()
 
     @pytest.mark.asyncio

@@ -88,7 +88,7 @@ class TestCreateExcelE2E:
                         ],
                     }
                 ],
-                "author": "MCP Zileo RAG",
+                "author": "Zileo Docs",
             }
         )
 
@@ -131,7 +131,7 @@ class TestCreateExcelE2E:
         assert len(ws.data_validations.dataValidation) == 1
 
         # Verifier l'auteur
-        assert wb.properties.creator == "MCP Zileo RAG"
+        assert wb.properties.creator == "Zileo Docs"
 
         wb.close()
 

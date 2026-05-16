@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from src.core.exceptions import MCPZileoError
+from src.core.exceptions import ZileoDocsError
 from src.main import app, create_app, lifespan
 
 
@@ -167,21 +167,21 @@ class TestMCPEndpoint:
 
 @pytest.mark.usefixtures("mocked_mcp_server")
 class TestExceptionHandler:
-    """Tests pour le handler global MCPZileoError -> 400 + to_dict()."""
+    """Tests pour le handler global ZileoDocsError -> 400 + to_dict()."""
 
-    def test_mcpzileo_error_serialized_as_400(
+    def test_zileo_docs_error_serialized_as_400(
         self, test_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Une MCPZileoError levee dans une route retourne 400 + to_dict()."""
+        """Une ZileoDocsError levee dans une route retourne 400 + to_dict()."""
         from src.main import settings
 
         monkeypatch.setattr(settings, "API_KEY", "")
         monkeypatch.setattr(settings, "DEBUG", True)
 
-        # On ajoute une route de test qui leve une MCPZileoError
+        # On ajoute une route de test qui leve une ZileoDocsError
         @test_client.app.get("/__test_error")
         async def _trigger() -> dict[str, str]:
-            raise MCPZileoError(message="boom", code="TEST_CODE")
+            raise ZileoDocsError(message="boom", code="TEST_CODE")
 
         with test_client:
             response = test_client.get("/__test_error")

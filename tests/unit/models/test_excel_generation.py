@@ -314,9 +314,9 @@ class TestCreateExcelParams:
         params = CreateExcelParams(
             filename="test.xlsx",
             sheets=[SheetDef(name="F1")],
-            author="MCP Zileo RAG",
+            author="Zileo Docs",
         )
-        assert params.author == "MCP Zileo RAG"
+        assert params.author == "Zileo Docs"
 
     def test_author_max_length_255(self) -> None:
         """Author respecte max_length=255."""

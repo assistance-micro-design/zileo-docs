@@ -15,8 +15,8 @@ from src.models.api import CreateExcelParams, EditExcelParams
 class TestFormatToolError:
     """Tests de _format_tool_error."""
 
-    def test_mcp_zileo_error_uses_llm_format(self) -> None:
-        """MCPZileoError -> to_llm_format()."""
+    def test_zileo_docs_error_uses_llm_format(self) -> None:
+        """ZileoDocsError -> to_llm_format()."""
         error = ExcelFileNotFoundError("test.xlsx")
         result = _format_tool_error(error)
         assert "EXCEL_FILE_NOT_FOUND" in result

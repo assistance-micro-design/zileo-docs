@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""Tests pour src/core/exceptions.py (hierarchie MCPZileoError)."""
+"""Tests pour src/core/exceptions.py (hierarchie ZileoDocsError)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import json
 from src.core.exceptions import (
     EmptyQueryError,
     ExcelFormulaInjectionError,
-    MCPZileoError,
+    ZileoDocsError,
     OCRRateLimitError,
     PDFError,
     SourceFileNotFoundError,
@@ -18,18 +18,18 @@ from src.core.exceptions import (
 )
 
 
-def test_source_file_not_found_inherits_mcpzileo_error() -> None:
-    """SourceFileNotFoundError herite de MCPZileoError (via PDFError)."""
+def test_source_file_not_found_inherits_zileo_docs_error() -> None:
+    """SourceFileNotFoundError herite de ZileoDocsError (via PDFError)."""
     err = SourceFileNotFoundError("/tmp/missing.pdf")
 
-    assert isinstance(err, MCPZileoError)
+    assert isinstance(err, ZileoDocsError)
     assert isinstance(err, PDFError)
 
 
 def test_default_code_class_var_applied() -> None:
     """default_code ClassVar est applique si code non passe."""
 
-    class CustomError(MCPZileoError):
+    class CustomError(ZileoDocsError):
         default_code = "CUSTOM_CODE"
 
     err = CustomError("msg sans code")
@@ -39,7 +39,7 @@ def test_default_code_class_var_applied() -> None:
 
 def test_default_code_overridden_by_explicit_code() -> None:
     """Un code explicite surcharge le default_code de la classe."""
-    err = MCPZileoError("msg", code="OVERRIDE")
+    err = ZileoDocsError("msg", code="OVERRIDE")
 
     assert err.code == "OVERRIDE"
 
@@ -53,7 +53,7 @@ def test_pdf_error_default_code() -> None:
 
 def test_to_llm_format_includes_code_message_suggestion() -> None:
     """to_llm_format() produit la forme ERROR [CODE]: msg\\nSUGGESTION: ..."""
-    err = MCPZileoError(
+    err = ZileoDocsError(
         message="boom",
         code="CODE_X",
         suggestion="essaie ceci",
@@ -71,7 +71,7 @@ def test_to_llm_format_includes_code_message_suggestion() -> None:
 
 def test_to_llm_format_minimal_when_no_suggestion() -> None:
     """to_llm_format() omet les lignes optionnelles si non fournies."""
-    err = MCPZileoError("msg", code="MINIMAL")
+    err = ZileoDocsError("msg", code="MINIMAL")
 
     formatted = err.to_llm_format()
 
@@ -96,7 +96,7 @@ def test_to_dict_is_json_serializable() -> None:
 
 def test_to_dict_omits_optional_fields_when_none() -> None:
     """to_dict() n'inclut pas suggestion/parameter/retry si non fournis."""
-    err = MCPZileoError("simple", code="SIMPLE")
+    err = ZileoDocsError("simple", code="SIMPLE")
 
     payload = err.to_dict()
 
