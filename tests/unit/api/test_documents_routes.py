@@ -147,7 +147,7 @@ class TestListStats:
 
 
 class TestRateLimitDecorators:
-    """Tests S2a: GET/DELETE et list_stats doivent etre rate-limites."""
+    """Verifie que GET/DELETE et list_stats sont rate-limites via slowapi."""
 
     def test_get_document_has_rate_limit(self) -> None:
         from src.api.routes.documents import limiter

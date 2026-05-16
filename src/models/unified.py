@@ -26,7 +26,7 @@ class UnifiedTableData(BaseModel):
     """Tableau normalisé (commun à tous les formats).
 
     Distinct de `src.models.extraction.TableData` (qui modélise un tableau
-    PDF natif). Renomme A2 audit 2026-05-15: levee la collision de nom.
+    PDF natif): le prefixe `Unified` evite la collision de nom.
     """
 
     headers: list[str] = Field(default_factory=list)
@@ -87,8 +87,8 @@ class FormulaData(BaseModel):
 class UnifiedImageData(BaseModel):
     """Image normalisée (commun a tous les formats).
 
-    Distinct de `src.models.extraction.ImageData` (image PDF native).
-    Renomme A2 audit 2026-05-15.
+    Distinct de `src.models.extraction.ImageData` (image PDF native):
+    le prefixe `Unified` evite la collision de nom.
     """
 
     filename: str

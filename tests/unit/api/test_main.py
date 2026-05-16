@@ -25,8 +25,8 @@ def test_client() -> TestClient:
 def mocked_mcp_server() -> Any:
     """Patch MCPServer pour que initialize() ne tente pas de se connecter a Qdrant.
 
-    Necessaire depuis le fail-fast du lifespan (S3, audit 2026-05-15): le vrai
-    MCPServer.initialize() echoue hors container.
+    Necessaire depuis que le lifespan fail-fast sur init MCPServer:
+    le vrai MCPServer.initialize() echoue hors container Docker.
     """
     mock_server = MagicMock()
     mock_server.initialize = AsyncMock()
@@ -72,7 +72,7 @@ class TestLifespanStartup:
 
     @pytest.mark.asyncio
     async def test_lifespan_raises_on_mcp_init_failure(self) -> None:
-        """Une exception dans MCPServer.initialize() doit faire echouer le lifespan (S3 fail-fast)."""
+        """Une exception dans MCPServer.initialize() doit faire echouer le lifespan (fail-fast)."""
         from src.main import MCPServer
 
         mock_server = MagicMock(spec=MCPServer)

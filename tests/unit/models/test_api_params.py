@@ -82,10 +82,7 @@ class TestInspectGeneratedFileParams:
 
 
 class TestParamsExtraForbid:
-    """Tests Q1 audit 2026-05-15: tous les *Params MCP rejettent les champs inconnus.
-
-    Garantit fail-fast cote LLM si un client envoie un champ ignore par erreur.
-    """
+    """Garantit fail-fast cote LLM si un client envoie un champ ignore par erreur."""
 
     def test_get_document_params_rejects_unknown_field(self) -> None:
         with pytest.raises(ValidationError, match="extra"):

@@ -165,7 +165,7 @@ def _orchestrator_error_to_http(exc: Exception) -> HTTPException:
 
     Les erreurs metier connues (4xx) exposent leur message clair au client.
     Les autres exceptions sont loggees cote serveur et le client recoit
-    un message generique (L5.a audit 2026-05-15: pas de leak d'internal state).
+    un message generique (pas de leak d'internal state via str(exc)).
 
     Args:
         exc: Exception levee par l'orchestrateur.

@@ -81,7 +81,7 @@ class TestVerifyFileSize:
 
 
 class TestPersistAndVerify:
-    """Tests Q3b audit 2026-05-15: factorisation save+verify via callable injecte."""
+    """Tests pour persist_and_verify: factorisation save+verify via callable injecte."""
 
     def test_calls_save_callable_with_file_path(self, tmp_path: Path) -> None:
         gen = BaseDocumentGenerator(output_path=tmp_path)

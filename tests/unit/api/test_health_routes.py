@@ -102,7 +102,7 @@ class TestHealthRoutes:
 
 
 class TestHealthRateLimit:
-    """Tests S2a: GET /health doit etre rate-limite, /live et /ready ne le sont pas."""
+    """GET /health doit etre rate-limite, /live et /ready ne le sont pas (probes)."""
 
     def test_health_check_has_rate_limit(self) -> None:
         from src.api.routes.health import limiter
