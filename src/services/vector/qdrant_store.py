@@ -456,32 +456,40 @@ class QdrantVectorStore:
             document_id: Identifiant du document a supprimer.
 
         Returns:
-            Nombre de points supprimes (approximatif via status).
+            Nombre exact de chunks supprimes (compte avant suppression).
 
         Example:
             >>> count = await store.delete_document("doc-123")
-            >>> print(f"Deleted chunks for document")
+            >>> print(f"Deleted {count} chunks")
         """
-        result = await asyncio.to_thread(
-            self.client.delete,
-            collection_name=self.COLLECTION_NAME,
-            points_selector=models.FilterSelector(
-                filter=Filter(
-                    must=[
-                        FieldCondition(
-                            key="document_id",
-                            match=MatchValue(value=document_id),
-                        )
-                    ]
+        filter_clause = Filter(
+            must=[
+                FieldCondition(
+                    key="document_id",
+                    match=MatchValue(value=document_id),
                 )
-            ),
+            ]
         )
 
-        logger.info("Deleted chunks for document %s", document_id)
+        count_result = await asyncio.to_thread(
+            self.client.count,
+            collection_name=self.COLLECTION_NAME,
+            count_filter=filter_clause,
+            exact=True,
+        )
+        chunks_count = int(count_result.count)
 
-        # Retourne le status de l'operation
-        # Note: Qdrant ne retourne pas le nombre exact de points supprimes
-        return 1 if result.status else 0
+        if chunks_count == 0:
+            return 0
+
+        await asyncio.to_thread(
+            self.client.delete,
+            collection_name=self.COLLECTION_NAME,
+            points_selector=models.FilterSelector(filter=filter_clause),
+        )
+
+        logger.info("Deleted %d chunks for document %s", chunks_count, document_id)
+        return chunks_count
 
     async def get_document_chunks(
         self,

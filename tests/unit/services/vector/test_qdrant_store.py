@@ -598,17 +598,34 @@ class TestDeleteAndGetChunks:
     """Tests pour delete_document et get_document_chunks."""
 
     @pytest.mark.asyncio
-    async def test_delete_document_returns_one_on_success(
+    async def test_delete_document_returns_actual_chunk_count(
         self, store_with_mock_client: QdrantVectorStore
     ) -> None:
-        """delete_document() retourne 1 quand le client retourne un status valide."""
-        result = MagicMock()
-        result.status = "completed"
-        store_with_mock_client.client.delete = MagicMock(return_value=result)
+        """delete_document() retourne le vrai nombre de chunks supprimes (count avant delete)."""
+        count_result = MagicMock()
+        count_result.count = 7
+        store_with_mock_client.client.count = MagicMock(return_value=count_result)
+        delete_result = MagicMock()
+        delete_result.status = "completed"
+        store_with_mock_client.client.delete = MagicMock(return_value=delete_result)
 
-        count = await store_with_mock_client.delete_document("doc-1")
+        deleted = await store_with_mock_client.delete_document("doc-1")
 
-        assert count == 1
+        assert deleted == 7
+
+    @pytest.mark.asyncio
+    async def test_delete_document_returns_zero_when_not_found(
+        self, store_with_mock_client: QdrantVectorStore
+    ) -> None:
+        """delete_document() retourne 0 quand aucun chunk ne correspond."""
+        count_result = MagicMock()
+        count_result.count = 0
+        store_with_mock_client.client.count = MagicMock(return_value=count_result)
+        store_with_mock_client.client.delete = MagicMock()
+
+        deleted = await store_with_mock_client.delete_document("doc-absent")
+
+        assert deleted == 0
 
     @pytest.mark.asyncio
     async def test_get_document_chunks_returns_payloads(
