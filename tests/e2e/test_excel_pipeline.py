@@ -24,9 +24,9 @@ from src.models.unified import (
     DocumentType,
     FormulaData,
     StructuredData,
-    TableData,
     UnifiedDocument,
     UnifiedMetadata,
+    UnifiedTableData,
 )
 from src.services.document.router import DocumentRouter
 
@@ -54,7 +54,7 @@ def mock_unified_excel_doc() -> MagicMock:
     )
 
     tables = [
-        TableData(
+        UnifiedTableData(
             headers=["Produit", "Prix", "Quantité"],
             rows=[["Widget", 10.5, 100], ["Gadget", 20.0, 50]],
             source_location="Feuille: Données",

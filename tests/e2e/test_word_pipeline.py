@@ -20,11 +20,11 @@ from src.mcp.tools.list_available_documents import ListAvailableDocumentsTool
 from src.mcp.tools.search_semantic import SearchSemanticTool
 from src.models.unified import (
     DocumentType,
-    ImageData,
     StructuredData,
-    TableData,
     UnifiedDocument,
+    UnifiedImageData,
     UnifiedMetadata,
+    UnifiedTableData,
 )
 from src.services.document.router import DocumentRouter
 
@@ -52,7 +52,7 @@ def mock_unified_word_doc() -> MagicMock:
     )
 
     tables = [
-        TableData(
+        UnifiedTableData(
             headers=["Mois", "Ventes", "Objectif"],
             rows=[
                 ["Janvier", "10000", "12000"],
@@ -63,7 +63,7 @@ def mock_unified_word_doc() -> MagicMock:
     ]
 
     images = [
-        ImageData(
+        UnifiedImageData(
             filename="logo.png",
             content_type="image/png",
             size_kb=45.2,
