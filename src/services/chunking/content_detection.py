@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2026 Assistance Micro Design
+# Copyright (C) 2025-2026 Assistance Micro Design
 """Detection des marqueurs de contenu (tableaux, images, equations) dans un chunk.
 
 Fonctions pures extraites de SmartChunker pour faciliter la testabilite.

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2025-2026 Assistance Micro Design
 """Tests d'integration pour MistralOCRProcessor.
 
 Ces tests necessitent une cle API Mistral valide et sont

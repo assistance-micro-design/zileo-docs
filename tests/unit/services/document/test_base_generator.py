@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2026 Assistance Micro Design
+# Copyright (C) 2025-2026 Assistance Micro Design
 """Tests unitaires pour BaseDocumentGenerator (sanitize + verify_file_size)."""
 
 from __future__ import annotations

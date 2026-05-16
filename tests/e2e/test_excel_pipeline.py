@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2025-2026 Assistance Micro Design
 """Tests E2E pour le pipeline d'extraction et indexation Excel.
 
 Ces tests verifient le fonctionnement de bout en bout pour les documents Excel:

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2026 Assistance Micro Design
+# Copyright (C) 2025-2026 Assistance Micro Design
 """Phase 3: Processeur OCR avec Mistral.
 
 Traite les pages complexes (tableaux, images, scans) avec Mistral OCR.

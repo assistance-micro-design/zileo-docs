@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2026 Assistance Micro Design
+# Copyright (C) 2025-2026 Assistance Micro Design
 """Service d'embedding sparse avec fastembed BM25.
 
 Ce module fournit un service pour generer des embeddings sparse
