@@ -17,7 +17,7 @@ from typing import Any
 from pydantic import ValidationError as PydanticValidationError
 
 from src.core.config import settings
-from src.core.exceptions import MCPZileoError
+from src.core.exceptions import ZileoDocsError
 from src.mcp.tools.base import BaseMCPTool
 from src.mcp.tools.create_excel import CreateExcelTool
 from src.mcp.tools.create_word import CreateWordTool
@@ -67,7 +67,7 @@ def _format_tool_error(error: Exception) -> str:
     Returns:
         Texte d'erreur formate pour le LLM.
     """
-    if isinstance(error, MCPZileoError):
+    if isinstance(error, ZileoDocsError):
         return error.to_llm_format()
 
     if isinstance(error, PydanticValidationError):
@@ -426,8 +426,8 @@ class MCPServer:
         Returns:
             Reponse JSON-RPC avec isError=True.
         """
-        # Logging: MCPZileoError et ValidationError = warning, le reste = exception
-        is_expected = isinstance(error, (MCPZileoError, PydanticValidationError))
+        # Logging: ZileoDocsError et ValidationError = warning, le reste = exception
+        is_expected = isinstance(error, (ZileoDocsError, PydanticValidationError))
         log_func = logger.warning if is_expected else logger.exception
         log_func("Tool error: %s", error)
 

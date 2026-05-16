@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 
-class MCPZileoError(Exception):
+class ZileoDocsError(Exception):
     """Classe de base pour toutes les exceptions de l'application.
 
     Inclut un champ `suggestion` pour guider les LLM sur comment corriger l'erreur.
@@ -73,7 +73,7 @@ class MCPZileoError(Exception):
 # === PDF Processing Errors ===
 
 
-class PDFError(MCPZileoError):
+class PDFError(ZileoDocsError):
     """Erreur liee au traitement PDF."""
 
     default_code: ClassVar[str] = "PDF_ERROR"
@@ -146,7 +146,7 @@ class PDFTooManyPagesError(PDFError):
 # === OCR Errors ===
 
 
-class OCRError(MCPZileoError):
+class OCRError(ZileoDocsError):
     """Erreur liee au service OCR."""
 
     default_code: ClassVar[str] = "OCR_ERROR"
@@ -182,7 +182,7 @@ class OCRRateLimitError(OCRError):
 # === Embedding Errors ===
 
 
-class EmbeddingError(MCPZileoError):
+class EmbeddingError(ZileoDocsError):
     """Erreur liee au service d'embeddings."""
 
     default_code: ClassVar[str] = "EMBEDDING_ERROR"
@@ -204,7 +204,7 @@ class EmbeddingAPIError(EmbeddingError):
 # === Vector Store Errors ===
 
 
-class VectorStoreError(MCPZileoError):
+class VectorStoreError(ZileoDocsError):
     """Erreur liee au vector store."""
 
     default_code: ClassVar[str] = "VECTOR_STORE_ERROR"
@@ -240,7 +240,7 @@ class DocumentNotFoundError(VectorStoreError):
 # === Excel Generation Errors ===
 
 
-class ExcelGenerationError(MCPZileoError):
+class ExcelGenerationError(ZileoDocsError):
     """Erreur liee a la generation de fichiers Excel."""
 
     default_code: ClassVar[str] = "EXCEL_GENERATION_ERROR"
@@ -305,7 +305,7 @@ class ExcelSheetNotFoundError(ExcelGenerationError):
 # === Word Generation Errors ===
 
 
-class WordGenerationError(MCPZileoError):
+class WordGenerationError(ZileoDocsError):
     """Erreur liee a la generation de fichiers Word."""
 
     default_code: ClassVar[str] = "WORD_GENERATION_ERROR"
@@ -314,7 +314,7 @@ class WordGenerationError(MCPZileoError):
 # === Validation Errors ===
 
 
-class ValidationError(MCPZileoError):
+class ValidationError(ZileoDocsError):
     """Erreur de validation des donnees."""
 
     default_code: ClassVar[str] = "VALIDATION_ERROR"

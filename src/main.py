@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Assistance Micro Design
-"""Point d'entree principal de l'application MCP Zileo RAG.
+"""Point d'entree principal de l'application Zileo Docs.
 
 Ce module configure et lance le serveur FastAPI avec:
 - API REST pour les documents et la recherche
@@ -24,7 +24,7 @@ from slowapi.util import get_remote_address
 from src.api.auth import verify_api_key
 from src.api.routes import documents, health, search
 from src.core.config import settings
-from src.core.exceptions import MCPZileoError
+from src.core.exceptions import ZileoDocsError
 from src.core.logging import setup_logging
 from src.mcp.server import MCPServer
 
@@ -129,8 +129,8 @@ def _register_routes(app: FastAPI, limiter: Limiter) -> None:
     app.include_router(documents.router, prefix="/api/v1")
     app.include_router(search.router, prefix="/api/v1")
 
-    @app.exception_handler(MCPZileoError)
-    async def mcp_exception_handler(_request: Request, exc: MCPZileoError) -> JSONResponse:
+    @app.exception_handler(ZileoDocsError)
+    async def mcp_exception_handler(_request: Request, exc: ZileoDocsError) -> JSONResponse:
         return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=exc.to_dict())
 
     max_mcp_body_bytes = settings.MAX_MCP_BODY_MB * 1024 * 1024

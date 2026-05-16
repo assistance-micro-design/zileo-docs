@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from src.core.config import settings
-from src.core.exceptions import MCPZileoError
+from src.core.exceptions import ZileoDocsError
 from src.core.file_validation import validate_filename_safety
 
 
@@ -23,7 +23,7 @@ class BaseDocumentGenerator:
         _max_output_size_mb: Taille max du fichier en MB.
     """
 
-    _error_class: type[MCPZileoError] = MCPZileoError
+    _error_class: type[ZileoDocsError] = ZileoDocsError
 
     def __init__(self, output_path: Path | None = None) -> None:
         self._output_path = Path(output_path or settings.OUTPUT_PATH)
@@ -43,7 +43,7 @@ class BaseDocumentGenerator:
             Nom de fichier securise.
 
         Raises:
-            MCPZileoError: Si le nom est invalide ou dangereux.
+            ZileoDocsError: Si le nom est invalide ou dangereux.
         """
         if not validate_filename_safety(filename):
             raise self._error_class(
