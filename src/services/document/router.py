@@ -6,14 +6,19 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol
+from typing import Any, ClassVar, Protocol
 
 from src.core.file_validation import compute_file_hash
-from src.models.unified import DocumentType
+from src.models.unified import (
+    DocumentType,
+    FormulaData,
+    ImageData,
+    StructuredData,
+    TableData,
+    UnifiedDocument,
+    UnifiedMetadata,
+)
 
-
-if TYPE_CHECKING:
-    from src.models.unified import UnifiedDocument
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +62,8 @@ class DocumentRouter:
         if self._initialized:
             return
 
-        # Import local pour éviter imports circulaires
+        # Import local: ExcelExtractor/WordExtractor importent indirectement
+        # des helpers qui re-importent ce module — evite un cycle reel.
         from src.services.excel.extractor import ExcelExtractor  # noqa: PLC0415
         from src.services.word.extractor import WordExtractor  # noqa: PLC0415
 
@@ -153,12 +159,7 @@ class DocumentRouter:
         Returns:
             UnifiedDocument avec le contenu PDF.
         """
-        # Imports locaux pour éviter imports circulaires
-        from src.models.unified import (  # noqa: PLC0415
-            StructuredData,
-            UnifiedDocument,
-            UnifiedMetadata,
-        )
+        # Import local: orchestrator depend de chunker qui peut creer un cycle.
         from src.services.pipeline.orchestrator import (  # noqa: PLC0415
             DocumentPipelineOrchestrator,
         )
@@ -201,12 +202,6 @@ class DocumentRouter:
         Returns:
             UnifiedDocument avec le contenu Excel.
         """
-        from src.models.unified import (  # noqa: PLC0415
-            StructuredData,
-            UnifiedDocument,
-            UnifiedMetadata,
-        )
-
         excel_doc = await self._extractors[DocumentType.EXCEL].extract(path)
         tables = self._excel_tables(excel_doc)
         formulas = self._excel_formulas(excel_doc)
@@ -239,12 +234,6 @@ class DocumentRouter:
         Returns:
             UnifiedDocument avec le contenu Word.
         """
-        from src.models.unified import (  # noqa: PLC0415
-            StructuredData,
-            UnifiedDocument,
-            UnifiedMetadata,
-        )
-
         word_doc = await self._extractors[DocumentType.WORD].extract(path)
         tables = self._word_tables(word_doc)
         images = self._word_images(word_doc)
@@ -270,8 +259,6 @@ class DocumentRouter:
     @staticmethod
     def _excel_tables(excel_doc: object) -> list[object]:
         """Convertit les tableaux d'un classeur Excel en TableData."""
-        from src.models.unified import TableData  # noqa: PLC0415
-
         return [
             TableData(
                 headers=table.headers,
@@ -285,8 +272,6 @@ class DocumentRouter:
     @staticmethod
     def _excel_formulas(excel_doc: object) -> list[object]:
         """Convertit les formules d'un classeur Excel en FormulaData."""
-        from src.models.unified import FormulaData  # noqa: PLC0415
-
         return [
             FormulaData(
                 cell=f.cell,
@@ -301,8 +286,6 @@ class DocumentRouter:
     @staticmethod
     def _word_tables(word_doc: object) -> list[object]:
         """Convertit les tableaux d'un document Word en TableData."""
-        from src.models.unified import TableData  # noqa: PLC0415
-
         result: list[object] = []
         for table in word_doc.tables:  # type: ignore[attr-defined]
             headers = table.headers or ([c.text for c in table.rows[0]] if table.rows else [])
@@ -318,8 +301,6 @@ class DocumentRouter:
     @staticmethod
     def _word_images(word_doc: object) -> list[object]:
         """Convertit les images d'un document Word en ImageData."""
-        from src.models.unified import ImageData  # noqa: PLC0415
-
         return [
             ImageData(
                 filename=img.filename,
