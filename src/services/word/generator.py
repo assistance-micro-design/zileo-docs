@@ -8,7 +8,6 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from docx import Document
@@ -130,9 +129,6 @@ class WordGenerator(BaseDocumentGenerator):
 
     _error_class = WordGenerationError
 
-    def __init__(self, output_path: Path | None = None) -> None:
-        super().__init__(output_path)
-
     async def generate(self, params: CreateWordParams) -> CreateWordResult:
         """Point d'entree principal. Cree le fichier docx."""
         return await asyncio.to_thread(self._generate_sync, params)
@@ -152,7 +148,11 @@ class WordGenerator(BaseDocumentGenerator):
         if params.author:
             doc.core_properties.author = params.author
 
-        file_size = self._save_and_verify(doc, file_path, safe_filename)
+        file_size = self.persist_and_verify(
+            lambda path: doc.save(str(path)),
+            file_path,
+            safe_filename,
+        )
 
         logger.info(
             "Word genere: %s (%d blocs, %d octets)",
@@ -397,8 +397,3 @@ class WordGenerator(BaseDocumentGenerator):
         run._element.append(br)
 
     # === File operations ===
-
-    def _save_and_verify(self, doc: Document, file_path: Path, filename: str) -> int:
-        """Sauvegarde le document et verifie la taille."""
-        doc.save(str(file_path))
-        return self.verify_file_size(file_path, filename)

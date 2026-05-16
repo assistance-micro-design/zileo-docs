@@ -78,3 +78,35 @@ class TestVerifyFileSize:
             gen.verify_file_size(path, "big.xlsx")
         assert exc_info.value.code == "OUTPUT_TOO_LARGE"
         assert not path.exists()
+
+
+class TestPersistAndVerify:
+    """Tests Q3b audit 2026-05-15: factorisation save+verify via callable injecte."""
+
+    def test_calls_save_callable_with_file_path(self, tmp_path: Path) -> None:
+        gen = BaseDocumentGenerator(output_path=tmp_path)
+        target = tmp_path / "report.xlsx"
+        captured: list[Path] = []
+
+        def fake_save(path: Path) -> None:
+            captured.append(path)
+            path.write_bytes(b"hello")
+
+        size = gen.persist_and_verify(fake_save, target, "report.xlsx")
+        assert captured == [target]
+        assert size == 5
+
+    def test_unlinks_oversized_output(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        gen = BaseDocumentGenerator(output_path=tmp_path)
+        monkeypatch.setattr(gen, "_max_output_size_mb", 1)
+        target = tmp_path / "huge.xlsx"
+
+        def fake_save(path: Path) -> None:
+            path.write_bytes(b"x" * (2 * 1024 * 1024))
+
+        with pytest.raises(MCPZileoError) as exc_info:
+            gen.persist_and_verify(fake_save, target, "huge.xlsx")
+        assert exc_info.value.code == "OUTPUT_TOO_LARGE"
+        assert not target.exists()

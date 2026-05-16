@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from src.core.config import settings
@@ -64,6 +65,28 @@ class BaseDocumentGenerator:
             )
 
         return filename
+
+    def persist_and_verify(
+        self,
+        save_callable: Callable[[Path], None],
+        file_path: Path,
+        filename: str,
+    ) -> int:
+        """Sauvegarde via le callable injecte puis verifie la taille.
+
+        Factorise le pattern "ecrire le fichier puis verifier" partage
+        entre Excel et Word (signatures de save divergentes).
+
+        Args:
+            save_callable: Fonction qui ecrit le document a `file_path`.
+            file_path: Destination du fichier.
+            filename: Nom (utilise pour les messages d'erreur).
+
+        Returns:
+            Taille du fichier en octets.
+        """
+        save_callable(file_path)
+        return self.verify_file_size(file_path, filename)
 
     def verify_file_size(self, file_path: Path, filename: str) -> int:
         """Verifie la taille d'un fichier genere et le supprime si trop gros.

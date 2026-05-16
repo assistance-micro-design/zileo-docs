@@ -60,14 +60,6 @@ class ExcelGenerator(BaseDocumentGenerator):
 
     _error_class = ExcelGenerationError
 
-    def __init__(self, output_path: Path | None = None) -> None:
-        """Initialise le generateur.
-
-        Args:
-            output_path: Repertoire de sortie (defaut: settings.OUTPUT_PATH).
-        """
-        super().__init__(output_path)
-
     async def generate(self, params: CreateExcelParams) -> CreateExcelResult:
         """Point d'entree principal. Cree le fichier xlsx.
 
@@ -151,9 +143,12 @@ class ExcelGenerator(BaseDocumentGenerator):
         Returns:
             Taille du fichier en octets.
         """
-        wb.save(str(file_path))
-        wb.close()
-        return self.verify_file_size(file_path, filename)
+
+        def _save(path: Path) -> None:
+            wb.save(str(path))
+            wb.close()
+
+        return self.persist_and_verify(_save, file_path, filename)
 
     def _create_sheet(self, wb: Workbook, sheet_def: SheetDef) -> Worksheet:
         """Cree une feuille avec donnees, headers, widths."""
