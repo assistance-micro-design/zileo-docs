@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,6 +19,19 @@ from src.main import app, create_app, lifespan
 def test_client() -> TestClient:
     """TestClient FastAPI partage (le lifespan est execute via context manager)."""
     return TestClient(app)
+
+
+@pytest.fixture
+def mocked_mcp_server() -> Any:
+    """Patch MCPServer pour que initialize() ne tente pas de se connecter a Qdrant.
+
+    Necessaire depuis le fail-fast du lifespan (S3, audit 2026-05-15): le vrai
+    MCPServer.initialize() echoue hors container.
+    """
+    mock_server = MagicMock()
+    mock_server.initialize = AsyncMock()
+    with patch("src.main.MCPServer", return_value=mock_server):
+        yield mock_server
 
 
 class TestLifespanStartup:
@@ -57,8 +71,8 @@ class TestLifespanStartup:
                 pass
 
     @pytest.mark.asyncio
-    async def test_lifespan_tolerates_mcp_init_failure(self) -> None:
-        """Une exception dans MCPServer.initialize() est attrapee et loggee."""
+    async def test_lifespan_raises_on_mcp_init_failure(self) -> None:
+        """Une exception dans MCPServer.initialize() doit faire echouer le lifespan (S3 fail-fast)."""
         from src.main import MCPServer
 
         mock_server = MagicMock(spec=MCPServer)
@@ -67,12 +81,15 @@ class TestLifespanStartup:
         fake_app = MagicMock()
         fake_app.state = MagicMock()
 
-        with patch("src.main.MCPServer", return_value=mock_server):
+        with (
+            patch("src.main.MCPServer", return_value=mock_server),
+            pytest.raises(RuntimeError, match="qdrant down"),
+        ):
             async with lifespan(fake_app):
-                # Malgre l'erreur d'init, l'app demarre et le serveur est attache
-                assert fake_app.state.mcp_server is mock_server
+                pass
 
 
+@pytest.mark.usefixtures("mocked_mcp_server")
 class TestMCPEndpoint:
     """Tests pour le endpoint POST /mcp."""
 
@@ -148,6 +165,7 @@ class TestMCPEndpoint:
         assert body["error"]["code"] == -32700
 
 
+@pytest.mark.usefixtures("mocked_mcp_server")
 class TestExceptionHandler:
     """Tests pour le handler global MCPZileoError -> 400 + to_dict()."""
 

@@ -61,13 +61,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         msg = "API_KEY non configuree en mode production: les endpoints proteges sont ouverts"
         raise RuntimeError(msg)
 
-    # Instancier et initialiser le serveur MCP, l'attacher a app.state
+    # Instancier et initialiser le serveur MCP, l'attacher a app.state.
+    # Fail-fast si l'init echoue: cohérent avec le RuntimeError sur API_KEY ci-dessus.
     mcp = MCPServer()
-    try:
-        await mcp.initialize()
-        logger.info("MCP Server initialized successfully")
-    except Exception as e:
-        logger.warning("MCP Server initialization failed: %s", e)
+    await mcp.initialize()
+    logger.info("MCP Server initialized successfully")
     app.state.mcp_server = mcp
 
     yield
