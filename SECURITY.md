@@ -4,21 +4,21 @@
 
 | Version | Supported |
 |---------|-----------|
-| 0.3.x   | ✅ |
-| < 0.3   | ❌ |
+| 0.4.x   | ✅ |
+| < 0.4   | ❌ |
 
 ## Reporting a Vulnerability
 
 **Do NOT create public GitHub issues for security vulnerabilities.**
 
 Please report vulnerabilities via:
-- [GitHub Security Advisories](https://github.com/assistance-micro-design/mcp-zileo-rag/security/advisories/new)
+- [GitHub Security Advisories](https://github.com/assistance-micro-design/zileo-docs/security/advisories/new)
 
 We will respond within 7 days and work with you to understand and resolve the issue.
 
 ## Security Measures
 
-MCP Zileo RAG implements the following security measures:
+Zileo Docs implements the following security measures:
 
 - **API Key Storage**: Secrets read from environment variables only (`MISTRAL_API_KEY`, `QDRANT_API_KEY`). Never logged, never persisted to disk.
 - **Input Validation**: Pydantic schemas on all REST and MCP inputs.

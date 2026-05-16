@@ -1,4 +1,4 @@
-# Contributing to MCP Zileo RAG
+# Contributing to Zileo Docs
 
 Thank you for considering a contribution. This document captures the conventions specific to this repository — please read it end-to-end before opening your first PR.
 
@@ -56,7 +56,7 @@ Do **not** create a new versioned section — only the maintainer cuts releases 
 ## Opening the PR
 
 1. Fork the repository and push your branch to your fork.
-2. Open a PR against `main` in `assistance-micro-design/mcp-zileo-rag`.
+2. Open a PR against `main` in `assistance-micro-design/zileo-docs`.
 3. Fill the [pull request template](.github/PULL_REQUEST_TEMPLATE.md) — every checkbox must be addressed.
 4. Link any related issue with `Closes #N` or `Refs #N`.
 5. Keep the PR focused. If review uncovers an unrelated issue, file a separate issue rather than expanding scope.

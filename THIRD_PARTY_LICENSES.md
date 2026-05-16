@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-MCP Zileo RAG depends on the following third-party libraries. Each library is listed with its version, license, and source.
+Zileo Docs depends on the following third-party libraries. Each library is listed with its version, license, and source.
 
 ## License compatibility note
 

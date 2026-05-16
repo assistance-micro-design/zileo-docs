@@ -1,6 +1,6 @@
 # Contributors
 
-Thank you to all who contribute to MCP Zileo RAG.
+Thank you to all who contribute to Zileo Docs.
 
 ## Organizations
 

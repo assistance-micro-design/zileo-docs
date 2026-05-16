@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-16
+
+### BREAKING CHANGES
+- **Project renamed from `mcp-zileo-rag` to `zileo-docs`**. The new name reflects the full scope (RAG indexing/search + document generation), and the `mcp-` prefix is dropped (redundant).
+- Python package name: `mcp-zileo-rag` -> `zileo-docs` (PyPI distribution name).
+- `APP_NAME` env/setting default: `"MCP Zileo RAG"` -> `"Zileo Docs"`.
+- Exception class `MCPZileoError` -> `ZileoDocsError` (subclass hierarchy unchanged).
+- Docker container names: `mcp-zileo-rag` -> `zileo-docs`, `mcp-zileo-rag-qdrant` -> `zileo-docs-qdrant`. Docker Compose `name:` fixed at `zileo-docs` (decouples from project directory name).
+- MCP client config key renamed in examples (`zileo-rag` -> `zileo-docs`). Existing client configs must be updated.
+- GitHub repository URL: `assistance-micro-design/mcp-zileo-rag` -> `assistance-micro-design/zileo-docs`.
+
 ### Security
 - CORS middleware removed in production mode (`allow_origins=[]` was ambiguous — a technical config active without any whitelisted domain)
 - Rate limiting extended to `GET/DELETE /api/v1/documents/{id}`, `GET /api/v1/documents`, `GET /health` (`RATE_LIMIT_DEFAULT`); `/health/live` and `/health/ready` deliberately remain unauthenticated (Kubernetes/Docker probes)
@@ -24,6 +35,21 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 - `src/services/document/router.py`: 8 lazy `models.unified` imports hoisted to the top of the file (no real circular import); comment and `noqa PLC0415` removed
 - `src/services/vector/payload.py` renamed to `payload_reader.py` (to distinguish it from `payload_builder.py`)
 - New `tests/unit/services/vector/test_payload_reader.py` covers `extract_doc_summary` (nominal case, partial payload, empty dict)
+
+### Migration
+
+Update local clones and MCP client configs:
+
+```bash
+# 1. Rename the project directory (optional but recommended)
+mv Mcp-Zileo-Rag Zileo-Docs
+
+# 2. Rebuild containers under the new names
+docker compose down && docker compose up -d --build
+
+# 3. Update MCP client config (e.g. .mcp.json or Claude Desktop)
+#    Replace the "zileo-rag" key with "zileo-docs"
+```
 
 ## [0.3.0] - 2026-05-15
 

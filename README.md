@@ -1,8 +1,8 @@
-# MCP Zileo RAG
+# Zileo Docs
 
-[![Version](https://img.shields.io/badge/version-0.3.0-orange)](https://github.com/assistance-micro-design/mcp-zileo-rag)
+[![Version](https://img.shields.io/badge/version-0.4.0-orange)](https://github.com/assistance-micro-design/zileo-docs)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
-[![Status](https://img.shields.io/badge/status-beta-yellow)](https://github.com/assistance-micro-design/mcp-zileo-rag)
+[![Status](https://img.shields.io/badge/status-beta-yellow)](https://github.com/assistance-micro-design/zileo-docs)
 
 > MCP (Model Context Protocol) server for indexing, semantic search, and generation of multi-format documents. Exposes 13 tools over JSON-RPC 2.0 so an LLM can search your local PDF, Excel, and Word files, and create or edit Excel and Word documents.
 
@@ -30,7 +30,7 @@ This project is in beta. Use at your own risk and review the trade-offs before r
 
 ## Description
 
-MCP Zileo RAG ingests heterogeneous office documents, extracts their content (native text or Mistral OCR), chunks the result while preserving Markdown structure, embeds each chunk with Mistral (1024-dim dense vectors plus BM25 sparse vectors), and stores them in Qdrant. An LLM connected over MCP can then search the indexed corpus, read full documents, and generate new Excel or Word files — all from natural-language tool calls.
+Zileo Docs ingests heterogeneous office documents, extracts their content (native text or Mistral OCR), chunks the result while preserving Markdown structure, embeds each chunk with Mistral (1024-dim dense vectors plus BM25 sparse vectors), and stores them in Qdrant. An LLM connected over MCP can then search the indexed corpus, read full documents, and generate new Excel or Word files — all from natural-language tool calls.
 
 ### Key Features
 
@@ -69,8 +69,8 @@ Required only when developing outside Docker (the container ships everything els
 ## Installation
 
 ```bash
-git clone https://github.com/assistance-micro-design/mcp-zileo-rag.git
-cd mcp-zileo-rag
+git clone https://github.com/assistance-micro-design/zileo-docs.git
+cd zileo-docs
 cp .env.example .env
 
 # Edit .env: set MISTRAL_API_KEY and DOCUMENTS_PATH
@@ -127,7 +127,7 @@ Add to the Claude Desktop config:
 ```json
 {
   "mcpServers": {
-    "zileo-rag": {
+    "zileo-docs": {
       "url": "http://localhost:8000/mcp",
       "transport": "http",
       "headers": {
