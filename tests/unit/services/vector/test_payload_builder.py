@@ -94,6 +94,13 @@ def test_build_payload_pdf_contains_doc_fields() -> None:
     assert payload["doc_creation_date"] is None
 
 
+def test_build_payload_pdf_sets_document_type_to_pdf() -> None:
+    """build_payload() marque document_type='pdf' pour la symetrie avec Excel/Word."""
+    payload = build_payload(_chunk(), _doc_meta())
+
+    assert payload["document_type"] == "pdf"
+
+
 def test_build_payload_pdf_includes_chunk_fields() -> None:
     """build_payload() conserve les champs communs du chunk."""
     payload = build_payload(_chunk(content="hello world"), _doc_meta())

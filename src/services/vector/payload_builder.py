@@ -36,6 +36,7 @@ def build_payload(chunk: DocumentChunk, doc_meta: DocumentMetadata) -> dict[str,
     payload = _build_common_payload(chunk)
     payload.update(
         {
+            "document_type": "pdf",
             "doc_filename": doc_meta.filename,
             "doc_title": doc_meta.title or "",
             "doc_author": doc_meta.author or "",
