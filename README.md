@@ -1,11 +1,10 @@
 # MCP Zileo RAG
 
-[![Version](https://img.shields.io/badge/version-0.2.0-orange)](https://github.com/assistance-micro-design/mcp-zileo-rag)
+[![Version](https://img.shields.io/badge/version-0.3.0-orange)](https://github.com/assistance-micro-design/mcp-zileo-rag)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/status-beta-yellow)](https://github.com/assistance-micro-design/mcp-zileo-rag)
 
-> Serveur MCP (Model Context Protocol) pour l'indexation, la recherche semantique et la generation de documents. Expose 12 outils via JSON-RPC 2.0 pour permettre a un LLM de chercher dans vos fichiers PDF, Excel et Word, et de creer/editer des fichiers Excel et Word.
+> MCP (Model Context Protocol) server for indexing, semantic search, and generation of multi-format documents. Exposes 13 tools over JSON-RPC 2.0 so an LLM can search your local PDF, Excel, and Word files, and create or edit Excel and Word documents.
 
 **Developed by** [Assistance Micro Design](https://www.assistancemicrodesign.net/)
 
@@ -13,29 +12,59 @@
 
 ---
 
-> **Usage personnel uniquement** - Concu pour une utilisation locale via Docker. Aucune garantie pour un deploiement public. L'auteur decline toute responsabilite en cas d'exposition a Internet.
+## Beta Warning
 
-## Fonctionnement
+This project is in beta. Use at your own risk and review the trade-offs before relying on it.
 
-1. Vous montez un dossier de documents dans le container Docker
-2. Le LLM (Claude, etc.) appelle `index_document` pour extraire et vectoriser un fichier
-3. Le contenu est decoupe en chunks, converti en embeddings via Mistral, et stocke dans Qdrant
-4. Le LLM peut ensuite chercher dans les documents indexes via `search_hybrid` (defaut) ou `search_semantic` (cosinus pur)
-5. Le LLM peut aussi creer et editer des fichiers Excel via les outils de generation
+| Risk | Description |
+|------|-------------|
+| **API Costs** | Every `index_document` call triggers Mistral embeddings (and OCR for image pages). Indexing large PDFs can generate non-trivial billing. |
+| **Breaking Changes** | The MCP tool surface evolves between minor versions. Version 0.3.0 split `search_documents` into `search_hybrid` and `search_semantic`; expect similar adjustments before 1.0. |
+| **Security** | Designed for **personal local use** behind Docker. The author declines responsibility if exposed to the public internet without an additional auth layer. |
+| **Instability** | Schemas validated with `extra="forbid"` since 0.3.0 — clients sending unknown fields now receive `VALIDATION_ERROR` instead of silent acceptance. |
+| **No SLA** | No guaranteed availability, no support contract. File issues via GitHub. |
 
-## Formats supportes
+**Recommendation:** Run behind a private network, set `API_KEY`, and pin the Docker image to a tagged version.
 
-| Format | Extensions | Bibliotheque | Remarques |
-|--------|------------|--------------|-----------|
-| PDF | `.pdf` | PyMuPDF4LLM + Mistral OCR | Texte natif ou OCR selon la page |
-| Excel | `.xlsx` | openpyxl | Donnees, formules, styles |
-| Excel legacy | `.xls` | xlrd | Donnees uniquement (pas de formules) |
-| Word | `.docx` | docx2python | Texte, tableaux, images |
+---
 
-## Prerequis
+## Description
 
-- Docker et Docker Compose
-- Une cle API Mistral (pour les embeddings et l'OCR)
+MCP Zileo RAG ingests heterogeneous office documents, extracts their content (native text or Mistral OCR), chunks the result while preserving Markdown structure, embeds each chunk with Mistral (1024-dim dense vectors plus BM25 sparse vectors), and stores them in Qdrant. An LLM connected over MCP can then search the indexed corpus, read full documents, and generate new Excel or Word files — all from natural-language tool calls.
+
+### Key Features
+
+- 13 MCP tools over JSON-RPC 2.0 / HTTP (`POST /mcp`)
+- Multi-format ingestion: PDF (native + OCR), Excel `.xlsx`/`.xls`, Word `.docx`
+- Hybrid search (dense + BM25 RRF) with cosine relevance guard against off-domain results
+- Semantic-only search with explicit `score_threshold`
+- Excel and Word generation from structured input (data, formulas, styles, charts)
+- Path traversal, formula-injection, and ZIP-bomb protections
+- Per-endpoint rate limiting (`slowapi`) and API-key authentication
+- Docker multi-stage image, non-root runtime, health-checked
+
+---
+
+## Prerequisites
+
+| Dependency | Purpose | Installation |
+|------------|---------|--------------|
+| Docker Engine >= 24 | Container runtime | https://docs.docker.com/engine/install/ |
+| Docker Compose v2 | Service orchestration | Bundled with Docker Desktop or the `docker compose` CLI plugin |
+| Mistral API key | Embeddings (1024d) + OCR | https://console.mistral.ai/ |
+
+---
+
+## Build Requirements
+
+Required only when developing outside Docker (the container ships everything else).
+
+| Tool | Min version | Verify |
+|------|-------------|--------|
+| Python | 3.11 | `python3 --version    # >= 3.11` |
+| uv | 0.9 | `uv --version    # >= 0.9` |
+
+---
 
 ## Installation
 
@@ -44,32 +73,53 @@ git clone https://github.com/assistance-micro-design/mcp-zileo-rag.git
 cd mcp-zileo-rag
 cp .env.example .env
 
-# Editer .env : renseigner MISTRAL_API_KEY, DOCUMENTS_PATH
-# Generer une cle API pour proteger le serveur :
+# Edit .env: set MISTRAL_API_KEY and DOCUMENTS_PATH
+# Generate an API key to protect the server:
 echo "API_KEY=$(openssl rand -hex 32)" >> .env
 
 docker compose up -d
 ```
 
-> **Note sur `API_KEY`** : la cle protege les endpoints `/api/v1/*`, `/mcp` et `/health`. Hors mode `DEBUG=true`, le serveur refuse de demarrer si la cle est vide. Voir [docs/mcp-client-setup.md](docs/mcp-client-setup.md#authentification) pour la passer aux clients MCP.
+> **About `API_KEY`** — Protects `/api/v1/*`, `/mcp`, and `/health`. Outside `DEBUG=true`, the server refuses to start with an empty key. See [docs/mcp-client-setup.md](docs/mcp-client-setup.md#authentication) for passing it to MCP clients.
 
-Verifier que le serveur fonctionne :
+Verify the server is up:
 
 ```bash
 curl -H "X-API-Key: $API_KEY" http://localhost:8000/health
 # {"status": "healthy", ...}
 ```
 
-## Configuration MCP
+---
 
-Le serveur MCP est accessible via l'endpoint `POST /mcp` (JSON-RPC 2.0 sur HTTP).
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Language | Python 3.11+ |
+| Web framework | FastAPI |
+| MCP runtime | `mcp` SDK (JSON-RPC 2.0 over HTTP) |
+| Dense embeddings | Mistral (`mistral-embed`, 1024 dim) |
+| Sparse embeddings | fastembed (BM25) |
+| Vector store | Qdrant 1.16.3 |
+| OCR | Mistral OCR API |
+| PDF extraction | PyMuPDF + pymupdf4llm |
+| Excel I/O | openpyxl, xlrd |
+| Word I/O | docx2python, python-docx |
+| Packaging | uv + Hatchling |
+| Runtime | Docker Compose (multi-stage, non-root) |
+
+---
+
+## MCP Configuration
+
+The MCP endpoint is `POST /mcp` (JSON-RPC 2.0 over HTTP).
 
 ### Claude Desktop
 
-Ajouter dans le fichier de configuration Claude Desktop :
+Add to the Claude Desktop config:
 
-| OS | Chemin |
-|----|--------|
+| OS | Path |
+|----|------|
 | Linux | `~/.config/Claude/claude_desktop_config.json` |
 | macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
@@ -81,171 +131,181 @@ Ajouter dans le fichier de configuration Claude Desktop :
       "url": "http://localhost:8000/mcp",
       "transport": "http",
       "headers": {
-        "X-API-Key": "ta_cle_api_ici"
+        "X-API-Key": "your_api_key_here"
       }
     }
   }
 }
 ```
 
-Remplacer `ta_cle_api_ici` par la valeur de `API_KEY` definie dans `.env`. Redemarrer Claude Desktop apres modification. Les 12 outils apparaitront automatiquement dans l'interface.
+Replace `your_api_key_here` with the `API_KEY` from `.env`. Restart Claude Desktop after editing.
 
-### Zileo Chat
+### Other MCP clients
 
-Ajouter dans la configuration MCP de Zileo Chat (`config.json` ou panneau de configuration) :
+Any MCP-compatible client can connect over HTTP Streamable to `http://localhost:8000/mcp`. The server implements:
 
-```json
-{
-  "mcpServers": {
-    "zileo-rag": {
-      "url": "http://localhost:8000/mcp",
-      "transport": "http",
-      "headers": {
-        "X-API-Key": "ta_cle_api_ici"
-      }
-    }
-  }
-}
-```
+- `initialize` — Handshake and capabilities
+- `tools/list` — Lists the 13 available tools
+- `tools/call` — Invokes a tool
 
-Si Zileo Chat et MCP Zileo RAG tournent dans le meme reseau Docker, utiliser le nom du service a la place de `localhost` :
+Transport is HTTP POST with JSON-RPC 2.0 payloads. No SSE, no WebSocket.
 
-```json
-{
-  "mcpServers": {
-    "zileo-rag": {
-      "url": "http://mcp-zileo-rag:8000/mcp",
-      "transport": "http",
-      "headers": {
-        "X-API-Key": "ta_cle_api_ici"
-      }
-    }
-  }
-}
-```
+---
 
-### Autres clients MCP
+## MCP Tools
 
-Tout client compatible MCP peut se connecter en HTTP Streamable vers `http://localhost:8000/mcp`. Le serveur implemente les methodes standard :
+### Indexing and search
 
-- `initialize` — Handshake et capabilities
-- `tools/list` — Liste des 12 outils disponibles
-- `tools/call` — Execution d'un outil
+| Tool | Description |
+|------|-------------|
+| `index_document` | Extract and index a PDF, Excel, or Word file into Qdrant |
+| `search_hybrid` | Hybrid search (dense + BM25 RRF) with cosine relevance guard against off-domain hits |
+| `search_semantic` | Pure semantic search (cosine, default threshold 0.7) |
+| `get_document` | Fetch the metadata and chunks for a document |
+| `delete_document` | Remove a document from the index (source file untouched) |
+| `list_indexed_documents` | List documents already indexed |
+| `read_document_content` | Read the reconstructed Markdown content of a document |
+| `get_excel_formulas` | Fetch the formulas from an indexed Excel file |
 
-Le transport utilise HTTP POST avec des requetes JSON-RPC 2.0. Pas de SSE, pas de WebSocket.
+### Generation and editing
 
-## Outils MCP
+| Tool | Description |
+|------|-------------|
+| `create_excel_document` | Create an Excel file (`.xlsx`) with data, styles, and charts |
+| `edit_excel_document` | Edit an existing Excel file (13 operations) |
+| `create_word_document` | Create a Word file (`.docx`) from Markdown content |
 
-### Indexation et recherche
+### Utilities
 
-| Outil | Description |
-|-------|-------------|
-| `index_document` | Extraire et indexer un PDF, Excel ou Word dans Qdrant |
-| `search_hybrid` | Recherche hybride (dense + BM25 RRF) avec garde-fou cosinus anti hors-domaine |
-| `search_semantic` | Recherche semantique pure (cosinus dense, defaut 0.7) |
-| `get_document` | Recuperer les metadonnees et chunks d'un document |
-| `delete_document` | Supprimer un document de l'index (pas le fichier source) |
-| `list_indexed_documents` | Lister les documents deja indexes |
-| `read_document_content` | Lire le contenu Markdown reconstitue d'un document |
-| `get_excel_formulas` | Recuperer les formules d'un fichier Excel indexe |
+| Tool | Description |
+|------|-------------|
+| `list_available_documents` | List source files (two sources: documents, generated) |
+| `inspect_generated_file` | Inspect the structure of a generated Excel file |
 
-### Generation et edition
-
-| Outil | Description |
-|-------|-------------|
-| `create_excel_document` | Creer un fichier Excel (.xlsx) avec donnees, styles, graphiques |
-| `edit_excel_document` | Editer un fichier Excel existant (13 operations) |
-| `create_word_document` | Creer un fichier Word (.docx) a partir d'un contenu Markdown |
-
-### Utilitaires
-
-| Outil | Description |
-|-------|-------------|
-| `list_available_documents` | Lister les fichiers disponibles (2 sources : documents, generated) |
-| `inspect_generated_file` | Inspecter la structure d'un Excel genere |
+---
 
 ## Configuration
 
-Variables d'environnement principales (voir [docs/configuration.md](docs/configuration.md) pour la liste complete) :
+Main environment variables (see [docs/configuration.md](docs/configuration.md) for the full list):
 
-| Variable | Requis | Description |
-|----------|--------|-------------|
-| `MISTRAL_API_KEY` | Oui | Cle API Mistral (embeddings + OCR) |
-| `API_KEY` | Oui (hors DEBUG) | Cle d'authentification pour les endpoints proteges. Generer via `openssl rand -hex 32`. Vide accepte uniquement si `DEBUG=true`. |
-| `DOCUMENTS_PATH` | Oui | Chemin local vers vos documents |
-| `OUTPUT_PATH` | Non | Dossier de sortie des fichiers generes (defaut: `./output`) |
-| `QDRANT_HOST` | Non | Hote Qdrant (defaut: `localhost`, `qdrant` en Docker) |
-| `DEBUG` | Non | Active Swagger UI et CORS (defaut: `false`) |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `MISTRAL_API_KEY` | Yes | Mistral API key (embeddings + OCR) |
+| `API_KEY` | Yes (outside DEBUG) | Authentication key for protected endpoints. Generate via `openssl rand -hex 32`. Empty value accepted only when `DEBUG=true`. |
+| `DOCUMENTS_PATH` | Yes | Local path to your source documents |
+| `OUTPUT_PATH` | No | Output directory for generated files (default: `./output`) |
+| `QDRANT_HOST` | No | Qdrant host (default: `localhost`, `qdrant` inside Docker) |
+| `DEBUG` | No | Enables Swagger UI and CORS (default: `false`) |
 
-## Developpement local
+---
 
-```bash
-pip install -e ".[dev]"
-docker compose up -d qdrant   # Qdrant seul
-uvicorn src.main:app --reload
-```
-
-## Tests
+## Local Development
 
 ```bash
-pytest tests/unit/ -v          # Tests unitaires
-pytest tests/integration/ -v   # Necessite Qdrant
-pytest tests/e2e/ -v           # Pipeline complet
+uv sync --extra dev
+docker compose up -d qdrant   # Qdrant only
+uv run uvicorn src.main:app --reload
 ```
 
-## Validation
+### Tests
 
 ```bash
-ruff check src/ tests/
-ruff format --check src/ tests/
-mypy src/
-pytest --cov=src --cov-fail-under=80
+uv run pytest tests/unit/ -v          # Unit tests
+uv run pytest tests/integration/ -v   # Requires Qdrant
+uv run pytest tests/e2e/ -v           # Full pipeline
 ```
+
+### Validation
+
+```bash
+uv run ruff check src/ tests/
+uv run ruff format --check src/ tests/
+uv run mypy src/
+uv run pytest --cov=src --cov-fail-under=80
+```
+
+---
 
 ## Architecture
 
 ```
 src/
-  main.py              # FastAPI app + endpoint /mcp
+  main.py              # FastAPI app + /mcp endpoint
   core/                # Config, exceptions, logging
-  api/routes/          # Endpoints REST (health, documents, search)
+  api/routes/          # REST endpoints (health, documents, search)
   mcp/
-    server.py          # Routeur JSON-RPC 2.0
-    tools/             # 12 outils MCP
+    server.py          # JSON-RPC 2.0 router
+    tools/             # 13 MCP tools
   services/
-    pdf/               # Analyse, extraction native, OCR Mistral
-    excel/             # Extraction + generation + edition
-    word/              # Extraction docx2python
-    inspection/        # Inspection fichiers generes
-    document/          # Routeur multi-format
-    chunking/          # Decoupage en chunks
-    embedding/         # Embeddings Mistral (1024 dim)
-    vector/            # Stockage Qdrant
-  models/              # Schemas Pydantic
+    pdf/               # Analysis, native extraction, Mistral OCR
+    excel/             # Extraction + generation + editing
+    word/              # docx2python extraction
+    inspection/        # Generated-file inspection
+    document/          # Multi-format router
+    chunking/          # Chunk splitting
+    embedding/         # Mistral embeddings (1024 dim)
+    vector/            # Qdrant storage
+  models/              # Pydantic schemas
 ```
+
+---
 
 ## Documentation
 
-- [Configuration clients MCP](docs/mcp-client-setup.md) — Claude Desktop, Zileo Chat, autres clients
-- [Guide de recherche](docs/research-guide.md) — Indexation, recherche hybride, lecture
-- [Guide de generation Excel & Word](docs/generation-guide.md) — Options, design, exemples
-- [Reference API](docs/api-reference.md) — Endpoints REST et 12 outils MCP
-- [Architecture](docs/architecture.md) — Pipeline de traitement et composants
-- [Configuration](docs/configuration.md) — Variables d'environnement
-- [Deploiement](docs/deployment.md) — Docker et developpement local
-- [Multi-format](docs/multi-format.md) — Support PDF, Excel, Word
-- [Code style](docs/code-style.md) — Conventions de code
+- [MCP client setup](docs/mcp-client-setup.md) — Claude Desktop, Zileo Chat, other clients
+- [Research guide](docs/research-guide.md) — Indexing, hybrid search, reading
+- [Generation guide](docs/generation-guide.md) — Excel and Word options, design, examples
+- [API reference](docs/api-reference.md) — REST endpoints and 13 MCP tools
+- [Architecture](docs/architecture.md) — Processing pipeline and components
+- [Configuration](docs/configuration.md) — Environment variables
+- [Deployment](docs/deployment.md) — Docker and local development
+- [Multi-format support](docs/multi-format.md) — PDF, Excel, Word
+- [Code style](docs/code-style.md) — Conventions
 
-## Licence
+---
 
-Distribue sous la licence [GNU Affero General Public License v3.0 ou ulterieure](LICENSE).
+## Contributing
 
-Cette licence est **obligatoire** car le projet depend de [PyMuPDF](https://github.com/pymupdf/PyMuPDF) et [pymupdf4llm](https://github.com/pymupdf/RAG) (Artifex Software, Inc.) qui sont distribues sous AGPL-3.0. Voir [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) pour l'inventaire complet.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md).
 
-## Securite
+Quick path:
 
-Pour signaler une vulnerabilite, voir [SECURITY.md](SECURITY.md). **Ne pas creer d'issue publique.**
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feat/your-feature`)
+3. Commit with a conventional message (`git commit -m "feat(scope): summary"`)
+4. Push and open a Pull Request against `main`
+5. Ensure CI is green and the PR checklist is satisfied
 
-## Contribuer
+---
 
-Voir [CONTRIBUTORS.md](CONTRIBUTORS.md) et [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md).
+## Security
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md). **Do not open public issues for security reports.**
+
+---
+
+## License
+
+Distributed under the [GNU Affero General Public License v3.0 or later](LICENSE).
+
+```
+Copyright 2025-2026 Assistance Micro Design
+Licensed under the GNU Affero General Public License v3.0 or later
+```
+
+This license is **mandatory** because the project depends on [PyMuPDF](https://github.com/pymupdf/PyMuPDF) and [pymupdf4llm](https://github.com/pymupdf/RAG) (Artifex Software, Inc.), both distributed under AGPL-3.0. See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for the complete inventory and [NOTICE](NOTICE) for attribution.
+
+---
+
+## Acknowledgments
+
+- [Mistral AI](https://mistral.ai/) — Embeddings and OCR
+- [Qdrant](https://qdrant.tech/) — Vector database
+- [PyMuPDF](https://github.com/pymupdf/PyMuPDF) and [pymupdf4llm](https://github.com/pymupdf/RAG) — PDF extraction
+- [FastAPI](https://github.com/fastapi/fastapi) — Web framework
+- [Model Context Protocol](https://modelcontextprotocol.io/) — Tool protocol
+- Built with [Claude Code](https://claude.com/claude-code) by [Anthropic](https://anthropic.com)
+
+---
+
+[Assistance Micro Design](https://www.assistancemicrodesign.net/) | [GitHub](https://github.com/assistance-micro-design)

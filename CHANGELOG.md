@@ -1,92 +1,92 @@
 # Changelog
 
-Toutes les modifications notables de ce projet sont documentees dans ce fichier.
+All notable changes to this project are documented in this file.
 
-Le format est base sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
-et ce projet adhere au [Semantic Versioning](https://semver.org/lang/fr/).
+The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 
 ## [Unreleased]
 
-### Securite
-- CORS : middleware retire en mode production (allow_origins=[] etait ambigu — config technique active sans domaines autorises)
-- Rate limiting etendu a `GET/DELETE /api/v1/documents/{id}`, `GET /api/v1/documents`, `GET /health` (RATE_LIMIT_DEFAULT) ; `/health/live` et `/health/ready` restent volontairement nus (probes Kubernetes/Docker)
-- Lifespan fail-fast : `MCPServer.initialize()` ne tolere plus les erreurs silencieusement (un Qdrant down ou Mistral mal configure empeche desormais le demarrage)
-- Variables anti-DoS exposees : `MISTRAL_TIMEOUT_S` et `MAX_DECOMPRESSED_MB` dans `.env.example` et `docker-compose.yml`
-- `_orchestrator_error_to_http` ne leak plus `str(exc)` au client : les exceptions inconnues sont loggees cote serveur et le client recoit `"Internal server error"`
+### Security
+- CORS middleware removed in production mode (`allow_origins=[]` was ambiguous — a technical config active without any whitelisted domain)
+- Rate limiting extended to `GET/DELETE /api/v1/documents/{id}`, `GET /api/v1/documents`, `GET /health` (`RATE_LIMIT_DEFAULT`); `/health/live` and `/health/ready` deliberately remain unauthenticated (Kubernetes/Docker probes)
+- Lifespan fail-fast: `MCPServer.initialize()` no longer swallows errors silently (a Qdrant outage or misconfigured Mistral now prevents startup)
+- Anti-DoS variables exposed: `MISTRAL_TIMEOUT_S` and `MAX_DECOMPRESSED_MB` documented in `.env.example` and `docker-compose.yml`
+- `_orchestrator_error_to_http` no longer leaks `str(exc)` to the client: unknown exceptions are logged server-side and the client receives `"Internal server error"`
 
-### Qualite
-- **BREAKING (cote LLM)** : `extra="forbid"` applique aux 10 modeles `*Params` MCP (`GetDocumentParams`, `DeleteDocumentParams`, `ReadDocumentContentParams`, `UnifiedIndexDocumentParams`, `GetExcelFormulasParams`, `CreateExcelParams`, `EditExcelParams`, `CreateWordParams`, `ListAvailableDocumentsParams`, `InspectGeneratedFileParams`). Un client envoyant un champ inconnu recoit desormais `VALIDATION_ERROR` au lieu d'un silence.
-- `model_config` uniformise via `ConfigDict(...)` typesafe sur `CreateExcelParams`, `EditExcelParams`, `CreateWordParams` (etaient en dict brut)
-- `BaseDocumentGenerator.persist_and_verify(callable, path, filename)` factorise le pattern "ecrire puis verifier la taille" partage entre Excel et Word ; `__init__` redondants de `ExcelGenerator`/`WordGenerator` supprimes (heritent directement)
+### Quality
+- **BREAKING (LLM-side)**: `extra="forbid"` applied to all 10 MCP `*Params` models (`GetDocumentParams`, `DeleteDocumentParams`, `ReadDocumentContentParams`, `UnifiedIndexDocumentParams`, `GetExcelFormulasParams`, `CreateExcelParams`, `EditExcelParams`, `CreateWordParams`, `ListAvailableDocumentsParams`, `InspectGeneratedFileParams`). A client sending an unknown field now receives `VALIDATION_ERROR` instead of silent acceptance.
+- `model_config` unified via typesafe `ConfigDict(...)` on `CreateExcelParams`, `EditExcelParams`, `CreateWordParams` (previously raw dicts)
+- `BaseDocumentGenerator.persist_and_verify(callable, path, filename)` factors out the "write then verify size" pattern shared between Excel and Word; redundant `__init__` of `ExcelGenerator`/`WordGenerator` removed (now inherit directly)
 
 ### Architecture
-- **BREAKING (import)** : `TableData`/`ImageData` de `src/models/unified.py` renommes en `UnifiedTableData`/`UnifiedImageData` pour lever la collision avec les versions PDF natif de `src/models/extraction.py`
-- `src/services/document/router.py` : 8 imports lazy `models.unified` hoistes au top du fichier (pas d'import circulaire reel) ; commentaire et `noqa PLC0415` retires
-- `src/services/vector/payload.py` renomme `payload_reader.py` (distinguer de `payload_builder.py`)
-- Nouveau `tests/unit/services/vector/test_payload_reader.py` couvre `extract_doc_summary` (cas nominal, payload incomplet, dict vide)
+- **BREAKING (import)**: `TableData`/`ImageData` from `src/models/unified.py` renamed to `UnifiedTableData`/`UnifiedImageData` to avoid collision with the native-PDF versions in `src/models/extraction.py`
+- `src/services/document/router.py`: 8 lazy `models.unified` imports hoisted to the top of the file (no real circular import); comment and `noqa PLC0415` removed
+- `src/services/vector/payload.py` renamed to `payload_reader.py` (to distinguish it from `payload_builder.py`)
+- New `tests/unit/services/vector/test_payload_reader.py` covers `extract_doc_summary` (nominal case, partial payload, empty dict)
 
 ## [0.3.0] - 2026-05-15
 
 ### BREAKING CHANGES
-- Tool MCP `search_documents` supprime. Remplace par deux tools dedies avec schemas non-ambigus :
-  - `search_hybrid` : `query` + `top_k` + `filters` + `min_cosine_relevance` (echelle RRF masquee, garde-fou cosinus 0.72 anti hors-domaine)
-  - `search_semantic` : `query` + `top_k` + `filters` + `score_threshold` (similarite cosinus pure, defaut 0.7)
-- Model Pydantic `SearchDocumentsParams` supprime ; remplace par `SearchHybridParams` + `SearchSemanticParams`
-- Methode `DocumentPipelineOrchestrator.search_documents` supprimee (code mort, non utilise)
+- MCP tool `search_documents` removed. Replaced by two dedicated tools with non-ambiguous schemas:
+  - `search_hybrid`: `query` + `top_k` + `filters` + `min_cosine_relevance` (RRF scale hidden, cosine guard 0.72 against off-domain results)
+  - `search_semantic`: `query` + `top_k` + `filters` + `score_threshold` (pure cosine similarity, default 0.7)
+- Pydantic model `SearchDocumentsParams` removed; replaced by `SearchHybridParams` and `SearchSemanticParams`
+- Method `DocumentPipelineOrchestrator.search_documents` removed (dead code, unused)
 
 ### Added
-- Classe abstraite `BaseSearchTool(VectorStoreMCPTool)` dans `src/mcp/tools/search_base.py` factorise la logique partagee (DI, validation Pydantic, embedding query, formatage reponse)
-- Eval `scripts/eval_rag.py` accepte desormais `--tool search_hybrid|search_semantic` (remplace `--mode`)
+- Abstract base class `BaseSearchTool(VectorStoreMCPTool)` in `src/mcp/tools/search_base.py` factors out the shared logic (DI, Pydantic validation, query embedding, response formatting)
+- Eval `scripts/eval_rag.py` now accepts `--tool search_hybrid|search_semantic` (replaces `--mode`)
 
 ### Changed
-- API REST `POST /api/v1/search` **inchangee** : conserve `search_mode` comme parametre bas niveau. L'asymetrie REST/MCP est volontaire (REST = bas niveau, MCP = orientee agent)
-- Message d'erreur du tool `index_document` (deja indexe) reference desormais `search_hybrid`/`search_semantic`
+- REST API `POST /api/v1/search` **unchanged**: keeps `search_mode` as a low-level parameter. The REST/MCP asymmetry is intentional (REST = low-level, MCP = agent-oriented)
+- Error message of the `index_document` tool (already-indexed case) now references `search_hybrid`/`search_semantic`
 
 ### Migration
-- Caller MCP : remplacer `search_documents` (mode hybrid) par `search_hybrid` ; remplacer `search_documents` (mode semantic) par `search_semantic`
-- Le format de reponse est identique (chunk_id, score, page_numbers, etc.) — seuls le nom et le schema d'entree changent
+- MCP caller: replace `search_documents` (hybrid mode) with `search_hybrid`; replace `search_documents` (semantic mode) with `search_semantic`
+- Response format is identical (chunk_id, score, page_numbers, etc.) — only the name and input schema change
 
 ## [0.2.0] - 2026-04-28
 
 ### Added
-- Recherche hybride RRF : `hybrid_search` combine dense (vecteur) + full-text avec Reciprocal Rank Fusion
-- Sparse embeddings BM25 via `fastembed` (prefetch natif Qdrant)
-- Parametre `search_mode` (hybrid/semantic) sur MCP `search_documents` et REST `/api/v1/search`
-- Hash SHA-256 de fichier (`compute_file_hash`) pour deduplication Excel/Word
-- Detection de fichier modifie : comparaison hash lors de `index_document`
-- Champ `file_hash` dans `UnifiedMetadata` et payload Qdrant
-- Outil MCP `create_word_document` : generation Word (.docx) depuis Markdown
-- Fichiers communaute GitHub : `SECURITY.md`, `CONTRIBUTORS.md`, `NOTICE`, `THIRD_PARTY_LICENSES.md`
-- CI GitHub Actions : `validate.yml` (ruff, mypy, pytest unit), `dependabot.yml` (pip + docker + actions)
-- Templates issue (bug, feature) et pull request
+- Hybrid search RRF: `hybrid_search` combines dense (vector) and full-text using Reciprocal Rank Fusion
+- BM25 sparse embeddings via `fastembed` (Qdrant-native prefetch)
+- `search_mode` parameter (hybrid/semantic) on MCP `search_documents` and REST `/api/v1/search`
+- SHA-256 file hash (`compute_file_hash`) for Excel/Word deduplication
+- Modified-file detection: hash comparison on `index_document`
+- `file_hash` field in `UnifiedMetadata` and Qdrant payload
+- MCP tool `create_word_document`: Word (`.docx`) generation from Markdown
+- GitHub community files: `SECURITY.md`, `CONTRIBUTORS.md`, `NOTICE`, `THIRD_PARTY_LICENSES.md`
+- GitHub Actions CI: `validate.yml` (ruff, mypy, pytest unit), `dependabot.yml` (pip + docker + actions)
+- Issue templates (bug, feature) and pull request template
 
 ### Changed
-- `IndexDocumentTool` utilise injection de dependances (vector_store, embedder)
-- Mode de recherche par defaut : `hybrid` (avant: semantic uniquement)
-- `_create_indexes` refactorise avec constantes de module
-- `_extract_excel`/`_extract_word` reutilisent les extracteurs deja initialises
-- Statut projet : Alpha → Beta
-- Renommage `LICENSE.txt` → `LICENSE` (convention GitHub)
-- Branche par defaut : `master` → `main`
+- `IndexDocumentTool` uses dependency injection (vector_store, embedder)
+- Default search mode: `hybrid` (previously: semantic only)
+- `_create_indexes` refactored with module-level constants
+- `_extract_excel`/`_extract_word` reuse already-initialized extractors
+- Project status: Alpha → Beta
+- Renamed `LICENSE.txt` → `LICENSE` (GitHub convention)
+- Default branch: `master` → `main`
 
 ### Removed
-- Code mort `_VALID_TYPES_BY_SOURCE` dans `ListAvailableDocumentsParams`
+- Dead code `_VALID_TYPES_BY_SOURCE` in `ListAvailableDocumentsParams`
 
 ## [0.1.0] - 2026-02-28
 
-Premiere version fonctionnelle du serveur MCP Zileo RAG.
+First functional release of MCP Zileo RAG.
 
 ### Added
-- 8 outils MCP via JSON-RPC 2.0 : `index_document`, `search_documents`, `get_document`, `delete_document`, `list_indexed_documents`, `list_available_documents`, `read_document_content`, `get_excel_formulas`
-- Support multi-format : PDF (natif + OCR Mistral), Excel (.xlsx/.xls), Word (.docx)
-- API REST avec endpoints health, documents, search
-- Pipeline d'extraction : analyse -> extraction -> chunking -> embedding -> stockage vectoriel
-- Embeddings Mistral (1024 dimensions) et stockage Qdrant
-- OCR intelligent : detection automatique pages texte vs image
-- Smart chunking avec preservation de la structure Markdown
-- Protection contre la double indexation (guard doublon)
-- Rate limiting configurable (slowapi)
-- Protection anti-path-traversal sur les outils MCP
-- Deploiement Docker (multi-stage, non-root, healthchecks)
-- 319 tests unitaires (couverture > 80%)
-- Licence AGPL-3.0-or-later
+- 8 MCP tools over JSON-RPC 2.0: `index_document`, `search_documents`, `get_document`, `delete_document`, `list_indexed_documents`, `list_available_documents`, `read_document_content`, `get_excel_formulas`
+- Multi-format support: PDF (native + Mistral OCR), Excel (`.xlsx`/`.xls`), Word (`.docx`)
+- REST API with health, documents, and search endpoints
+- Extraction pipeline: analysis -> extraction -> chunking -> embedding -> vector storage
+- Mistral embeddings (1024 dimensions) and Qdrant storage
+- Smart OCR: automatic detection of text vs. image pages
+- Smart chunking with Markdown structure preservation
+- Double-indexing protection (duplicate guard)
+- Configurable rate limiting (`slowapi`)
+- Path-traversal protection on MCP tools
+- Docker deployment (multi-stage, non-root, healthchecks)
+- 319 unit tests (>80% coverage)
+- AGPL-3.0-or-later license
