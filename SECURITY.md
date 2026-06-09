@@ -60,7 +60,7 @@ Report these to the respective maintainers:
 
 ### Not Applicable
 
-- The README states **« Usage personnel uniquement »**. Exposing this server on a public network without an additional auth layer is explicitly out of scope.
+- The README states the server is **designed for personal local use** behind Docker. Exposing this server on a public network without an additional auth layer is explicitly out of scope.
 - DoS by sending oversized files within the configured limits is a feature trade-off, not a vulnerability.
 
 ## Disclosure

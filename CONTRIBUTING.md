@@ -63,7 +63,7 @@ Do **not** create a new versioned section — only the maintainer cuts releases 
 
 ## Code style cheat sheet
 
-These rules are enforced by `ruff`, `mypy`, or by reviewers. The full set lives in `.claude/rules/`.
+These rules are enforced by `ruff`, `mypy`, or by reviewers.
 
 - Type hints on every public function and method (`mypy --strict` passes).
 - `from __future__ import annotations` at the top of every module.

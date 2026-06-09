@@ -1,6 +1,6 @@
 # Architecture
 
-Serveur FastAPI exposant 12 outils MCP via JSON-RPC 2.0 (`POST /mcp`) et une API REST. Indexe des documents (PDF, Excel, Word) dans Qdrant via embeddings Mistral, puis les retrouve par recherche hybride (dense + BM25 sparse).
+Serveur FastAPI exposant 13 outils MCP via JSON-RPC 2.0 (`POST /mcp`) et une API REST. Indexe des documents (PDF, Excel, Word) dans Qdrant via embeddings Mistral, puis les retrouve par recherche hybride (dense + BM25 sparse).
 
 ## Pipeline de traitement
 
@@ -167,7 +167,7 @@ src/
 ├── api/routes/                     # health, documents, search
 ├── mcp/
 │   ├── server.py                   # MCPServer (router JSON-RPC)
-│   └── tools/                      # 12 outils
+│   └── tools/                      # 13 outils
 ├── services/
 │   ├── pipeline/orchestrator.py    # PDFPipelineOrchestrator
 │   ├── pdf/                        # analyzer, native_extractor, ocr_processor

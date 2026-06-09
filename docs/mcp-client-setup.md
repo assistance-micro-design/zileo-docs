@@ -85,9 +85,9 @@ Redémarrer le container : `docker compose up -d`.
 }
 ```
 
-Remplacer `ta_cle_api_ici` par la valeur de `API_KEY` du fichier `.env` du serveur. Si d'autres serveurs sont déjà configurés, ajouter `zileo-rag` dans le `mcpServers` existant.
+Remplacer `ta_cle_api_ici` par la valeur de `API_KEY` du fichier `.env` du serveur. Si d'autres serveurs sont déjà configurés, ajouter `zileo-docs` dans le `mcpServers` existant.
 
-Redémarrer Claude Desktop. Les **12 outils** apparaissent dans l'icône d'outils.
+Redémarrer Claude Desktop. Les **13 outils** apparaissent dans l'icône d'outils.
 
 ### Dépannage
 
@@ -183,7 +183,7 @@ Tout client compatible MCP peut se connecter :
 |---------|-------------|
 | `initialize` | Handshake. Retourne `protocolVersion: "2024-11-05"` et capabilities |
 | `notifications/initialized` | Notification post-handshake (pas de réponse) |
-| `tools/list` | Liste les 12 outils avec leurs schemas |
+| `tools/list` | Liste les 13 outils avec leurs schemas |
 | `tools/call` | Exécute un outil avec ses arguments |
 
 ### Exemples de requêtes

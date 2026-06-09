@@ -1,6 +1,6 @@
 # Référence API
 
-Endpoints REST + 12 outils MCP. Pour les options détaillées de génération Excel/Word, voir [generation-guide.md](generation-guide.md).
+Endpoints REST + 13 outils MCP. Pour les options détaillées de génération Excel/Word, voir [generation-guide.md](generation-guide.md).
 
 ## REST
 
@@ -41,7 +41,7 @@ Réponse : `query`, `total_results`, `results[]` (chunk_id, document_id, content
 | Méthode | Description |
 |---------|-------------|
 | `initialize` | Handshake → `protocolVersion: "2024-11-05"` + capabilities |
-| `tools/list` | Liste les **12 outils** avec leurs schemas |
+| `tools/list` | Liste les **13 outils** avec leurs schemas |
 | `tools/call` | Exécute un outil par nom |
 
 ## Outils MCP
