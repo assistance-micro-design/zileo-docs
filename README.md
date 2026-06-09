@@ -140,6 +140,30 @@ Add to the Claude Desktop config:
 
 Replace `your_api_key_here` with the `API_KEY` from `.env`. Restart Claude Desktop after editing.
 
+### Zileo Chat
+
+In Zileo Chat, open **Settings → MCP** and add a server pointing at the running container:
+
+```json
+{
+  "mcpServers": {
+    "zileo-docs": {
+      "url": "http://localhost:8000/mcp",
+      "transport": "http",
+      "headers": {
+        "X-API-Key": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+- **Same host**: use `http://localhost:8000/mcp`.
+- **Zileo Chat in Docker on the same host**: use the container name and join the `zileo-docs_mcp-network` network — `http://zileo-docs:8000/mcp`.
+- **Remote host (LAN)**: use the server's IP — `http://192.168.1.X:8000/mcp`.
+
+Replace `your_api_key_here` with the `API_KEY` from `.env`. See [docs/mcp-client-setup.md](docs/mcp-client-setup.md#zileo-chat) for the full matrix.
+
 ### Other MCP clients
 
 Any MCP-compatible client can connect over HTTP Streamable to `http://localhost:8000/mcp`. The server implements:
