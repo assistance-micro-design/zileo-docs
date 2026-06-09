@@ -21,7 +21,7 @@ This project is in beta. Use at your own risk and review the trade-offs before r
 | **API Costs** | Every `index_document` call triggers Mistral embeddings (and OCR for image pages). Indexing large PDFs can generate non-trivial billing. |
 | **Breaking Changes** | The MCP tool surface evolves between minor versions. Version 0.3.0 split `search_documents` into `search_hybrid` and `search_semantic`; expect similar adjustments before 1.0. |
 | **Security** | Designed for **personal local use** behind Docker. The author declines responsibility if exposed to the public internet without an additional auth layer. |
-| **Instability** | Schemas validated with `extra="forbid"` since 0.3.0 — clients sending unknown fields now receive `VALIDATION_ERROR` instead of silent acceptance. |
+| **Instability** | Schemas validated with `extra="forbid"` since 0.4.0 — clients sending unknown fields now receive `VALIDATION_ERROR` instead of silent acceptance. |
 | **No SLA** | No guaranteed availability, no support contract. File issues via GitHub. |
 
 **Recommendation:** Run behind a private network, set `API_KEY`, and pin the Docker image to a tagged version.
@@ -217,7 +217,7 @@ Main environment variables (see [docs/configuration.md](docs/configuration.md) f
 | `MISTRAL_API_KEY` | Yes | Mistral API key (embeddings + OCR) |
 | `API_KEY` | Yes (outside DEBUG) | Authentication key for protected endpoints. Generate via `openssl rand -hex 32`. Empty value accepted only when `DEBUG=true`. |
 | `DOCUMENTS_PATH` | Yes | Local path to your source documents |
-| `OUTPUT_PATH` | No | Output directory for generated files (default: `./output`) |
+| `OUTPUT_PATH` | No | Output directory for generated files (default: `/app/output`) |
 | `QDRANT_HOST` | No | Qdrant host (default: `localhost`, `qdrant` inside Docker) |
 | `DEBUG` | No | Enables Swagger UI and CORS (default: `false`) |
 

@@ -55,6 +55,8 @@ La cle est passee par le client dans le header `X-API-Key`. Voir [docs/mcp-clien
 | `MAX_PAGES` | `1000` | Nombre maximum de pages par document |
 | `MAX_OUTPUT_FILE_SIZE_MB` | `10` | Taille maximum d'un fichier genere (Excel/Word) en Mo |
 | `MAX_MCP_BODY_MB` | `5` | Taille maximum du body JSON-RPC sur `/mcp` (protection DoS) |
+| `MISTRAL_TIMEOUT_S` | `30` | Timeout (s) sur les appels Mistral (embeddings et OCR), anti-saturation de la pool asyncio |
+| `MAX_DECOMPRESSED_MB` | `200` | Taille maximum decompressee (Mo) pour `.xlsx`/`.docx` (anti zip-bomb) |
 
 ### Chemins
 
@@ -120,6 +122,8 @@ MAX_FILE_SIZE_MB=50
 MAX_PAGES=1000
 MAX_OUTPUT_FILE_SIZE_MB=10
 MAX_MCP_BODY_MB=5
+MISTRAL_TIMEOUT_S=30
+MAX_DECOMPRESSED_MB=200
 
 # Chemins
 DOCUMENTS_PATH=/home/user/Documents

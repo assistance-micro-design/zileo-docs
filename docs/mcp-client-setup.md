@@ -182,7 +182,6 @@ Tout client compatible MCP peut se connecter :
 | Méthode | Description |
 |---------|-------------|
 | `initialize` | Handshake. Retourne `protocolVersion: "2024-11-05"` et capabilities |
-| `notifications/initialized` | Notification post-handshake (pas de réponse) |
 | `tools/list` | Liste les 13 outils avec leurs schemas |
 | `tools/call` | Exécute un outil avec ses arguments |
 
