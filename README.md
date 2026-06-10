@@ -1,6 +1,6 @@
 # Zileo Docs
 
-[![Version](https://img.shields.io/badge/version-0.4.0-orange)](https://github.com/assistance-micro-design/zileo-docs)
+[![Version](https://img.shields.io/badge/version-0.5.0-orange)](https://github.com/assistance-micro-design/zileo-docs)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 [![Status](https://img.shields.io/badge/status-beta-yellow)](https://github.com/assistance-micro-design/zileo-docs)
 

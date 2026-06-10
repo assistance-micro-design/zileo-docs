@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # === Application ===
     APP_NAME: str = "Zileo Docs"
-    APP_VERSION: str = "0.4.0"
+    APP_VERSION: str = "0.5.0"
     DEBUG: bool = False
 
     # === Mistral API ===
