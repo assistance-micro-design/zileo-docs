@@ -11,11 +11,10 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi import Path as PathParam
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import OrchestratorDep, VectorStoreDep
+from src.api.rate_limit import limiter
 from src.core.config import settings
 from src.core.exceptions import (
     DocumentNotFoundError,
@@ -34,7 +33,6 @@ _UPLOAD_CHUNK_BYTES = 64 * 1024
 
 logger = logging.getLogger(__name__)
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/documents", tags=["Documents"], dependencies=[Depends(verify_api_key)])
 
 

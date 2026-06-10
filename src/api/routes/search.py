@@ -9,11 +9,10 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import EmbedderDep, SparseEmbedderDep, VectorStoreDep
+from src.api.rate_limit import limiter
 from src.core.config import settings
 from src.models.search import SearchFilters, SearchQuery, SearchResponse, SearchResultItem
 from src.services.embedding.sparse_embedder import SparseEmbedder
@@ -22,7 +21,6 @@ from src.services.vector.qdrant_store import QdrantVectorStore
 
 logger = logging.getLogger(__name__)
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/search", tags=["Search"], dependencies=[Depends(verify_api_key)])
 
 

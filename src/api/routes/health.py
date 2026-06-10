@@ -7,18 +7,16 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import VectorStoreDep
+from src.api.rate_limit import limiter
 from src.core.config import settings
 from src.models.api import HealthResponse
 
 
 logger = logging.getLogger(__name__)
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/health", tags=["Health"])
 
 

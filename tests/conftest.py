@@ -30,6 +30,23 @@ def create_minimal_png(path: Path) -> None:
 
 
 # =============================================================================
+# Fixtures: Rate limiting
+# =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter() -> None:
+    """Remet a zero les quotas du limiter partage entre les tests.
+
+    Le limiter slowapi est un singleton module-level (src/api/rate_limit.py) :
+    sans reset, les quotas (ex: 30/min sur /mcp) se cumulent entre tests.
+    """
+    from src.api.rate_limit import limiter
+
+    limiter.reset()
+
+
+# =============================================================================
 # Fixtures: PDF Files
 # =============================================================================
 

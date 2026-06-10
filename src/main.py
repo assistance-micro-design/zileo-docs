@@ -17,11 +17,11 @@ from typing import TYPE_CHECKING, Any
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from src.api.auth import verify_api_key
+from src.api.rate_limit import limiter
 from src.api.routes import documents, health, search
 from src.core.config import settings
 from src.core.exceptions import ZileoDocsError
@@ -82,8 +82,6 @@ def create_app() -> FastAPI:
     """
     setup_logging()
 
-    limiter = Limiter(key_func=get_remote_address)
-
     app = FastAPI(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
@@ -96,13 +94,13 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.DEBUG else None,
     )
 
-    _configure_middleware(app, limiter)
-    _register_routes(app, limiter)
+    _configure_middleware(app)
+    _register_routes(app)
 
     return app
 
 
-def _configure_middleware(app: FastAPI, limiter: Limiter) -> None:
+def _configure_middleware(app: FastAPI) -> None:
     """Configure les middlewares (rate limiting, CORS).
 
     CORS n'est monte qu'en mode DEBUG. En production, le serveur est destine
@@ -123,7 +121,7 @@ def _configure_middleware(app: FastAPI, limiter: Limiter) -> None:
     )
 
 
-def _register_routes(app: FastAPI, limiter: Limiter) -> None:
+def _register_routes(app: FastAPI) -> None:
     """Enregistre les routes API, MCP et les handlers d'erreur."""
     app.include_router(health.router)
     app.include_router(documents.router, prefix="/api/v1")
