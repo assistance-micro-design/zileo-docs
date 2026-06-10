@@ -142,27 +142,28 @@ Replace `your_api_key_here` with the `API_KEY` from `.env`. Restart Claude Deskt
 
 ### Zileo Chat
 
-In Zileo Chat, open **Settings → MCP** and add a server pointing at the running container:
+In Zileo Chat, open **Settings → MCP → Add server** and fill in the form:
 
-```json
-{
-  "mcpServers": {
-    "zileo-docs": {
-      "url": "http://localhost:8000/mcp",
-      "transport": "http",
-      "headers": {
-        "X-API-Key": "your_api_key_here"
-      }
-    }
-  }
-}
-```
+| Field | Value |
+|-------|-------|
+| **Name** | `zileo-docs` |
+| **Deployment method** | `HTTP` |
+| **Arguments** | the endpoint URL on the first line — `http://localhost:8000/mcp` |
+| **Authentication** | `API key` |
+| **Header name** | `X-API-Key` |
+| **API key value** | the `API_KEY` from your `.env` |
 
-- **Same host**: use `http://localhost:8000/mcp`.
-- **Zileo Chat in Docker on the same host**: use the container name and join the `zileo-docs_mcp-network` network — `http://zileo-docs:8000/mcp`.
-- **Remote host (LAN)**: use the server's IP — `http://192.168.1.X:8000/mcp`.
+The API-key value is stored in your OS keychain — never written to the database in plain text, never exported. Only non-sensitive metadata (the header name) is persisted.
 
-Replace `your_api_key_here` with the `API_KEY` from `.env`. See [docs/mcp-client-setup.md](docs/mcp-client-setup.md#zileo-chat) for the full matrix.
+Set the endpoint URL according to where Zileo Chat runs relative to the server:
+
+| Scenario | Endpoint URL |
+|----------|--------------|
+| Same host | `http://localhost:8000/mcp` |
+| Zileo Chat in Docker, same host | `http://zileo-docs:8000/mcp` — join the `zileo-docs_mcp-network` network |
+| Remote host (LAN) | `http://<server-ip>:8000/mcp` — enable the LAN access toggle at the top of the MCP settings first |
+
+Then **Save**. See [docs/mcp-client-setup.md](docs/mcp-client-setup.md#zileo-chat) for details.
 
 ### Other MCP clients
 
