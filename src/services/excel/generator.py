@@ -340,6 +340,7 @@ class ExcelGenerator(BaseDocumentGenerator):
         """Fusionne des cellules."""
         ws.merge_cells(merge_def.range)
         if merge_def.value is not None:
+            self.check_cell_value_safety(merge_def.value)
             # Ecrire la valeur dans la premiere cellule de la plage
             top_left = merge_def.range.split(":")[0]
             ws[top_left] = merge_def.value

@@ -660,3 +660,37 @@ class TestEditorFormulaInjection:
         )
         with pytest.raises(ExcelFormulaInjectionError):
             await editor.edit(params)
+
+    @pytest.mark.asyncio
+    async def test_merge_cells_blocks_injection(
+        self, editor: ExcelEditor, sample_file: str
+    ) -> None:
+        """merge_cells bloque les valeurs dangereuses."""
+        params = EditExcelParams(
+            filename=sample_file,
+            operations=[
+                MergeCellsOp(
+                    sheet="Ventes",
+                    merge=MergedCellDef(range="A5:B5", value="+cmd|'/C calc'"),
+                ),
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await editor.edit(params)
+
+    @pytest.mark.asyncio
+    async def test_merge_cells_allows_safe_value(
+        self, editor: ExcelEditor, sample_file: str
+    ) -> None:
+        """merge_cells autorise les valeurs sures."""
+        params = EditExcelParams(
+            filename=sample_file,
+            operations=[
+                MergeCellsOp(
+                    sheet="Ventes",
+                    merge=MergedCellDef(range="A5:B5", value="Total general"),
+                ),
+            ],
+        )
+        result = await editor.edit(params)
+        assert result.operations_applied == 1

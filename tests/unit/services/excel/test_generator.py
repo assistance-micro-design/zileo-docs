@@ -936,3 +936,35 @@ class TestExcelGeneratorFormulaInjection:
         )
         with pytest.raises(ExcelFormulaInjectionError):
             await generator.generate(params)
+
+    @pytest.mark.asyncio
+    async def test_merged_cell_injection_blocked(self, generator: ExcelGenerator) -> None:
+        """La valeur d'une cellule fusionnee est aussi verifiee."""
+        params = CreateExcelParams(
+            filename="merge_inj.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    rows=[["a", "b"]],
+                    merged_cells=[MergedCellDef(range="A2:B2", value='=CMD("calc")')],
+                )
+            ],
+        )
+        with pytest.raises(ExcelFormulaInjectionError):
+            await generator.generate(params)
+
+    @pytest.mark.asyncio
+    async def test_merged_cell_safe_value_accepted(self, generator: ExcelGenerator) -> None:
+        """Une valeur sure dans une cellule fusionnee passe."""
+        params = CreateExcelParams(
+            filename="merge_safe.xlsx",
+            sheets=[
+                SheetDef(
+                    name="S1",
+                    rows=[["a", "b"]],
+                    merged_cells=[MergedCellDef(range="A2:B2", value="Titre")],
+                )
+            ],
+        )
+        result = await generator.generate(params)
+        assert result.total_rows == 1
