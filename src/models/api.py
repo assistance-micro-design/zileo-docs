@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -210,9 +210,9 @@ class UnifiedIndexDocumentParams(BaseModel):
         default=None,
         description="Excel uniquement: noms des feuilles à indexer (toutes si vide)",
     )
-    table_format: str = Field(
+    table_format: Literal["markdown", "html"] = Field(
         default="markdown",
-        description="Format des tableaux extraits: markdown, html ou json",
+        description="Format des tableaux extraits: markdown ou html",
     )
 
 

@@ -137,3 +137,19 @@ class TestParamsExtraForbid:
     def test_inspect_generated_file_params_rejects_unknown_field(self) -> None:
         with pytest.raises(ValidationError, match="extra"):
             InspectGeneratedFileParams(filename="r.xlsx", extra_field="oops")  # type: ignore[call-arg]
+
+
+class TestTableFormatLiteral:
+    """table_format n'accepte que les valeurs supportees par l'extraction."""
+
+    def test_markdown_accepted(self) -> None:
+        params = UnifiedIndexDocumentParams(file_path="/tmp/x.pdf", table_format="markdown")
+        assert params.table_format == "markdown"
+
+    def test_html_accepted(self) -> None:
+        params = UnifiedIndexDocumentParams(file_path="/tmp/x.pdf", table_format="html")
+        assert params.table_format == "html"
+
+    def test_unsupported_value_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            UnifiedIndexDocumentParams(file_path="/tmp/x.pdf", table_format="json")
