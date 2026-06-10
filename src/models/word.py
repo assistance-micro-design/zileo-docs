@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -22,7 +22,7 @@ class HeadingLevel(int, Enum):
     HEADING_6 = 6  # Titre 6
 
 
-class ContentType(str, Enum):
+class ContentType(StrEnum):
     """Type de contenu dans le document."""
 
     PARAGRAPH = "paragraph"

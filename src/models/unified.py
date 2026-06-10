@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from src.models.types import CellValue, FormulaResult
 
 
-class DocumentType(str, Enum):
+class DocumentType(StrEnum):
     """Type de document source."""
 
     PDF = "pdf"

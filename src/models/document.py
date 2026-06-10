@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 
-class PageType(str, Enum):
+class PageType(StrEnum):
     """Classification du type de page."""
 
     TEXT_ONLY = "text_only"
