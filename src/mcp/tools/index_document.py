@@ -25,6 +25,12 @@ from src.services.vector.qdrant_store import QdrantVectorStore
 
 logger = logging.getLogger(__name__)
 
+# Decoupage des documents unifies (Excel/Word) en chunks
+_MAIN_CHUNK_MAX_CHARS = 8000
+_OVERFLOW_CHUNK_CHARS = 4000
+_OVERFLOW_CHUNK_OVERLAP = 200
+_FORMULAS_PER_CHUNK = 50
+
 
 class IndexDocumentTool(BaseMCPTool):
     """Tool MCP unifié pour extraire et indexer un document dans la base vectorielle.
@@ -275,9 +281,9 @@ class IndexDocumentTool(BaseMCPTool):
             "pages_processed_native": result.pages_processed_native,
             "pages_processed_ocr": result.pages_processed_ocr,
             "chunks_stored": result.chunks_stored,
-            "has_tables": any(c.metadata.has_table for c in result.chunks if c.metadata.has_table),
+            "has_tables": any(c.metadata.has_table for c in result.chunks),
             "has_formulas": False,
-            "has_images": any(c.metadata.has_image for c in result.chunks if c.metadata.has_image),
+            "has_images": any(c.metadata.has_image for c in result.chunks),
             "metadata": {
                 "title": result.analysis.metadata.title,
                 "author": result.analysis.metadata.author,
@@ -384,11 +390,11 @@ class IndexDocumentTool(BaseMCPTool):
         return chunks
 
     def _create_main_chunk(self, doc: UnifiedDocument) -> DocumentChunk | None:
-        """Cree le chunk principal (max 8000 chars)."""
+        """Cree le chunk principal (max _MAIN_CHUNK_MAX_CHARS chars)."""
         main_content = doc.content_markdown
         if not main_content.strip():
             return None
-        chunk_content = main_content[:8000]
+        chunk_content = main_content[:_MAIN_CHUNK_MAX_CHARS]
         return DocumentChunk(
             content=chunk_content,
             metadata=ChunkMetadata(
@@ -408,13 +414,13 @@ class IndexDocumentTool(BaseMCPTool):
     def _create_overflow_chunks(
         self, doc: UnifiedDocument, start_index: int
     ) -> list[DocumentChunk]:
-        """Cree les chunks supplementaires pour le contenu au-dela de 8000 chars."""
+        """Cree les chunks supplementaires au-dela de _MAIN_CHUNK_MAX_CHARS chars."""
         main_content = doc.content_markdown
-        if len(main_content) <= 8000:
+        if len(main_content) <= _MAIN_CHUNK_MAX_CHARS:
             return []
-        remaining = main_content[8000:]
-        chunk_size = 4000
-        overlap = 200
+        remaining = main_content[_MAIN_CHUNK_MAX_CHARS:]
+        chunk_size = _OVERFLOW_CHUNK_CHARS
+        overlap = _OVERFLOW_CHUNK_OVERLAP
         chunks: list[DocumentChunk] = []
         for i, start in enumerate(range(0, len(remaining), chunk_size - overlap)):
             chunk_content = remaining[start : start + chunk_size]
@@ -490,11 +496,11 @@ class IndexDocumentTool(BaseMCPTool):
             return ""
 
         lines = ["# Formules Excel", ""]
-        for f in formulas[:50]:  # Limite 50 formules par chunk
+        for f in formulas[:_FORMULAS_PER_CHUNK]:
             result_str = f" = {f.result}" if f.result is not None else ""
             lines.append(f"- **{f.sheet}!{f.cell}**: `{f.formula}`{result_str}")
 
-        if len(formulas) > 50:
-            lines.append(f"\n*... et {len(formulas) - 50} autres formules*")
+        if len(formulas) > _FORMULAS_PER_CHUNK:
+            lines.append(f"\n*... et {len(formulas) - _FORMULAS_PER_CHUNK} autres formules*")
 
         return "\n".join(lines)

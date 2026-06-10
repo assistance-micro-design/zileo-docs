@@ -156,7 +156,6 @@ class ExcelExtractor:
         """Extrait une feuille Excel."""
         cells: list[list[ExcelCell]] = []
         formulas: list[ExcelFormula] = []
-        tables: list[ExcelTable] = []
 
         # Dimensions
         max_row = ws_formulas.max_row or 0

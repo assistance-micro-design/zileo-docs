@@ -131,7 +131,7 @@ class MistralOCRProcessor:
         Returns:
             OCRResult avec le contenu extrait.
         """
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         # 1. Convertir page en image PNG haute resolution
         img_base64 = self._page_to_base64(pdf_path, page_num)
@@ -146,7 +146,7 @@ class MistralOCRProcessor:
         except Exception as e:
             return self._create_error_result(page_num, str(e))
 
-        processing_time = int((time.time() - start_time) * 1000)
+        processing_time = int((time.perf_counter() - start_time) * 1000)
 
         # 4. Parser la reponse
         if not ocr_response or not hasattr(ocr_response, "pages") or not ocr_response.pages:
@@ -168,6 +168,9 @@ class MistralOCRProcessor:
             images=images,
             charts=charts,
             equations=equations,
+            # L'API Mistral OCR ne retourne pas de score de confiance : valeur
+            # nominale de succes. 0.0 est reserve aux erreurs (sentinelle lue
+            # par l'orchestrateur).
             confidence_score=0.95,
             processing_time_ms=processing_time,
         )
