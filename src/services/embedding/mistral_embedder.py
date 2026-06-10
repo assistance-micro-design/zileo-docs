@@ -97,8 +97,7 @@ class MistralEmbedder:
             Liste des memes chunks avec le champ embedding rempli.
 
         Raises:
-            ValueError: Si la liste de chunks est vide.
-            MistralAPIError: En cas d'erreur de l'API Mistral.
+            mistralai.models.SDKError: En cas d'erreur de l'API Mistral (propagee).
 
         Example:
             >>> embedder = MistralEmbedder()
@@ -143,7 +142,7 @@ class MistralEmbedder:
 
         Raises:
             ValueError: Si la requete est vide.
-            MistralAPIError: En cas d'erreur de l'API Mistral.
+            mistralai.models.SDKError: En cas d'erreur de l'API Mistral (propagee).
 
         Example:
             >>> embedder = MistralEmbedder()
@@ -260,7 +259,7 @@ class MistralEmbedder:
             Liste des vecteurs d'embedding dans le meme ordre que les textes.
 
         Raises:
-            MistralAPIError: En cas d'erreur de l'API.
+            mistralai.models.SDKError: En cas d'erreur de l'API (propagee).
         """
         if not texts:
             return []
