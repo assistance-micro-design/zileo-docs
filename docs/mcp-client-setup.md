@@ -102,41 +102,30 @@ Redémarrer Claude Desktop. Les **13 outils** apparaissent dans l'icône d'outil
 
 ## Zileo Chat
 
-### Même machine (localhost)
+Zileo Chat ne lit pas de fichier `mcpServers` : la configuration se fait via un formulaire. Ouvrir **Réglages → MCP → Ajouter un serveur** et renseigner :
 
-```json
-{
-  "mcpServers": {
-    "zileo-docs": {
-      "url": "http://localhost:8000/mcp",
-      "transport": "http",
-      "headers": {
-        "X-API-Key": "ta_cle_api_ici"
-      }
-    }
-  }
-}
-```
+| Champ | Valeur |
+|-------|--------|
+| **Nom** | `zileo-docs` |
+| **Méthode de déploiement** | `HTTP` |
+| **Arguments** | l'URL de l'endpoint sur la première ligne — `http://localhost:8000/mcp` |
+| **Authentification** | `Clé d'API` |
+| **Nom de l'en-tête** | `X-API-Key` |
+| **Valeur de la clé d'API** | la valeur de `API_KEY` du `.env` |
+
+La valeur de la clé est stockée dans le trousseau du système d'exploitation : jamais en base en clair, jamais exportée. Seules les métadonnées non sensibles (le nom de l'en-tête) sont persistées.
+
+### URL de l'endpoint selon l'emplacement
+
+| Cas | URL |
+|-----|-----|
+| Même machine | `http://localhost:8000/mcp` |
+| Zileo Chat dans Docker, même machine | `http://zileo-docs:8000/mcp` (voir « Même réseau Docker » ci-dessous) |
+| Machine distante (LAN) | `http://<ip-serveur>:8000/mcp` — activer au préalable la bascule d'accès réseau LAN en haut de la page MCP |
 
 ### Même réseau Docker
 
-Si Zileo Chat tourne dans Docker sur la même machine, utiliser le nom du container :
-
-```json
-{
-  "mcpServers": {
-    "zileo-docs": {
-      "url": "http://zileo-docs:8000/mcp",
-      "transport": "http",
-      "headers": {
-        "X-API-Key": "ta_cle_api_ici"
-      }
-    }
-  }
-}
-```
-
-Et brancher Zileo Chat sur le réseau de Zileo Docs (dans son `docker-compose.yml`) :
+Si Zileo Chat tourne dans Docker sur la même machine, utiliser le nom du container (`http://zileo-docs:8000/mcp`) et le brancher sur le réseau de Zileo Docs (dans son `docker-compose.yml`) :
 
 ```yaml
 services:
@@ -150,24 +139,6 @@ networks:
 ```
 
 Le nom du réseau externe est `<projet>_mcp-network` (préfixe Docker Compose + nom du réseau).
-
-### Machine distante (LAN)
-
-```json
-{
-  "mcpServers": {
-    "zileo-docs": {
-      "url": "http://192.168.1.X:8000/mcp",
-      "transport": "http",
-      "headers": {
-        "X-API-Key": "ta_cle_api_ici"
-      }
-    }
-  }
-}
-```
-
-Remplacer `192.168.1.X` par l'IP de la machine qui héberge Zileo Docs.
 
 ## Autres clients MCP
 
