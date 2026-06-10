@@ -5,6 +5,7 @@
 !.gitignore
 !.github/
 !.github/**
+!.python-version
 CLAUDE.md
 
 # Python

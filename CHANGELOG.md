@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Development environment: `.python-version` pins Python 3.11 locally — the same interpreter as the CI jobs and the Docker base image — so local validation runs on what CI actually executes.
+
 ## [0.5.0] - 2026-06-10
 
 First public release on GitHub.
