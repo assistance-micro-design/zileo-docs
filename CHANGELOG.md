@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 
 ### Changed
 - Development environment: `.python-version` pins Python 3.11 locally — the same interpreter as the CI jobs and the Docker base image — so local validation runs on what CI actually executes.
+- CI: CodeQL action updated to v4 (Node 24 runtime; v3 is deprecated) and now also scans pushes to `main`, keeping the Security tab baseline fresh; per-job uv cache keys remove the cache-reservation race warning between parallel jobs.
 
 ## [0.5.0] - 2026-06-10
 

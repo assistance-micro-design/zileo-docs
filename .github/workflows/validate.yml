@@ -22,6 +22,9 @@ jobs:
         with:
           version: "0.9.21"
           enable-cache: true
+          # Suffixe par job : les 3 jobs paralleles se disputaient la meme cle
+          # de cache ("Failed to save: Unable to reserve cache")
+          cache-suffix: lint
 
       - name: Install dependencies (locked)
         run: uv sync --frozen --extra dev --python 3.11
@@ -42,6 +45,7 @@ jobs:
         with:
           version: "0.9.21"
           enable-cache: true
+          cache-suffix: typecheck
 
       - name: Install dependencies (locked)
         run: uv sync --frozen --extra dev --python 3.11
@@ -59,6 +63,7 @@ jobs:
         with:
           version: "0.9.21"
           enable-cache: true
+          cache-suffix: test
 
       - name: Install dependencies (locked)
         run: uv sync --frozen --extra dev --python 3.11
