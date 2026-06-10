@@ -348,9 +348,7 @@ class TestExtraFieldsForbidden:
             (SetSheetPropertiesOp, {"sheet": "S"}),
         ],
     )
-    def test_unknown_field_rejected(
-        self, model_cls: type, kwargs: dict[str, object]
-    ) -> None:
+    def test_unknown_field_rejected(self, model_cls: type, kwargs: dict[str, object]) -> None:
         """Un champ inconnu leve ValidationError au lieu d'etre ignore."""
         with pytest.raises(ValidationError, match="unknown_field"):
             model_cls(**kwargs, unknown_field="x")
