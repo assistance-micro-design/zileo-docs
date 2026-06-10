@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.models.excel_generation import (
     CellStyleDef,
@@ -19,6 +19,8 @@ from src.models.types import CellValue
 
 class UpdateCellsOp(BaseModel):
     """Modifier des valeurs de cellules."""
+
+    model_config = ConfigDict(extra="forbid")
 
     op: Literal["update_cells"] = "update_cells"
     sheet: str
@@ -33,6 +35,8 @@ class UpdateCellsOp(BaseModel):
 
 class InsertRowsOp(BaseModel):
     """Inserer des lignes."""
+
+    model_config = ConfigDict(extra="forbid")
 
     op: Literal["insert_rows"] = "insert_rows"
     sheet: str
@@ -49,6 +53,8 @@ class InsertRowsOp(BaseModel):
 
 class DeleteRowsOp(BaseModel):
     """Supprimer des lignes."""
+
+    model_config = ConfigDict(extra="forbid")
 
     op: Literal["delete_rows"] = "delete_rows"
     sheet: str
@@ -68,6 +74,8 @@ class DeleteRowsOp(BaseModel):
 class ApplyStylesOp(BaseModel):
     """Appliquer des styles a des cellules."""
 
+    model_config = ConfigDict(extra="forbid")
+
     op: Literal["apply_styles"] = "apply_styles"
     sheet: str
     styles: Annotated[list[CellStyleDef], Field(min_length=1)]
@@ -75,6 +83,8 @@ class ApplyStylesOp(BaseModel):
 
 class AddSheetOp(BaseModel):
     """Ajouter une feuille."""
+
+    model_config = ConfigDict(extra="forbid")
 
     op: Literal["add_sheet"] = "add_sheet"
     name: Annotated[
@@ -90,12 +100,16 @@ class AddSheetOp(BaseModel):
 class DeleteSheetOp(BaseModel):
     """Supprimer une feuille."""
 
+    model_config = ConfigDict(extra="forbid")
+
     op: Literal["delete_sheet"] = "delete_sheet"
     name: str
 
 
 class RenameSheetOp(BaseModel):
     """Renommer une feuille."""
+
+    model_config = ConfigDict(extra="forbid")
 
     op: Literal["rename_sheet"] = "rename_sheet"
     name: str
@@ -110,6 +124,8 @@ class RenameSheetOp(BaseModel):
 class AddChartOp(BaseModel):
     """Ajouter un graphique."""
 
+    model_config = ConfigDict(extra="forbid")
+
     op: Literal["add_chart"] = "add_chart"
     sheet: str
     chart: ChartDef
@@ -118,12 +134,16 @@ class AddChartOp(BaseModel):
 class RemoveChartsOp(BaseModel):
     """Supprimer tous les graphiques d'une feuille."""
 
+    model_config = ConfigDict(extra="forbid")
+
     op: Literal["remove_charts"] = "remove_charts"
     sheet: str
 
 
 class AddDataValidationOp(BaseModel):
     """Ajouter une validation de donnees."""
+
+    model_config = ConfigDict(extra="forbid")
 
     op: Literal["add_data_validation"] = "add_data_validation"
     sheet: str
@@ -133,6 +153,8 @@ class AddDataValidationOp(BaseModel):
 class MergeCellsOp(BaseModel):
     """Fusionner des cellules."""
 
+    model_config = ConfigDict(extra="forbid")
+
     op: Literal["merge_cells"] = "merge_cells"
     sheet: str
     merge: MergedCellDef
@@ -141,6 +163,8 @@ class MergeCellsOp(BaseModel):
 class UnmergeCellsOp(BaseModel):
     """Defusionner des cellules."""
 
+    model_config = ConfigDict(extra="forbid")
+
     op: Literal["unmerge_cells"] = "unmerge_cells"
     sheet: str
     range: str
@@ -148,6 +172,8 @@ class UnmergeCellsOp(BaseModel):
 
 class SetSheetPropertiesOp(BaseModel):
     """Modifier les proprietes d'une feuille."""
+
+    model_config = ConfigDict(extra="forbid")
 
     op: Literal["set_sheet_properties"] = "set_sheet_properties"
     sheet: str

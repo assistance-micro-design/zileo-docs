@@ -6,13 +6,15 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.models.types import CellValue
 
 
 class CellStyleDef(BaseModel):
     """Definition de style pour une plage de cellules."""
+
+    model_config = ConfigDict(extra="forbid")
 
     range: Annotated[str, Field(description="Plage de cellules. Ex: 'A1:D1'")]
     bold: bool = False
@@ -55,6 +57,8 @@ class CellStyleDef(BaseModel):
 
 class ChartDef(BaseModel):
     """Definition d'un graphique Excel."""
+
+    model_config = ConfigDict(extra="forbid")
 
     type: Annotated[
         str,
@@ -100,6 +104,8 @@ class ChartDef(BaseModel):
 class DataValidationDef(BaseModel):
     """Definition d'une validation de donnees."""
 
+    model_config = ConfigDict(extra="forbid")
+
     range: Annotated[str, Field(description="Plage de cellules. Ex: 'A2:A100'")]
     type: Annotated[
         str,
@@ -132,12 +138,16 @@ class DataValidationDef(BaseModel):
 class MergedCellDef(BaseModel):
     """Definition d'une fusion de cellules."""
 
+    model_config = ConfigDict(extra="forbid")
+
     range: Annotated[str, Field(description="Plage a fusionner. Ex: 'A1:D1'")]
     value: CellValue = None
 
 
 class SheetDef(BaseModel):
     """Definition d'une feuille Excel."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: Annotated[str, Field(min_length=1, max_length=31, description="Nom de la feuille")]
     headers: Annotated[

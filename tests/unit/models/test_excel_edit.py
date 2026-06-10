@@ -322,3 +322,35 @@ class TestColumnLimits:
         headers = [f"H{i}" for i in range(501)]
         with pytest.raises(ValidationError):
             AddSheetOp(name="S1", headers=headers)
+
+
+class TestExtraFieldsForbidden:
+    """Les operations d'edition rejettent les champs inconnus (extra="forbid")."""
+
+    @pytest.mark.parametrize(
+        ("model_cls", "kwargs"),
+        [
+            (UpdateCellsOp, {"sheet": "S", "cells": {"A1": 1}}),
+            (InsertRowsOp, {"sheet": "S", "rows": [[1]]}),
+            (DeleteRowsOp, {"sheet": "S", "start_row": 1, "end_row": 2}),
+            (ApplyStylesOp, {"sheet": "S", "styles": [{"range": "A1:B1"}]}),
+            (AddSheetOp, {"name": "S2"}),
+            (DeleteSheetOp, {"name": "S2"}),
+            (RenameSheetOp, {"name": "S2", "new_name": "S3"}),
+            (AddChartOp, {"sheet": "S", "chart": {"type": "bar", "data_range": "B1:E5"}}),
+            (RemoveChartsOp, {"sheet": "S"}),
+            (
+                AddDataValidationOp,
+                {"sheet": "S", "validation": {"range": "A2:A10", "type": "list"}},
+            ),
+            (MergeCellsOp, {"sheet": "S", "merge": {"range": "A1:B1"}}),
+            (UnmergeCellsOp, {"sheet": "S", "range": "A1:B1"}),
+            (SetSheetPropertiesOp, {"sheet": "S"}),
+        ],
+    )
+    def test_unknown_field_rejected(
+        self, model_cls: type, kwargs: dict[str, object]
+    ) -> None:
+        """Un champ inconnu leve ValidationError au lieu d'etre ignore."""
+        with pytest.raises(ValidationError, match="unknown_field"):
+            model_cls(**kwargs, unknown_field="x")

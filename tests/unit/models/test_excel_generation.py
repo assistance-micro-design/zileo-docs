@@ -370,3 +370,24 @@ class TestCreateExcelResult:
             file_size_bytes=1000,
         )
         assert result.overwritten is False
+
+
+class TestExtraFieldsForbidden:
+    """Les modeles imbriques rejettent les champs inconnus (extra="forbid")."""
+
+    @pytest.mark.parametrize(
+        ("model_cls", "kwargs"),
+        [
+            (CellStyleDef, {"range": "A1:D1"}),
+            (ChartDef, {"type": "bar", "data_range": "B1:E5"}),
+            (DataValidationDef, {"range": "A2:A10", "type": "list"}),
+            (MergedCellDef, {"range": "A1:B1"}),
+            (SheetDef, {"name": "S1"}),
+        ],
+    )
+    def test_unknown_field_rejected(
+        self, model_cls: type, kwargs: dict[str, object]
+    ) -> None:
+        """Un champ inconnu leve ValidationError au lieu d'etre ignore."""
+        with pytest.raises(ValidationError, match="unknown_field"):
+            model_cls(**kwargs, unknown_field="x")
