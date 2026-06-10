@@ -118,7 +118,11 @@ async def search_documents_get(
     content_type: str | None = Query(default=None, description="Filtrer par type"),
     has_table: bool | None = Query(default=None, description="Filtrer tableaux"),
     has_image: bool | None = Query(default=None, description="Filtrer images"),
-    search_mode: str = Query(default="hybrid", description="Mode: hybrid ou semantic"),
+    search_mode: str = Query(
+        default="hybrid",
+        pattern="^(hybrid|semantic)$",
+        description="Mode: hybrid ou semantic",
+    ),
 ) -> SearchResponse:
     """Execute une recherche semantique via GET.
 
@@ -145,13 +149,12 @@ async def search_documents_get(
     )
 
     # Construire la requete
-    mode = search_mode if search_mode in ("hybrid", "semantic") else "hybrid"
     query = SearchQuery(
         query=q,
         top_k=top_k,
         score_threshold=score_threshold,
         filters=filters if any((document_id, content_type, has_table, has_image)) else None,
-        search_mode=mode,
+        search_mode=search_mode,
     )
 
     return await search_documents(request, query, embedder, vector_store, sparse_embedder)  # type: ignore[no-any-return]

@@ -124,3 +124,15 @@ class TestSearchGet:
         response = await client.get("/api/v1/search")
 
         assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_search_get_valid_modes_accepted(self, client: AsyncClient) -> None:
+        for mode in ("hybrid", "semantic"):
+            response = await client.get(f"/api/v1/search?q=test&search_mode={mode}")
+            assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_search_get_invalid_mode_rejected(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/search?q=test&search_mode=fulltext")
+
+        assert response.status_code == 422
