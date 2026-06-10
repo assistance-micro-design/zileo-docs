@@ -249,6 +249,15 @@ uv run mypy src/
 uv run pytest --cov=src --cov-fail-under=80
 ```
 
+### RAG evaluation
+
+Offline evaluation of search quality against the golden set (`tests/eval/golden_questions.yml`). Requires the server running with indexed documents.
+
+```bash
+uv run python3 scripts/eval_rag.py --tool search_hybrid    # or search_semantic
+# Metrics: recall@1, recall@5, MRR, false-positive rate (off-domain), mean results
+```
+
 ---
 
 ## Architecture
