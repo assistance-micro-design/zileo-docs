@@ -64,4 +64,13 @@ jobs:
         run: uv sync --frozen --extra dev --python 3.11
 
       - name: Pytest (unit only — integration and e2e require Qdrant + Mistral)
-        run: uv run --no-sync pytest tests/unit --cov=src --cov-fail-under=80
+        env:
+          # Pas de .env sur le runner : memes variables que l'environnement de dev,
+          # valeurs factices (aucun test unitaire n'appelle un service externe).
+          MISTRAL_API_KEY: test-key
+          API_KEY: test-api-key
+          DOCUMENTS_PATH: ${{ github.workspace }}/ci-documents
+          OUTPUT_PATH: ${{ github.workspace }}/ci-output
+        run: |
+          mkdir -p ci-documents ci-output
+          uv run --no-sync pytest tests/unit --cov=src --cov-fail-under=80
