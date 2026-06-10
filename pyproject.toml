@@ -33,7 +33,7 @@ dependencies = [
     "pymupdf4llm>=0.0.10",
 
     # Mistral
-    "mistralai>=1.0.0,<2.0.0",
+    "mistralai>=1.0.0,<3.0.0",
 
     # Vector Store
     "qdrant-client>=1.9.0",
