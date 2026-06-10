@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-10
+
+First public release on GitHub.
+
+### Security
+- The Excel formula-injection blocklist now also covers merged-cell values (`merged_cells[].value`), closing a bypass that affected both `create_excel_document` and the `merge_cells` operation of `edit_excel_document`.
+- CI hardening: GitHub Actions pinned to full commit SHAs; `validate` workflow restricted to `contents: read` permissions.
+
+### Changed
+- **Stricter input validation (LLM-side)**: `extra="forbid"` now applies to all nested Excel models (sheet, style, chart, data-validation and merge definitions, plus the 13 edit operations). A client sending an unknown field receives `VALIDATION_ERROR` instead of silent acceptance.
+- `index_document`: `table_format` is constrained to `"markdown"` or `"html"` (previously a free-form string; the documented `json` value never existed).
+- `GET /api/v1/search`: an invalid `search_mode` now returns HTTP 422 (previously silently coerced to `hybrid`).
+- Internal cleanups: shared `slowapi` rate-limiter module (`src/api/rate_limit.py`), named constants for unified-document chunking, `time.perf_counter()` for OCR timing.
+
+### Fixed
+- Documentation accuracy pass: tool count corrected to 13 across `docs/`, `OUTPUT_PATH` default documented as `/app/output`, removed the non-implemented `notifications/initialized` from the JSON-RPC method list, documented `MISTRAL_TIMEOUT_S` and `MAX_DECOMPRESSED_MB`, fixed a leftover `zileo-rag` reference.
+- Embedder docstrings referenced a non-existent exception class; Mistral SDK errors (`mistralai.models.SDKError`) propagate as-is.
+- Dockerfile `APP_VERSION` build-arg aligned with the project version.
+
+### Added
+- `.github/release.yml` for categorized GitHub release notes.
+- README: Zileo Chat configuration section (form-based HTTP setup) and RAG evaluation script documentation (`scripts/eval_rag.py`).
+
 ## [0.4.0] - 2026-05-16
 
 ### BREAKING CHANGES
@@ -116,3 +139,6 @@ First functional release of MCP Zileo RAG.
 - Docker deployment (multi-stage, non-root, healthchecks)
 - 319 unit tests (>80% coverage)
 - AGPL-3.0-or-later license
+
+[Unreleased]: https://github.com/assistance-micro-design/zileo-docs/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/assistance-micro-design/zileo-docs/releases/tag/v0.5.0

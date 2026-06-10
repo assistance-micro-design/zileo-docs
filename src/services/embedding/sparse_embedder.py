@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from fastembed import SparseTextEmbedding  # type: ignore[import-not-found]
+    from fastembed import SparseTextEmbedding
 
     from src.models.chunk import DocumentChunk
     from src.services.embedding.mistral_embedder import MistralEmbedder

@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -17,7 +17,7 @@ from src.models.excel_generation import SheetDef
 # === Enums ===
 
 
-class ProcessingStatus(str, Enum):
+class ProcessingStatus(StrEnum):
     """Statut de traitement d'un document."""
 
     PENDING = "pending"

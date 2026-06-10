@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from src.models.types import CellValue, FormulaResult
 
 
-class CellType(str, Enum):
+class CellType(StrEnum):
     """Type de données d'une cellule Excel."""
 
     TEXT = "text"

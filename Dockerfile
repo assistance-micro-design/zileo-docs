@@ -35,7 +35,7 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-ARG APP_VERSION=0.4.0
+ARG APP_VERSION=0.5.0
 
 # Labels
 LABEL org.opencontainers.image.title="Zileo Docs"
